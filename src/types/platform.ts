@@ -104,6 +104,51 @@ export interface Site {
   };
 }
 
+/** Severity values from bridge `health_meta` checks (WordPress Site Health style). */
+export type SiteHealthSeverity = 'ok' | 'warning' | 'critical' | 'pending' | 'unknown';
+
+export interface SiteHealthCheckMeta {
+  wp_status?: string;
+  badge_color?: string;
+  [key: string]: unknown;
+}
+
+export interface SiteHealthCheck {
+  id: string;
+  module_id?: string;
+  slug?: string;
+  execution?: string;
+  label: string;
+  severity: SiteHealthSeverity | string;
+  category?: string | null;
+  message?: string;
+  meta?: SiteHealthCheckMeta;
+}
+
+export interface SiteHealthModule {
+  id: string;
+  label: string;
+  description?: string;
+  source?: string;
+  checks?: SiteHealthCheck[];
+}
+
+export interface SiteHealthSummary {
+  overall?: string;
+  counts?: Partial<Record<SiteHealthSeverity, number>> & Record<string, number | undefined>;
+  total_checks?: number;
+}
+
+/** Parsed bridge snapshot stored in Appwrite `health_meta` on `sites`. */
+export interface SiteHealthMetaSnapshot {
+  schema_version?: number;
+  collected_at?: string;
+  collection_duration_ms?: number;
+  summary?: SiteHealthSummary;
+  modules?: SiteHealthModule[];
+  checks_flat?: SiteHealthCheck[];
+}
+
 export interface ConnectionStatus {
   status: 'connected' | 'disconnected';
   heartbeatUpdatedAt: string;

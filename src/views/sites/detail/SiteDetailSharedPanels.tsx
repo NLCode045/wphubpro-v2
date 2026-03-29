@@ -1,38 +1,22 @@
 import { parseActionLogForAudit } from '@/domains/sites';
 import type { Site } from '@/types';
 import SiteActionHistoryList from '@/views/sites/detail/SiteActionHistoryList';
+import SiteHealthMetaPanel from '@/views/sites/detail/SiteHealthMetaPanel';
+import { formatChecked } from '@/views/sites/detail/siteDetailFormat';
 import { useMemo } from 'react';
 import { Card, CardBody, Table } from 'react-bootstrap';
 
-export function formatChecked(iso: string | undefined): string {
-  if (!iso) return '—';
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-  } catch {
-    return '—';
-  }
-}
+export { formatChecked } from '@/views/sites/detail/siteDetailFormat';
 
 type OutgoingLogRow = NonNullable<Site['logData']>['outgoing'][number];
 
 export function SiteDetailHealthPanel({ site }: { site: Site }) {
-  let healthPretty: string | null = null;
-  if (site.healthMeta && site.healthMeta.trim().length > 2) {
-    try {
-      healthPretty = JSON.stringify(JSON.parse(site.healthMeta), null, 2);
-    } catch {
-      healthPretty = site.healthMeta;
-    }
-  }
-
   return (
     <Card>
       <CardBody>
         <h5 className="fs-base mb-3">Health</h5>
         <p className="mb-1">
-          <span className="text-muted">Status:</span>{' '}
+          <span className="text-muted">Bridge status:</span>{' '}
           <span className={`badge badge-soft-${site.healthStatus === 'healthy' ? 'success' : 'warning'}`}>
             {site.healthStatus === 'healthy' ? 'Healthy' : 'Needs attention'}
           </span>
@@ -40,16 +24,7 @@ export function SiteDetailHealthPanel({ site }: { site: Site }) {
         <p className="mb-3">
           <span className="text-muted">Last check:</span> {formatChecked(site.lastChecked)}
         </p>
-        {healthPretty ? (
-          <>
-            <p className="fs-sm fw-semibold mb-2">Health snapshot</p>
-            <pre className="bg-light rounded p-3 small mb-0 overflow-auto" style={{ maxHeight: '50vh' }}>
-              {healthPretty}
-            </pre>
-          </>
-        ) : (
-          <p className="text-muted mb-0">No detailed health snapshot stored for this site yet.</p>
-        )}
+        <SiteHealthMetaPanel site={site} />
       </CardBody>
     </Card>
   );

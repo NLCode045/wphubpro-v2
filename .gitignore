@@ -1,0 +1,23 @@
+node_modules
+.env
+.env.local
+.env.*.local
+functions/.env
+functions/.env.local
+!*.env.example
+_deprecated
+dist
+.DS_Store
+wphubpro.code-workspace
+.cursor
+
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+# Dependencies
+node_modules/
+bower_components/
+
+# Build outputs
+dist/
+build/
+.next/
+out/

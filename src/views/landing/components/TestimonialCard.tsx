@@ -1,0 +1,29 @@
+
+import { Card, CardBody } from 'react-bootstrap'
+import { TbStarFilled } from 'react-icons/tb'
+import type { TestimonialType } from './types.ts'
+
+const TestimonialCard = ({ testimonial }: { testimonial: TestimonialType }) => {
+  return (
+    <Card className="border border-dashed shadow-none rounded-4 p-3 card-h-100">
+      <CardBody className="pb-0 text-center">
+        <div className="avatar avatar-xl mx-auto mb-3">
+          <img src={testimonial.avatar} alt="Michael Roberts" className="img-fluid rounded-circle" />
+        </div>
+        <span className="text-warning fs-lg mb-3 d-block">
+          {Array(5)
+            .fill(5)
+            .map((_star, idx) => (
+              <span key={idx}>
+                <TbStarFilled />&nbsp;
+              </span>
+            ))}
+        </span>
+        <h4 className="mb-2 fs-md">{testimonial.title}</h4>
+        <p className="text-muted mb-3 fst-italic fs-sm">"{testimonial.description}"</p>
+      </CardBody>
+    </Card>
+  )
+}
+
+export default TestimonialCard

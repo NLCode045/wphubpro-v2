@@ -14,8 +14,8 @@ import {
 import { parseSiteHealthScore } from '@/lib/siteHealthScore.ts';
 import type { Site, SiteHealthCheck, SiteHealthSeverity } from '@/types';
 import type { ApexOptions } from 'apexcharts';
-import { Suspense, useMemo, useState } from 'react';
-import { Badge, Button, Card, CardBody, Col, Collapse, Row } from 'react-bootstrap';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Button, Card, CardBody, Col, Collapse, Row } from 'react-bootstrap';
 import ReactApexChart from 'react-apexcharts';
 import SiteHealthScoreDonut from '@/views/sites/detail/SiteHealthScoreDonut';
 
@@ -46,6 +46,17 @@ function overallLabel(overall: string | undefined): string {
   return overall.charAt(0).toUpperCase() + overall.slice(1).toLowerCase();
 }
 
+/** Map `summary.overall` to a check severity for filtering (good → ok). */
+function overallToFilterSeverity(overall: string | undefined): SiteHealthSeverity | null {
+  const o = String(overall ?? '').toLowerCase();
+  if (o === 'critical') return 'critical';
+  if (o === 'warning') return 'warning';
+  if (o === 'ok' || o === 'good') return 'ok';
+  if (o === 'pending') return 'pending';
+  if (o === 'unknown') return 'unknown';
+  return null;
+}
+
 function severitySoftClass(sev: SiteHealthSeverity): string {
   switch (sev) {
     case 'ok':
@@ -69,6 +80,41 @@ function formatCategorySummaryLine(counts: Record<SiteHealthSeverity, number>): 
   if (counts.pending) parts.push(`${counts.pending} pending`);
   if (counts.unknown) parts.push(`${counts.unknown} unknown`);
   return parts.length ? parts.join(' · ') : 'No checks';
+}
+
+const SEVERITY_ORDER: SiteHealthSeverity[] = ['ok', 'warning', 'critical', 'pending', 'unknown'];
+
+type FilterSeverityBadgeProps = {
+  severity: SiteHealthSeverity;
+  count: number;
+  active: boolean;
+  onToggle: (s: SiteHealthSeverity) => void;
+};
+
+function FilterSeverityBadge({ severity, count, active, onToggle }: FilterSeverityBadgeProps) {
+  const label = severityDisplayName(severity);
+  const disabled = count <= 0;
+  return (
+    <button
+      type="button"
+      className={`badge ${severitySoftClass(severity)} border-0`}
+      style={
+        active ? { boxShadow: '0 0 0 2px var(--bs-primary)', cursor: disabled ? 'not-allowed' : 'pointer' } : { cursor: disabled ? 'not-allowed' : 'pointer' }
+      }
+      disabled={disabled}
+      aria-pressed={active}
+      aria-label={
+        disabled
+          ? `${label}: no checks`
+          : active
+            ? `${label}: filter active, click to show all checks`
+            : `Show only ${label} checks`
+      }
+      onClick={() => onToggle(severity)}
+    >
+      {label} {count}
+    </button>
+  );
 }
 
 type SiteHealthCategoryChartProps = {
@@ -182,15 +228,29 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
   const parseFailed = raw.length > 2 && snapshot === null;
 
   const checks = useMemo(() => (snapshot ? getChecksForDashboard(snapshot) : []), [snapshot]);
-  const byCategory = useMemo(() => groupChecksByCategory(checks), [checks]);
-  const aggRows = useMemo(() => aggregateByCategory(checks), [checks]);
+  const checkTotals = useMemo(() => severityTotalsForChecks(checks), [checks]);
+  const [severityFilter, setSeverityFilter] = useState<SiteHealthSeverity | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
+
+  useEffect(() => {
+    setSeverityFilter(null);
+  }, [site.$id, site.healthMeta]);
+
+  const displayedChecks = useMemo(() => {
+    if (!severityFilter) return checks;
+    return checks.filter((c) => normalizeSiteHealthSeverity(c.severity) === severityFilter);
+  }, [checks, severityFilter]);
+
+  const byCategory = useMemo(() => groupChecksByCategory(displayedChecks), [displayedChecks]);
+  const aggRows = useMemo(() => aggregateByCategory(displayedChecks), [displayedChecks]);
   const score = useMemo(() => parseSiteHealthScore(site), [site]);
 
-  const summaryCounts = snapshot?.summary?.counts;
   const totalFromSummary =
     typeof snapshot?.summary?.total_checks === 'number' ? snapshot.summary.total_checks : undefined;
 
-  const [showRaw, setShowRaw] = useState(false);
+  const toggleSeverityFilter = (s: SiteHealthSeverity) => {
+    setSeverityFilter((prev) => (prev === s ? null : s));
+  };
 
   if (parseFailed) {
     return (
@@ -213,6 +273,9 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
   }
 
   const overall = snapshot.summary?.overall;
+  const overallSev = overallToFilterSeverity(overall);
+  const canFilterOverall =
+    overallSev != null && checkTotals[overallSev] > 0;
 
   return (
     <div className="d-flex flex-column gap-3">
@@ -230,9 +293,24 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
             <CardBody>
               <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
                 <span className="text-muted fs-sm">Overall</span>
-                <Badge bg={overallBadgeVariant(overall)} className="fs-6">
+                <Button
+                  variant={overallBadgeVariant(overall)}
+                  size="sm"
+                  className="fs-6 py-1 px-2"
+                  disabled={!canFilterOverall}
+                  active={overallSev != null && severityFilter === overallSev}
+                  onClick={() => overallSev && toggleSeverityFilter(overallSev)}
+                  aria-pressed={overallSev != null && severityFilter === overallSev}
+                  aria-label={
+                    canFilterOverall
+                      ? severityFilter === overallSev
+                        ? 'Clear overall status filter'
+                        : `Show only ${overallLabel(overall)} checks`
+                      : 'Overall status filter unavailable'
+                  }
+                >
                   {overallLabel(overall)}
-                </Badge>
+                </Button>
               </div>
               <p className="text-muted fs-xs mb-2">
                 Snapshot: {formatChecked(snapshot.collected_at)}
@@ -240,31 +318,35 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
                   <> · Collected in {snapshot.collection_duration_ms} ms</>
                 ) : null}
               </p>
-              <div className="d-flex flex-wrap gap-2">
-                {summaryCounts ? (
-                  <>
-                    {typeof summaryCounts.ok === 'number' ? (
-                      <span className="badge badge-soft-success">OK {summaryCounts.ok}</span>
-                    ) : null}
-                    {typeof summaryCounts.warning === 'number' ? (
-                      <span className="badge badge-soft-warning">Warning {summaryCounts.warning}</span>
-                    ) : null}
-                    {typeof summaryCounts.critical === 'number' ? (
-                      <span className="badge badge-soft-danger">Critical {summaryCounts.critical}</span>
-                    ) : null}
-                    {typeof summaryCounts.pending === 'number' ? (
-                      <span className="badge badge-soft-info">Pending {summaryCounts.pending}</span>
-                    ) : null}
-                    {typeof summaryCounts.unknown === 'number' && summaryCounts.unknown > 0 ? (
-                      <span className="badge badge-soft-secondary">Unknown {summaryCounts.unknown}</span>
-                    ) : null}
-                  </>
-                ) : null}
-                {typeof totalFromSummary === 'number' ? (
-                  <span className="badge badge-soft-secondary">Total {totalFromSummary}</span>
-                ) : (
-                  <span className="badge badge-soft-secondary">Total {checks.length}</span>
-                )}
+              {severityFilter ? (
+                <p className="text-primary fs-xs fw-semibold mb-2">
+                  Showing {displayedChecks.length} of {checks.length} checks (
+                  {severityDisplayName(severityFilter)} only). Click the same badge again to show all.
+                </p>
+              ) : null}
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                <span className="text-muted fs-xs text-uppercase" style={{ letterSpacing: '0.04em' }}>
+                  Filter
+                </span>
+                {SEVERITY_ORDER.map((sev) => (
+                  <FilterSeverityBadge
+                    key={sev}
+                    severity={sev}
+                    count={checkTotals[sev]}
+                    active={severityFilter === sev}
+                    onToggle={toggleSeverityFilter}
+                  />
+                ))}
+                <button
+                  type="button"
+                  className="badge badge-soft-secondary border-0"
+                  style={{ cursor: severityFilter ? 'pointer' : 'default' }}
+                  disabled={!severityFilter}
+                  aria-label="Show all checks"
+                  onClick={() => setSeverityFilter(null)}
+                >
+                  All ({typeof totalFromSummary === 'number' ? totalFromSummary : checks.length})
+                </button>
               </div>
             </CardBody>
           </Card>
@@ -279,6 +361,10 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
             <SiteHealthCategoryChart rows={aggRows} />
           </CardBody>
         </Card>
+      ) : null}
+
+      {severityFilter && displayedChecks.length === 0 ? (
+        <p className="text-muted mb-0">No checks match this filter.</p>
       ) : null}
 
       <div className="d-flex flex-column gap-3">

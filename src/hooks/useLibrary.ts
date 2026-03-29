@@ -449,7 +449,57 @@ export type PatchLibraryItemInput = {
   wpSlug?: string;
   isDefault?: boolean;
   categoryId?: string | null;
+  /** When set, updates `category_ids` and sets `category_id` to the first id (or null). */
+  categoryIds?: string[] | null;
   isFavourite?: boolean;
+};
+
+export type SetLibraryDefaultVersionInput = {
+  libraryDocumentId: string;
+  versionKey: string;
+};
+
+/**
+ * Sets which version in a library document is the default (used for installs and UI).
+ * Updates `versions_json` and mirrored legacy fields on the document.
+ */
+export const useSetLibraryDefaultVersion = () => {
+  const queryClient = useQueryClient();
+  const { showNotification } = useNotificationContext();
+  const { user } = useAuth();
+
+  return useMutation<void, Error, SetLibraryDefaultVersionInput>({
+    mutationFn: async ({ libraryDocumentId, versionKey }) => {
+      const doc = await databases.getDocument(DATABASE_ID, LIBRARY_COLLECTION, libraryDocumentId);
+      const map = getOrBuildVersionsMap(doc as Record<string, unknown>);
+      if (!map[versionKey]) {
+        throw new Error(`Version "${versionKey}" not found on this library document.`);
+      }
+      const newMap = setDefaultVersionInMap(map, versionKey);
+      const mirror = mirrorLegacyFieldsFromVersions(newMap);
+      await databases.updateDocument(DATABASE_ID, LIBRARY_COLLECTION, libraryDocumentId, {
+        versions_json: serializeVersionsJson(newMap),
+        version: mirror.version,
+        source: mirror.source,
+        is_default: mirror.is_default,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['libraryItems', user?.$id] });
+      showNotification({
+        title: 'Default version updated',
+        message: 'The bridge will use this build when installing from your library.',
+        variant: 'success',
+      });
+    },
+    onError: (error: Error) => {
+      showNotification({
+        title: 'Could not set default version',
+        message: error.message,
+        variant: 'danger',
+      });
+    },
+  });
 };
 
 export const usePatchLibraryItem = () => {
@@ -466,6 +516,7 @@ export const usePatchLibraryItem = () => {
       wpSlug,
       isDefault,
       categoryId,
+      categoryIds,
       isFavourite,
     }: PatchLibraryItemInput) => {
       const composite = parseCompositeLibraryItemId(itemId);
@@ -476,8 +527,15 @@ export const usePatchLibraryItem = () => {
       if (name !== undefined) patch.name = name;
       if (wpSlug !== undefined) patch.wpSlug = wpSlug;
       if (isDefault !== undefined) patch.is_default = isDefault;
-      if (categoryId !== undefined) {
-        patch.category_id = categoryId === null || categoryId === '' ? null : categoryId;
+      if (categoryIds !== undefined) {
+        const raw = categoryIds == null ? [] : categoryIds;
+        const uniq = [...new Set(raw.map((id) => String(id).trim()).filter(Boolean))];
+        patch.category_ids = uniq.length > 0 ? uniq : null;
+        patch.category_id = uniq[0] ?? null;
+      } else if (categoryId !== undefined) {
+        const id = categoryId === null || categoryId === '' ? null : String(categoryId).trim();
+        patch.category_id = id;
+        patch.category_ids = id ? [id] : null;
       }
       if (isFavourite !== undefined) patch.is_favourite = isFavourite;
       if (Object.keys(patch).length === 0) {

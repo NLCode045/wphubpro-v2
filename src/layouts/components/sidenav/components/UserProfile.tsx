@@ -23,11 +23,11 @@ const UserProfile = () => {
     <div className="sidenav-user">
       <div className="d-flex justify-content-between align-items-center">
         <div>
-          <Link to="/" className="link-reset">
+          <Link to={ROUTE_PATHS.PROFILE} className="link-reset">
             <img src={user3} alt="user-image" width="36" height="36" className="rounded-circle mb-2 avatar-md" />
             <span className="sidenav-user-name fw-bold">{displayName}</span>
             <span className="fs-12 fw-semibold" data-lang="user-role">
-              Art Director
+              {user?.isAdmin ? 'Administrator' : 'Member'}
             </span>
           </Link>
         </div>

@@ -10,6 +10,7 @@ import LibraryItemDetailPage from '@/views/library/detail/LibraryItemDetailPage'
 import SiteDetailPage from '@/views/sites/detail/SiteDetailPage'
 import SiteExtensionDetailPage from '@/views/sites/detail/SiteExtensionDetailPage'
 import SitesPage from '@/views/sites'
+import UserProfilePage from '@/views/profile/UserProfilePage'
 import ForgotPasswordPage from '@/views/auth/auth-1/reset-password'
 import LoginPage from '@/views/auth/auth-1/sign-in'
 import NewPasswordPage from '@/views/auth/auth-1/new-password'
@@ -61,6 +62,7 @@ export const routes: RouteObject[] = [
     children: [
       { path: '/', element: <Navigate to={ROUTE_PATHS.DASHBOARD} replace /> },
       { path: ROUTE_PATHS.DASHBOARD, element: <DashboardPage /> },
+      { path: ROUTE_PATHS.PROFILE, element: <UserProfilePage /> },
       { path: ROUTE_PATHS.ADMIN_DASHBOARD, element: <AdminDashboardPage /> },
       { path: ROUTE_PATHS.ADMIN_USERS, element: <AdminUsersOverviewPage /> },
       { path: ROUTE_PATHS.SITES, element: <SitesPage /> },

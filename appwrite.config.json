@@ -1374,6 +1374,15 @@
                     "encrypt": false
                 },
                 {
+                    "key": "category_ids",
+                    "type": "string",
+                    "required": false,
+                    "array": true,
+                    "size": 36,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
                     "key": "is_favourite",
                     "type": "boolean",
                     "required": false,

@@ -94,6 +94,55 @@ export type WpThemeSearchRow = {
   short_description?: string;
 };
 
+export interface WpThemeInfo {
+  name: string;
+  slug: string;
+  version: string;
+  author: string;
+  description?: string;
+  homepage?: string;
+  download_link?: string;
+  versions?: Record<string, string>;
+}
+
+export const getWpThemeInfo = async (slug: string): Promise<WpThemeInfo | null> => {
+  const trimmed = slug.trim();
+  if (!trimmed) return null;
+  const params = new URLSearchParams();
+  params.set('action', 'theme_information');
+  params.set('request[slug]', trimmed);
+  params.set('request[fields][versions]', '1');
+  params.set('request[fields][sections]', '1');
+  const url = `${THEMES_API_BASE}?${params.toString()}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = (await res.json()) as Record<string, unknown>;
+    if (!data || data.error) return null;
+    const sections = data.sections as { description?: string } | undefined;
+    const descRaw = sections?.description ?? '';
+    const description =
+      typeof descRaw === 'string'
+        ? descRaw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+        : undefined;
+    return {
+      name: String(data.name ?? trimmed),
+      slug: String(data.slug ?? trimmed),
+      version: String(data.version ?? ''),
+      author: themeAuthorToString(data.author) || 'Unknown',
+      homepage: typeof data.homepage === 'string' ? data.homepage : undefined,
+      description: description || undefined,
+      download_link: typeof data.download_link === 'string' ? data.download_link : undefined,
+      versions:
+        data.versions && typeof data.versions === 'object' && !Array.isArray(data.versions)
+          ? (data.versions as Record<string, string>)
+          : undefined,
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const searchWpThemes = async (searchTerm: string): Promise<WpThemeSearchRow[]> => {
   if (!searchTerm) return [];
   const params = new URLSearchParams();
@@ -109,12 +158,12 @@ export const searchWpThemes = async (searchTerm: string): Promise<WpThemeSearchR
   const themes = data.themes || [];
   const out: WpThemeSearchRow[] = [];
   for (const t of themes) {
-    const slug = String(t.slug ?? '').trim();
-    if (!slug) continue;
+    const s = String(t.slug ?? '').trim();
+    if (!s) continue;
     const desc = typeof t.description === 'string' ? t.description : '';
     const row: WpThemeSearchRow = {
-      name: String(t.name ?? slug),
-      slug,
+      name: String(t.name ?? s),
+      slug: s,
       version: String(t.version ?? ''),
       author: themeAuthorToString(t.author),
     };

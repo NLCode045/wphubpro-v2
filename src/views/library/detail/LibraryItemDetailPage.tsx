@@ -12,6 +12,9 @@ import type { LibraryItem, LibraryItemSource, Site, WordPressPlugin, WordPressTh
 import LibraryItemDetailInfoCard from '@/views/library/detail/LibraryItemDetailInfoCard';
 import LibraryItemDetailOrganization from '@/views/library/detail/LibraryItemDetailOrganization';
 import { LIBRARY_ITEM_DETAIL_TAB_CONFIG } from '@/views/library/detail/libraryItemDetailNavTabs';
+import AddRemoteUrlModal from '@/views/library/modals/AddRemoteUrlModal';
+import PinWordPressOrgVersionsModal from '@/views/library/modals/PinWordPressOrgVersionsModal';
+import UploadLibraryModal from '@/views/library/modals/UploadLibraryModal';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -20,13 +23,15 @@ import {
   CardBody,
   Col,
   Container,
+  Form,
+  Modal,
   Nav,
   Row,
   Spinner,
   Table,
 } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { TbTrash } from 'react-icons/tb';
+import { TbBrandWordpress, TbCloudUpload, TbLink, TbTrash, TbUpload } from 'react-icons/tb';
 
 const TAB_KEYS = ['overview', 'sites'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -71,6 +76,12 @@ const LibraryItemDetailPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabIndex = indexFromTabKey(searchParams.get('tab'));
   const [tab, setTab] = useState(tabIndex);
+  const [pinWpOpen, setPinWpOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [remoteOpen, setRemoteOpen] = useState(false);
+  const [installOnSiteOpen, setInstallOnSiteOpen] = useState(false);
+  const [installPickerItem, setInstallPickerItem] = useState<LibraryItem | null>(null);
+  const [installSiteIds, setInstallSiteIds] = useState<Set<string>>(() => new Set());
 
   const itemKind: 'plugin' | 'theme' | null =
     rawKind === 'plugin' ? 'plugin' : rawKind === 'theme' ? 'theme' : null;
@@ -162,12 +173,28 @@ const LibraryItemDetailPage = () => {
     return [...new Set(vers)].sort(compareSemverDesc)[0];
   }, [wpInfo?.version, localItems, remoteItems, officialItems]);
 
-  const projectHref = useMemo(() => {
+  const defaultVersionLabel = useMemo(() => {
+    const explicit = groupItems.find((i) => i.isDefault === true);
+    if (explicit) return explicit.version === 'latest' ? (wpInfo?.version ?? 'latest') : explicit.version;
+    if (officialItems.length > 1) return `${officialItems.length} WordPress.org pins`;
+    if (officialItems.length === 1) {
+      const v = officialItems[0].version;
+      return v === 'latest' ? (wpInfo?.version ? `Latest (${wpInfo.version})` : 'Latest') : v;
+    }
+    return localItems[0]?.version ?? remoteItems[0]?.version ?? '—';
+  }, [groupItems, officialItems, localItems, remoteItems, wpInfo?.version]);
+
+  const wordpressOrgHref = useMemo(() => {
     if (itemKind === 'plugin') {
-      return wpInfo?.homepage ?? `https://wordpress.org/plugins/${encodeURIComponent(slug)}/`;
+      return `https://wordpress.org/plugins/${encodeURIComponent(slug)}/`;
     }
     return `https://wordpress.org/themes/${encodeURIComponent(slug)}/`;
-  }, [itemKind, slug, wpInfo?.homepage]);
+  }, [itemKind, slug]);
+
+  const pluginWebsiteHref = useMemo(() => {
+    const h = wpInfo?.homepage?.trim();
+    return h && h.length > 0 ? h : undefined;
+  }, [wpInfo?.homepage]);
 
   const uniqueLibraryDocumentIds = useMemo(
     () => [...new Set(groupItems.map((i) => i.libraryDocumentId).filter(Boolean))] as string[],
@@ -181,7 +208,22 @@ const LibraryItemDetailPage = () => {
     [groupItems, primaryLibraryDocumentId],
   );
   const documentTagsForEdit = primaryLibraryRow?.tags ?? [];
-  const documentCategoryId = primaryLibraryRow?.categoryId;
+  const documentCategoryIds = useMemo(() => {
+    const row = primaryLibraryRow;
+    if (!row) return [];
+    const ids = row.categoryIds;
+    if (ids && ids.length > 0) return [...ids];
+    if (row.categoryId) return [row.categoryId];
+    return [];
+  }, [primaryLibraryRow]);
+
+  const existingOfficialVersionKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const it of groupItems) {
+      if (it.source === 'official' && it.version) keys.add(String(it.version));
+    }
+    return [...keys];
+  }, [groupItems]);
 
   const sitesWithPlugin = useMemo(() => {
     if (itemKind !== 'plugin' || !slug) return [];
@@ -206,6 +248,65 @@ const LibraryItemDetailPage = () => {
       })
       .filter(Boolean) as { site: Site; theme: WordPressTheme }[];
   }, [sites, itemKind, slug]);
+
+  const connectedSitesForInstall = useMemo(
+    () => (sites ?? []).filter((s) => s.status === 'connected' && s.enabled !== false),
+    [sites],
+  );
+
+  const installPickerVersionLabel = useMemo(() => {
+    if (!installPickerItem || !itemKind) return '—';
+    if (
+      installPickerItem.source === 'official' &&
+      installPickerItem.version === 'latest' &&
+      itemKind === 'plugin'
+    ) {
+      return wpInfo?.version ?? 'latest';
+    }
+    return installPickerItem.version || '—';
+  }, [installPickerItem, itemKind, wpInfo?.version]);
+
+  const closeInstallOnSiteModal = () => {
+    setInstallOnSiteOpen(false);
+    setInstallPickerItem(null);
+    setInstallSiteIds(new Set());
+  };
+
+  const installSitesTab = itemKind === 'plugin' ? 'plugins' : 'themes';
+
+  const toggleInstallSite = (siteId: string) => {
+    setInstallSiteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(siteId)) next.delete(siteId);
+      else next.add(siteId);
+      return next;
+    });
+  };
+
+  const selectAllInstallSites = () => {
+    setInstallSiteIds(new Set(connectedSitesForInstall.map((s) => s.$id)));
+  };
+
+  const clearInstallSiteSelection = () => {
+    setInstallSiteIds(new Set());
+  };
+
+  const openSelectedSitesForInstall = () => {
+    if (installSiteIds.size === 0 || typeof window === 'undefined') return;
+    const origin = window.location.origin;
+    const ids = [...installSiteIds];
+    ids.forEach((id, i) => {
+      const path = ROUTE_PATHS.siteDetailPath(id);
+      const url = `${origin}${path}?tab=${installSitesTab}`;
+      window.setTimeout(() => {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }, i * 300);
+    });
+    closeInstallOnSiteModal();
+  };
+
+  const allInstallSitesSelected =
+    connectedSitesForInstall.length > 0 && installSiteIds.size === connectedSitesForInstall.length;
 
   const handleRemoveAll = async () => {
     if (groupItems.length === 0) return;
@@ -337,6 +438,65 @@ const LibraryItemDetailPage = () => {
                         Pinned, uploaded, and remote versions for this {itemKind}. Removing a row deletes that
                         version from the library (and storage when applicable).
                       </p>
+                      <Row className="g-3 mb-4">
+                        <Col md={4}>
+                          <Card className="h-100 border shadow-none bg-light bg-opacity-50">
+                            <CardBody className="d-flex flex-column">
+                              <div className="d-flex align-items-center gap-2 mb-2">
+                                <span className="avatar-xs bg-primary bg-opacity-10 text-primary rounded d-inline-flex align-items-center justify-content-center">
+                                  <TbBrandWordpress className="fs-4" aria-hidden />
+                                </span>
+                                <h6 className="fw-semibold mb-0">Pin WordPress.org versions</h6>
+                              </div>
+                              <p className="text-muted small flex-grow-1 mb-3">
+                                Choose official release numbers from the WordPress.org directory and pin them to this
+                                library item.
+                              </p>
+                              <Button variant="primary" size="sm" className="align-self-start" onClick={() => setPinWpOpen(true)}>
+                                Choose versions
+                              </Button>
+                            </CardBody>
+                          </Card>
+                        </Col>
+                        <Col md={4}>
+                          <Card className="h-100 border shadow-none bg-light bg-opacity-50">
+                            <CardBody className="d-flex flex-column">
+                              <div className="d-flex align-items-center gap-2 mb-2">
+                                <span className="avatar-xs bg-secondary bg-opacity-10 text-secondary rounded d-inline-flex align-items-center justify-content-center">
+                                  <TbUpload className="fs-4" aria-hidden />
+                                </span>
+                                <h6 className="fw-semibold mb-0">Upload to WPHub.Pro</h6>
+                              </div>
+                              <p className="text-muted small flex-grow-1 mb-3">
+                                Upload a ZIP from your computer and attach it to this {itemKind} slug as a local
+                                version.
+                              </p>
+                              <Button variant="outline-primary" size="sm" className="align-self-start" onClick={() => setUploadOpen(true)}>
+                                Upload ZIP
+                              </Button>
+                            </CardBody>
+                          </Card>
+                        </Col>
+                        <Col md={4}>
+                          <Card className="h-100 border shadow-none bg-light bg-opacity-50">
+                            <CardBody className="d-flex flex-column">
+                              <div className="d-flex align-items-center gap-2 mb-2">
+                                <span className="avatar-xs bg-info bg-opacity-10 text-info rounded d-inline-flex align-items-center justify-content-center">
+                                  <TbLink className="fs-4" aria-hidden />
+                                </span>
+                                <h6 className="fw-semibold mb-0">Add from remote storage</h6>
+                              </div>
+                              <p className="text-muted small flex-grow-1 mb-3">
+                                Point to a ZIP URL (your CDN or storage). That build can be installed on sites from the
+                                library.
+                              </p>
+                              <Button variant="outline-secondary" size="sm" className="align-self-start" onClick={() => setRemoteOpen(true)}>
+                                Add remote URL
+                              </Button>
+                            </CardBody>
+                          </Card>
+                        </Col>
+                      </Row>
                       <div className="table-responsive border rounded mb-4">
                         <Table hover size="sm" className="mb-0 align-middle">
                           <thead className="table-light">
@@ -387,16 +547,31 @@ const LibraryItemDetailPage = () => {
                                   <td className="text-muted small text-break">{details}</td>
                                   <td>{item.isDefault ? <span className="text-success fw-medium">Yes</span> : '—'}</td>
                                   <td className="text-end">
-                                    <Button
-                                      variant="outline-danger"
-                                      size="sm"
-                                      className="d-inline-flex align-items-center gap-1"
-                                      disabled={deleteMutation.isPending}
-                                      onClick={() => handleDeleteVersion(item)}
-                                    >
-                                      <TbTrash />
-                                      Remove
-                                    </Button>
+                                    <div className="d-inline-flex flex-wrap align-items-center justify-content-end gap-2">
+                                      <Button
+                                        variant="outline-secondary"
+                                        size="sm"
+                                        className="d-inline-flex align-items-center gap-1"
+                                        onClick={() => {
+                                          setInstallPickerItem(item);
+                                          setInstallSiteIds(new Set());
+                                          setInstallOnSiteOpen(true);
+                                        }}
+                                      >
+                                        <TbCloudUpload />
+                                        Install on site
+                                      </Button>
+                                      <Button
+                                        variant="outline-danger"
+                                        size="sm"
+                                        className="d-inline-flex align-items-center gap-1"
+                                        disabled={deleteMutation.isPending}
+                                        onClick={() => handleDeleteVersion(item)}
+                                      >
+                                        <TbTrash />
+                                        Remove
+                                      </Button>
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -411,7 +586,7 @@ const LibraryItemDetailPage = () => {
                           slug={slug}
                           displayName={displayName}
                           libraryDocumentId={primaryLibraryDocumentId}
-                          categoryId={documentCategoryId}
+                          categoryIds={documentCategoryIds}
                           tags={documentTagsForEdit}
                           categories={categories}
                           collections={collections}
@@ -505,14 +680,137 @@ const LibraryItemDetailPage = () => {
                 itemKind={itemKind}
                 descriptionShort={descriptionShort}
                 latestReleaseLabel={latestReleaseLabel}
+                defaultVersionLabel={defaultVersionLabel}
                 authorLabel={displayAuthor || '—'}
                 authorHref={authorHref}
-                projectHref={projectHref}
+                wordpressOrgHref={wordpressOrgHref}
+                websiteHref={pluginWebsiteHref}
               />
             </Col>
           </Row>
         </Col>
       </Row>
+
+      <Modal show={installOnSiteOpen} onHide={closeInstallOnSiteModal} centered scrollable size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-lg">Install on site</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-muted small mb-3">
+            Choose one or more connected sites. We open each site’s {itemKind === 'plugin' ? 'Plugins' : 'Themes'} tab
+            in a new browser tab—use the WPHub Pro bridge in WordPress to install this {itemKind} from your library.
+          </p>
+          {installPickerItem ? (
+            <p className="small mb-3">
+              <span className="text-muted">Library version: </span>
+              <span className="fw-medium">{installPickerVersionLabel}</span>
+            </p>
+          ) : null}
+          {connectedSitesForInstall.length === 0 ? (
+            <p className="text-muted small mb-0">
+              No connected sites.{' '}
+              <Link to={ROUTE_PATHS.SITES} onClick={closeInstallOnSiteModal}>
+                Go to Sites
+              </Link>{' '}
+              to add one.
+            </p>
+          ) : (
+            <>
+              <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <Button variant="outline-secondary" size="sm" type="button" onClick={selectAllInstallSites}>
+                  Select all
+                </Button>
+                <Button variant="outline-secondary" size="sm" type="button" onClick={clearInstallSiteSelection}>
+                  Clear
+                </Button>
+                <span className="text-muted small ms-auto">
+                  {installSiteIds.size} of {connectedSitesForInstall.length} selected
+                </span>
+              </div>
+              <div className="border rounded overflow-hidden" style={{ maxHeight: 'min(22rem, 55vh)' }}>
+                <Table responsive hover size="sm" className="mb-0 align-middle">
+                  <thead className="table-light position-sticky top-0">
+                    <tr>
+                      <th style={{ width: '2.5rem' }} className="text-center">
+                        <Form.Check
+                          type="checkbox"
+                          aria-label="Select all sites"
+                          checked={allInstallSitesSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) selectAllInstallSites();
+                            else clearInstallSiteSelection();
+                          }}
+                        />
+                      </th>
+                      <th>Site</th>
+                      <th className="d-none d-md-table-cell">URL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {connectedSitesForInstall.map((site) => (
+                      <tr key={site.$id} className={installSiteIds.has(site.$id) ? 'table-active' : undefined}>
+                        <td className="text-center">
+                          <Form.Check
+                            type="checkbox"
+                            aria-label={`Select ${site.siteName?.trim() || site.$id}`}
+                            checked={installSiteIds.has(site.$id)}
+                            onChange={() => toggleInstallSite(site.$id)}
+                          />
+                        </td>
+                        <td>
+                          <div className="fw-medium">{site.siteName?.trim() || site.$id}</div>
+                          <div className="small text-muted text-break d-md-none">{site.siteUrl}</div>
+                        </td>
+                        <td className="small text-muted text-break d-none d-md-table-cell">{site.siteUrl}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+              <p className="text-muted small mt-2 mb-0">
+                If only one tab opens, allow pop-ups for this site or open the remaining sites manually from Sites.
+              </p>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer className="gap-2">
+          <Button variant="light" size="sm" onClick={closeInstallOnSiteModal}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={installSiteIds.size === 0 || connectedSitesForInstall.length === 0}
+            onClick={openSelectedSitesForInstall}
+          >
+            Open selected {installSiteIds.size === 1 ? 'site' : 'sites'}
+            {installSiteIds.size > 0 ? ` (${installSiteIds.size})` : ''}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <PinWordPressOrgVersionsModal
+        show={pinWpOpen}
+        onHide={() => setPinWpOpen(false)}
+        itemKind={itemKind}
+        slug={slug}
+        displayName={displayName}
+        wpPluginInfo={wpInfo}
+        wpPluginInfoLoading={wpLoading}
+        existingOfficialVersionKeys={existingOfficialVersionKeys}
+      />
+      <UploadLibraryModal
+        show={uploadOpen}
+        onHide={() => setUploadOpen(false)}
+        initialType={itemKind === 'theme' ? 'theme' : 'plugin'}
+        prefillPluginSlug={slug}
+      />
+      <AddRemoteUrlModal
+        show={remoteOpen}
+        onHide={() => setRemoteOpen(false)}
+        existingPluginSlug={slug}
+        existingPluginName={displayName}
+      />
     </Container>
   );
 };

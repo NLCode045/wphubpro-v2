@@ -106,6 +106,23 @@ export function getOrBuildVersionsMap(doc: Record<string, unknown>): Record<stri
   };
 }
 
+function parseLibraryCategoryFields(doc: Record<string, unknown>): {
+  categoryIds: string[];
+  categoryId?: string;
+} {
+  const rawMulti = doc.category_ids ?? doc.categoryIds;
+  let categoryIds: string[] = [];
+  if (Array.isArray(rawMulti)) {
+    categoryIds = [...new Set(rawMulti.map((x: unknown) => String(x).trim()).filter(Boolean))];
+  }
+  const legacyRaw = doc.category_id ?? doc.categoryId;
+  const legacy =
+    legacyRaw != null && String(legacyRaw).trim() ? String(legacyRaw).trim() : undefined;
+  if (categoryIds.length === 0 && legacy) categoryIds = [legacy];
+  const categoryId = categoryIds[0];
+  return { categoryIds, ...(categoryId ? { categoryId } : {}) };
+}
+
 /** One Appwrite row → one or many LibraryItems (multi-version documents expand). */
 export function expandLibraryDocumentToItems(doc: Record<string, unknown>): LibraryItem[] {
   const userId = String(doc.userId || doc.user_id || '');
@@ -118,9 +135,7 @@ export function expandLibraryDocumentToItems(doc: Record<string, unknown>): Libr
   const description = String(doc.description ?? '');
   const type = toLibraryItemType(String(doc.type ?? 'plugin'));
   const wpSlug = (doc.wpSlug || doc.wp_slug) as string | undefined;
-  const categoryIdRaw = doc.category_id ?? doc.categoryId;
-  const categoryId =
-    categoryIdRaw != null && String(categoryIdRaw).trim() ? String(categoryIdRaw).trim() : undefined;
+  const { categoryIds, categoryId } = parseLibraryCategoryFields(doc);
   const isFavourite =
     doc.is_favourite === true || doc.isFavourite === true || doc.is_favourite === 'true';
 
@@ -160,7 +175,7 @@ export function expandLibraryDocumentToItems(doc: Record<string, unknown>): Libr
         ...(entry.isDefault === true ? { isDefault: true } : {}),
         libraryDocumentId: String(doc.$id),
         versionKey,
-        ...(categoryId ? { categoryId } : {}),
+        ...(categoryIds.length > 0 ? { categoryIds, categoryId } : {}),
         ...(isFavourite ? { isFavourite: true } : {}),
       });
     }
@@ -183,7 +198,7 @@ export function expandLibraryDocumentToItems(doc: Record<string, unknown>): Libr
       ...(doc.remoteUrl || doc.remote_url ? { remoteUrl: String(doc.remoteUrl || doc.remote_url) } : {}),
       ...(tags && tags.length > 0 ? { tags } : {}),
       ...(doc.isDefault === true || doc.is_default === true ? { isDefault: true } : {}),
-      ...(categoryId ? { categoryId } : {}),
+      ...(categoryIds.length > 0 ? { categoryIds, categoryId } : {}),
       ...(isFavourite ? { isFavourite: true } : {}),
     },
   ];

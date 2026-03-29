@@ -22,13 +22,22 @@ export function computeSidebarCounts(rows: LibraryDashboardRow[]) {
   };
 }
 
+function rowCategoryIds(row: LibraryDashboardRow): string[] {
+  if (row.categoryIds?.length) return row.categoryIds;
+  if (row.categoryId) return [row.categoryId];
+  return [];
+}
+
 export function computeCategoryFolderCounts(rows: LibraryDashboardRow[]): CategoryFolderCounts {
   const byCategoryId: Record<string, number> = {};
   let uncategorized = 0;
   for (const r of rows) {
-    if (!r.categoryId) uncategorized += 1;
+    const ids = rowCategoryIds(r);
+    if (ids.length === 0) uncategorized += 1;
     else {
-      byCategoryId[r.categoryId] = (byCategoryId[r.categoryId] ?? 0) + 1;
+      for (const id of ids) {
+        byCategoryId[id] = (byCategoryId[id] ?? 0) + 1;
+      }
     }
   }
   return { byCategoryId, uncategorized };
@@ -64,8 +73,8 @@ export function filterLibraryRows(
     r = r.filter((x) => x.tags.some((t) => t.toLowerCase() === tl));
   }
 
-  if (categoryId === 'uncategorized') r = r.filter((x) => !x.categoryId);
-  else if (categoryId) r = r.filter((x) => x.categoryId === categoryId);
+  if (categoryId === 'uncategorized') r = r.filter((x) => rowCategoryIds(x).length === 0);
+  else if (categoryId) r = r.filter((x) => rowCategoryIds(x).includes(categoryId));
 
   const qq = q.trim().toLowerCase();
   if (qq) {

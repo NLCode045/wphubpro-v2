@@ -13,6 +13,8 @@ export namespace Models {
 
 export type User = Models.User<Models.Preferences> & {
   isAdmin?: boolean;
+  /** Appwrite account MFA flag when returned from `account.get()`. */
+  mfa?: boolean;
 };
 
 export type BillingInterval = 'monthly' | 'yearly';
@@ -241,8 +243,10 @@ export interface LibraryItem {
   libraryDocumentId?: string;
   /** Key in the parent document’s versions map. */
   versionKey?: string;
-  /** Optional `library_categories` document id (document-level). */
+  /** Optional `library_categories` document id (document-level); first of {@link categoryIds} when set. */
   categoryId?: string;
+  /** Multiple folder categories (`category_ids` on the library document). */
+  categoryIds?: string[];
   /** Favourite flag on the library document (document-level). */
   isFavourite?: boolean;
 }

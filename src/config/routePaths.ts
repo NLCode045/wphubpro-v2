@@ -4,6 +4,7 @@ export const ROUTE_PATHS = {
   FORGOT_PASSWORD: '/forgot-password',
   RESET_PASSWORD: '/reset-password',
   DASHBOARD: '/dashboard',
+  PROFILE: '/profile',
   SITES: '/sites',
   /** Path pattern: `/sites/:siteId` — use `siteDetailPath(id)` for links. */
   siteDetailPath: (siteId: string) => `/sites/${encodeURIComponent(siteId)}`,

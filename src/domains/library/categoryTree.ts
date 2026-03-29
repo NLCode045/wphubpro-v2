@@ -74,6 +74,24 @@ export function libraryCategoriesForLibraryItemRow(
   return cur ? [...base, cur] : base;
 }
 
+/** Selectable categories for multi-assign, including any current ids outside the default kind list. */
+export function libraryCategoriesForLibraryItemRowMulti(
+  row: { kind: 'plugin' | 'theme'; categoryIds?: string[] | null },
+  categories: LibraryCategory[],
+): LibraryCategory[] {
+  const ids = (row.categoryIds ?? []).map((id) => id.trim()).filter(Boolean);
+  const base = libraryCategoriesForLibraryItemRow({ kind: row.kind, categoryId: ids[0] ?? null }, categories);
+  const inBase = new Set(base.map((c) => c.$id));
+  const byId = categoryByIdMap(categories);
+  const extra: LibraryCategory[] = [];
+  for (const id of ids) {
+    if (inBase.has(id)) continue;
+    const c = byId.get(id);
+    if (c) extra.push(c);
+  }
+  return [...base, ...extra];
+}
+
 /**
  * After reordering a filtered subset of roots, merge back into full root order for persisted `sort_order`.
  */

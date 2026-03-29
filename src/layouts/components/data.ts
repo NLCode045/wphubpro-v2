@@ -22,7 +22,7 @@ export const userDropdownItems: UserDropdownItemType[] = [
   {
     label: 'Profile',
     icon: TbUserCircle,
-    url: '/dashboard',
+    url: ROUTE_PATHS.PROFILE,
   },
   {
     label: 'Log Out',

@@ -41,6 +41,8 @@ export type LibraryDashboardRow = {
   /** Lowercased slug for `/library/items/:kind/:slug` routes. */
   routeSlug: string;
   categoryId?: string;
+  /** All assigned folder categories (for filters / counts). */
+  categoryIds?: string[];
   categoryName?: string;
   isFavourite: boolean;
   /** True if any version uses local (uploaded) source. */
@@ -61,7 +63,13 @@ export function buildLibraryDashboardRows(
     const versionLabel = g.items.length > 1 ? `${g.items.length} versions` : String(first?.version ?? '');
     const libraryDocumentId = first?.libraryDocumentId ?? parseThemeDocId(first?.$id ?? '');
     const routeSlug = getLibraryItemSlug(first!).toLowerCase();
-    const categoryId = first?.categoryId;
+    const categoryIds =
+      first?.categoryIds?.length ? first.categoryIds : first?.categoryId ? [first.categoryId] : [];
+    const categoryId = categoryIds[0];
+    const categoryName =
+      categoryIds.length > 0
+        ? categoryIds.map((id) => categoryNameById[id]).filter(Boolean).join(', ') || undefined
+        : undefined;
     const isFavourite = !!first?.isFavourite;
     const hasLocalVersion = g.items.some((i) => i.source === 'local');
     rows.push({
@@ -73,8 +81,8 @@ export function buildLibraryDashboardRows(
       author: first?.author || '—',
       libraryDocumentId,
       routeSlug,
-      ...(categoryId ? { categoryId } : {}),
-      ...(categoryId && categoryNameById[categoryId] ? { categoryName: categoryNameById[categoryId] } : {}),
+      ...(categoryIds.length > 0 ? { categoryIds, categoryId } : {}),
+      ...(categoryName ? { categoryName } : {}),
       isFavourite,
       hasLocalVersion,
     });
@@ -83,6 +91,13 @@ export function buildLibraryDashboardRows(
   for (const item of themeItems) {
     const libraryDocumentId = item.libraryDocumentId ?? parseThemeDocId(item.$id);
     const routeSlug = getLibraryItemSlug(item).toLowerCase();
+    const categoryIds =
+      item.categoryIds?.length ? item.categoryIds : item.categoryId ? [item.categoryId] : [];
+    const categoryId = categoryIds[0];
+    const categoryName =
+      categoryIds.length > 0
+        ? categoryIds.map((id) => categoryNameById[id]).filter(Boolean).join(', ') || undefined
+        : undefined;
     rows.push({
       id: `theme:${item.$id}`,
       kind: 'theme',
@@ -92,10 +107,8 @@ export function buildLibraryDashboardRows(
       author: item.author || '—',
       libraryDocumentId,
       routeSlug,
-      ...(item.categoryId ? { categoryId: item.categoryId } : {}),
-      ...(item.categoryId && categoryNameById[item.categoryId]
-        ? { categoryName: categoryNameById[item.categoryId] }
-        : {}),
+      ...(categoryIds.length > 0 ? { categoryIds, categoryId } : {}),
+      ...(categoryName ? { categoryName } : {}),
       isFavourite: !!item.isFavourite,
       hasLocalVersion: item.source === 'local',
     });

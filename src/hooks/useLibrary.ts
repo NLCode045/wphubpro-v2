@@ -457,6 +457,8 @@ export type PatchLibraryItemInput = {
 export type SetLibraryDefaultVersionInput = {
   libraryDocumentId: string;
   versionKey: string;
+  /** When true, skip success toast (e.g. before a bulk bridge install). */
+  silent?: boolean;
 };
 
 /**
@@ -484,13 +486,15 @@ export const useSetLibraryDefaultVersion = () => {
         is_default: mirror.is_default,
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['libraryItems', user?.$id] });
-      showNotification({
-        title: 'Default version updated',
-        message: 'The bridge will use this build when installing from your library.',
-        variant: 'success',
-      });
+      if (!variables.silent) {
+        showNotification({
+          title: 'Default version updated',
+          message: 'The bridge will use this build when installing from your library.',
+          variant: 'success',
+        });
+      }
     },
     onError: (error: Error) => {
       showNotification({

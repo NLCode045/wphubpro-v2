@@ -1,4 +1,5 @@
 export * from './categoryTree';
+export * from './libraryBridgeInstall';
 export * from './libraryDocument';
 export * from './libraryPluginGroups';
 export * from './libraryDashboardRows';

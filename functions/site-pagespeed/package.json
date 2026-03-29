@@ -1,0 +1,9 @@
+{
+  "name": "site-pagespeed",
+  "version": "1.0.0",
+  "description": "Proxy Google PageSpeed Insights for a user-owned site URL (API key from function env)",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3"
+  }
+}

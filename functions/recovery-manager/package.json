@@ -1,0 +1,11 @@
+{
+    "name": "recovery-manager",
+    "version": "1.0.0",
+    "description": "WPHubPro Recovery Manager for Fatal Errors",
+    "main": "index.js",
+    "type": "module",
+    "dependencies": {
+      "node-appwrite": "^11.0.0",
+      "jsonwebtoken": "^9.0.0"
+    }
+  }

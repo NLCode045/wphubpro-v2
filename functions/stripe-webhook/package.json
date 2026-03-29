@@ -1,0 +1,9 @@
+{
+  "name": "stripe-webhook",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "stripe": "^12.16.0"
+  }
+}

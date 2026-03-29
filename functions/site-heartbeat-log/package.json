@@ -1,0 +1,9 @@
+{
+  "name": "site-heartbeat-log",
+  "version": "1.0.0",
+  "description": "Logs incoming heartbeats to sites.log_data.incoming",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0"
+  }
+}

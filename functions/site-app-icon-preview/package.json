@@ -1,0 +1,9 @@
+{
+  "name": "site-app-icon-preview",
+  "version": "1.0.0",
+  "description": "Fetch site homepage HTML and extract img#app-icon-preview src for dashboard avatar",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3"
+  }
+}

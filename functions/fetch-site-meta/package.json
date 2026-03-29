@@ -1,0 +1,10 @@
+{
+  "name": "fetch-site-meta",
+  "version": "1.0.0",
+  "description": "One-time fetch of plugins_meta and themes_meta from bridge when empty and bridge_status is connected",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3",
+    "node-fetch": "^2.6.7"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "stripe-customers",
+  "version": "1.0.0",
+  "description": "Stripe customers: create (event-driven)",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3",
+    "stripe": "^20.4.1"
+  }
+}

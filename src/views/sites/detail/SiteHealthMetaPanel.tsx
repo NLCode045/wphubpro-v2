@@ -281,7 +281,7 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
     <div className="d-flex flex-column gap-3">
       <Row className="g-3 align-items-stretch">
         <Col md={4} lg={3} className="d-flex">
-          <Card className="border shadow-none flex-grow-1">
+          <Card className="border shadow-none flex-grow-1 bg-transparent">
             <CardBody className="d-flex flex-column align-items-center justify-content-center text-center py-3">
               <SiteHealthScoreDonut site={site} size={80} surface="light" showHeading />
               <div className="fs-xxs text-muted mt-2">Score {score}/100</div>
@@ -289,7 +289,7 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
           </Card>
         </Col>
         <Col md={8} lg={9}>
-          <Card className="border shadow-none h-100">
+          <Card className="border shadow-none h-100 bg-transparent">
             <CardBody>
               <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
                 <span className="text-muted fs-sm">Overall</span>
@@ -354,7 +354,7 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
       </Row>
 
       {aggRows.length > 0 ? (
-        <Card className="border shadow-none">
+        <Card className="border shadow-none bg-transparent">
           <CardBody>
             <h6 className="fs-base mb-2">Checks by category</h6>
             <p className="text-muted fs-xs mb-3">100% stacked: share of severities within each category.</p>
@@ -373,7 +373,7 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
           const title =
             categoryLabel === SITE_HEALTH_UNCATEGORIZED ? 'Uncategorized / pending' : categoryLabel;
           return (
-            <Card key={categoryLabel} className="border shadow-none">
+            <Card key={categoryLabel} className="border shadow-none bg-transparent">
               <CardBody>
                 <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                   <h6 className="fs-base mb-0">{title}</h6>

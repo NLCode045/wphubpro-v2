@@ -468,7 +468,7 @@ const SiteOverviewSitespeedCard = ({ siteId, siteUrl, performanceMeta }: SiteOve
                   }}
                   id={`site-pagespeed-tabs-${siteId}`}
                 >
-                  <div className="px-0 pt-1">
+                  <div className="px-0 pt-1 border-bottom border-light">
                     <Nav variant="underline" className="fs-xs gap-3 flex-nowrap" role="tablist">
                       <Nav.Item>
                         <Nav.Link eventKey="desktop" className="py-2 px-0">

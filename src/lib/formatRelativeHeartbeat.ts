@@ -15,7 +15,7 @@ export function formatRelativeHeartbeatLabel(isoOrTimestamp: string): string | n
 
   if (calendarDaysApart === 0) {
     if (diffMinutes < 2) return '1 minute ago';
-    if (diffMinutes < 60) return 'an hour ago';
+    if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
     return 'earlier today';
   }
   if (calendarDaysApart === 1) return 'yesterday';

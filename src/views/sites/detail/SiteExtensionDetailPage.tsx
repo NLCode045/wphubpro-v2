@@ -274,7 +274,7 @@ const SiteExtensionDetailPage = () => {
             <Col xl={9}>
               <Card className="mb-3 shadow-sm">
                 {kind === 'theme' ? (
-                  <CardBody className="pb-0">
+                  <CardBody className="pb-0 border-bottom border-light">
                     <Nav variant="underline" className="gap-3 flex-nowrap mb-0">
                       {EXT_TAB_KEYS.map((key, i) => {
                         const { label, Icon } = SITE_DETAIL_TAB_CONFIG[key];

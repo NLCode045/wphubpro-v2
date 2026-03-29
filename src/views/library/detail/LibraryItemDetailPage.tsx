@@ -1,19 +1,16 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { TabNavLabel } from '@/components/TabNavLabel';
 import { ROUTE_PATHS } from '@/config/routePaths';
-import {
-  decodeHtmlEntities,
-  filterCollectionsContainingSlug,
-  filterFamiliesContainingSlug,
-  filterLibraryItemsBySlugAndType,
-} from '@/domains/library';
+import { decodeHtmlEntities, filterLibraryItemsBySlugAndType } from '@/domains/library';
 import { parsePluginsMeta, parseThemesMeta } from '@/domains/sites/installedMeta';
 import { useFetchSiteMetaIfNeeded, useSites } from '@/domains/sites';
 import { useDeleteLibraryItem, useLibraryItems } from '@/hooks/useLibrary';
+import { useLibraryCategories } from '@/hooks/useLibraryCategories';
 import { useLibraryCollections, useLibraryFamilies } from '@/hooks/useLibraryFamiliesAndCollections';
 import { getWpPluginInfo } from '@/services/wordpress';
 import type { LibraryItem, LibraryItemSource, Site, WordPressPlugin, WordPressTheme } from '@/types';
 import LibraryItemDetailInfoCard from '@/views/library/detail/LibraryItemDetailInfoCard';
+import LibraryItemDetailOrganization from '@/views/library/detail/LibraryItemDetailOrganization';
 import { LIBRARY_ITEM_DETAIL_TAB_CONFIG } from '@/views/library/detail/libraryItemDetailNavTabs';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -31,7 +28,7 @@ import {
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { TbTrash } from 'react-icons/tb';
 
-const TAB_KEYS = ['overview', 'versions', 'sites'] as const;
+const TAB_KEYS = ['overview', 'sites'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 function indexFromTabKey(k: string | null): number {
@@ -101,6 +98,7 @@ const LibraryItemDetailPage = () => {
   const { data: sites = [] } = useSites();
   const { data: families = [] } = useLibraryFamilies();
   const { data: collections = [] } = useLibraryCollections();
+  const { data: categories = [] } = useLibraryCategories();
   const deleteMutation = useDeleteLibraryItem();
 
   useFetchSiteMetaIfNeeded(sites);
@@ -140,38 +138,17 @@ const LibraryItemDetailPage = () => {
 
   const authorHref = wpInfo?.authorUri ?? wpInfo?.homepage;
 
-  const longDescription = useMemo(() => {
+  const descriptionShort = useMemo(() => {
     const fromWp = wpInfo?.description ? stripHtml(wpInfo.description) : '';
     let best = '';
     for (const i of groupItems) {
       const t = stripHtml(i.description ?? '');
       if (t.length > best.length) best = t;
     }
-    return best.length >= fromWp.length ? best : fromWp;
+    const long = best.length >= fromWp.length ? best : fromWp;
+    const t = long.slice(0, 220);
+    return long.length > 220 ? `${t}…` : t;
   }, [groupItems, wpInfo?.description]);
-
-  const descriptionShort = useMemo(() => {
-    const t = longDescription.slice(0, 220);
-    return longDescription.length > 220 ? `${t}…` : t;
-  }, [longDescription]);
-
-  const mergedTags = useMemo(() => {
-    const s = new Set<string>();
-    groupItems.forEach((i) =>
-      (i.tags ?? []).forEach((t) => {
-        const x = String(t).trim();
-        if (x) s.add(x);
-      }),
-    );
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
-  }, [groupItems]);
-
-  const wpVersionList = useMemo(() => {
-    if (!wpInfo?.versions) return [] as string[];
-    return Object.keys(wpInfo.versions)
-      .filter((v) => v !== 'trunk')
-      .sort(compareSemverDesc);
-  }, [wpInfo?.versions]);
 
   const latestKnownVersion = useMemo(() => {
     const wpLatest = wpInfo?.version ?? '';
@@ -185,17 +162,6 @@ const LibraryItemDetailPage = () => {
     return [...new Set(vers)].sort(compareSemverDesc)[0];
   }, [wpInfo?.version, localItems, remoteItems, officialItems]);
 
-  const defaultVersionLabel = useMemo(() => {
-    const explicit = groupItems.find((i) => i.isDefault === true);
-    if (explicit) return explicit.version === 'latest' ? (wpInfo?.version ?? 'latest') : explicit.version;
-    if (officialItems.length > 1) return `${officialItems.length} WordPress.org pins`;
-    if (officialItems.length === 1) {
-      const v = officialItems[0].version;
-      return v === 'latest' ? (wpInfo?.version ? `Latest (${wpInfo.version})` : 'Latest') : v;
-    }
-    return localItems[0]?.version ?? remoteItems[0]?.version ?? '—';
-  }, [groupItems, officialItems, localItems, remoteItems, wpInfo?.version]);
-
   const projectHref = useMemo(() => {
     if (itemKind === 'plugin') {
       return wpInfo?.homepage ?? `https://wordpress.org/plugins/${encodeURIComponent(slug)}/`;
@@ -203,28 +169,35 @@ const LibraryItemDetailPage = () => {
     return `https://wordpress.org/themes/${encodeURIComponent(slug)}/`;
   }, [itemKind, slug, wpInfo?.homepage]);
 
-  const familiesForSlug = useMemo(
-    () => (itemKind ? filterFamiliesContainingSlug(families, slug) : []),
-    [families, itemKind, slug],
+  const uniqueLibraryDocumentIds = useMemo(
+    () => [...new Set(groupItems.map((i) => i.libraryDocumentId).filter(Boolean))] as string[],
+    [groupItems],
   );
-
-  const collectionsForSlug = useMemo(
-    () => (itemKind ? filterCollectionsContainingSlug(collections, slug, itemKind) : []),
-    [collections, itemKind, slug],
+  const primaryLibraryDocumentId = uniqueLibraryDocumentIds[0] ?? '';
+  const duplicateLibraryDocuments = uniqueLibraryDocumentIds.length > 1;
+  const primaryLibraryRow = useMemo(
+    () =>
+      groupItems.find((i) => i.libraryDocumentId === primaryLibraryDocumentId) ?? groupItems[0] ?? null,
+    [groupItems, primaryLibraryDocumentId],
   );
+  const documentTagsForEdit = primaryLibraryRow?.tags ?? [];
+  const documentCategoryId = primaryLibraryRow?.categoryId;
 
-  const sitesWithItem = useMemo(() => {
-    if (!itemKind || !slug) return [];
+  const sitesWithPlugin = useMemo(() => {
+    if (itemKind !== 'plugin' || !slug) return [];
     const connected = sites.filter((s) => s.status === 'connected');
-    if (itemKind === 'plugin') {
-      return connected
-        .map((site) => {
-          const plugins = parsePluginsMeta(site.pluginsMeta);
-          const m = plugins.find((p) => pluginDirFromFile(p.plugin) === slug);
-          return m ? { site, plugin: m } : null;
-        })
-        .filter(Boolean) as { site: Site; plugin: WordPressPlugin }[];
-    }
+    return connected
+      .map((site) => {
+        const plugins = parsePluginsMeta(site.pluginsMeta);
+        const m = plugins.find((p) => pluginDirFromFile(p.plugin) === slug);
+        return m ? { site, plugin: m } : null;
+      })
+      .filter(Boolean) as { site: Site; plugin: WordPressPlugin }[];
+  }, [sites, itemKind, slug]);
+
+  const sitesWithTheme = useMemo(() => {
+    if (itemKind !== 'theme' || !slug) return [];
+    const connected = sites.filter((s) => s.status === 'connected');
     return connected
       .map((site) => {
         const themes = parseThemesMeta(site.themesMeta);
@@ -303,7 +276,7 @@ const LibraryItemDetailPage = () => {
     );
   }
 
-  const latestSidebar = wpLoading ? '…' : latestKnownVersion;
+  const latestReleaseLabel = wpLoading ? '…' : latestKnownVersion;
 
   return (
     <Container fluid>
@@ -320,70 +293,51 @@ const LibraryItemDetailPage = () => {
           <Row>
             <Col xl={9}>
               <Card className="mb-3 shadow-sm">
-                <CardBody className="pb-0">
-                  <Nav variant="underline" className="gap-3 flex-nowrap mb-0">
-                    {TAB_KEYS.map((key, i) => {
-                      const { label, Icon } = LIBRARY_ITEM_DETAIL_TAB_CONFIG[key];
-                      return (
-                        <Nav.Item key={key}>
-                          <Nav.Link
-                            active={tab === i}
-                            href="#"
-                            className="py-2 px-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setTabKey(key);
-                            }}
-                          >
-                            <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
-                          </Nav.Link>
-                        </Nav.Item>
-                      );
-                    })}
-                  </Nav>
+                <CardBody className="pb-0 border-bottom border-light">
+                  <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <Nav variant="underline" className="gap-3 flex-nowrap mb-0 flex-grow-1 min-w-0">
+                      {TAB_KEYS.map((key, i) => {
+                        const { label, Icon } = LIBRARY_ITEM_DETAIL_TAB_CONFIG[key];
+                        return (
+                          <Nav.Item key={key}>
+                            <Nav.Link
+                              active={tab === i}
+                              href="#"
+                              className="py-2 px-0"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setTabKey(key);
+                              }}
+                            >
+                              <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
+                            </Nav.Link>
+                          </Nav.Item>
+                        );
+                      })}
+                    </Nav>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      className="d-inline-flex align-items-center justify-content-center flex-shrink-0 rounded-circle p-2"
+                      style={{ width: '2.25rem', height: '2.25rem' }}
+                      disabled={deleteMutation.isPending}
+                      onClick={() => void handleRemoveAll()}
+                      aria-label="Remove from library"
+                      title="Remove from library"
+                    >
+                      <TbTrash className="fs-lg" />
+                    </Button>
+                  </div>
                 </CardBody>
                 <CardBody className="pt-4 pb-4">
                   {tab === 0 && (
                     <div>
-                      <h6 className="text-muted text-uppercase fs-xs fw-semibold mb-2">About</h6>
-                      <p className="mb-4">
-                        {longDescription ? (
-                          decodeHtmlEntities(longDescription)
-                        ) : (
-                          <span className="text-muted">No description yet.</span>
-                        )}
-                      </p>
-                      <h6 className="text-muted text-uppercase fs-xs fw-semibold mb-2">Sources in library</h6>
-                      <ul className="mb-0">
-                        {officialItems.length > 0 && (
-                          <li>
-                            WordPress.org: {officialItems.length} pin
-                            {officialItems.length === 1 ? '' : 's'}
-                          </li>
-                        )}
-                        {localItems.length > 0 && (
-                          <li>
-                            Uploaded: {localItems.length} version
-                            {localItems.length === 1 ? '' : 's'}
-                          </li>
-                        )}
-                        {remoteItems.length > 0 && (
-                          <li>
-                            Remote URL: {remoteItems.length} version
-                            {remoteItems.length === 1 ? '' : 's'}
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
-
-                  {tab === 1 && (
-                    <div>
+                      <h6 className="text-muted text-uppercase fs-xs fw-semibold mb-2">Versions</h6>
                       <p className="text-muted fs-sm mb-3">
                         Pinned, uploaded, and remote versions for this {itemKind}. Removing a row deletes that
                         version from the library (and storage when applicable).
                       </p>
-                      <div className="table-responsive border rounded">
+                      <div className="table-responsive border rounded mb-4">
                         <Table hover size="sm" className="mb-0 align-middle">
                           <thead className="table-light">
                             <tr>
@@ -450,16 +404,67 @@ const LibraryItemDetailPage = () => {
                           </tbody>
                         </Table>
                       </div>
+
+                      {itemKind && primaryLibraryDocumentId ? (
+                        <LibraryItemDetailOrganization
+                          itemKind={itemKind}
+                          slug={slug}
+                          displayName={displayName}
+                          libraryDocumentId={primaryLibraryDocumentId}
+                          categoryId={documentCategoryId}
+                          tags={documentTagsForEdit}
+                          categories={categories}
+                          collections={collections}
+                          families={families}
+                          duplicateLibraryDocuments={duplicateLibraryDocuments}
+                        />
+                      ) : null}
                     </div>
                   )}
 
-                  {tab === 2 && (
+                  {tab === 1 && (
                     <div>
                       <p className="text-muted fs-sm mb-3">
                         Connected sites where this {itemKind} appears in the last bridge sync. Open a site to manage
                         installs and updates.
                       </p>
-                      {sitesWithItem.length === 0 ? (
+                      {itemKind === 'plugin' ? (
+                        sitesWithPlugin.length === 0 ? (
+                          <p className="text-muted mb-0">Not reported on any connected site yet.</p>
+                        ) : (
+                          <div className="table-responsive border rounded">
+                            <Table hover size="sm" className="mb-0 align-middle">
+                              <thead className="table-light">
+                                <tr>
+                                  <th>Site</th>
+                                  <th>Installed version</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sitesWithPlugin.map(({ site, plugin }) => (
+                                  <tr key={site.$id}>
+                                    <td>
+                                      <Link
+                                        to={`${ROUTE_PATHS.siteDetailPath(site.$id)}?tab=plugins`}
+                                        className="fw-medium text-decoration-none"
+                                      >
+                                        {site.siteName?.trim() || site.$id}
+                                      </Link>
+                                    </td>
+                                    <td>{plugin.version || '—'}</td>
+                                    <td>
+                                      <span className="badge bg-secondary bg-opacity-10 text-secondary">
+                                        {plugin.status === 'active' ? 'Active' : 'Inactive'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </Table>
+                          </div>
+                        )
+                      ) : sitesWithTheme.length === 0 ? (
                         <p className="text-muted mb-0">Not reported on any connected site yet.</p>
                       ) : (
                         <div className="table-responsive border rounded">
@@ -468,42 +473,22 @@ const LibraryItemDetailPage = () => {
                               <tr>
                                 <th>Site</th>
                                 <th>Installed version</th>
-                                {itemKind === 'plugin' ? <th>Status</th> : null}
                               </tr>
                             </thead>
                             <tbody>
-                              {itemKind === 'plugin'
-                                ? sitesWithItem.map(({ site, plugin }) => (
-                                    <tr key={site.$id}>
-                                      <td>
-                                        <Link
-                                          to={`${ROUTE_PATHS.siteDetailPath(site.$id)}?tab=plugins`}
-                                          className="fw-medium text-decoration-none"
-                                        >
-                                          {site.siteName?.trim() || site.$id}
-                                        </Link>
-                                      </td>
-                                      <td>{plugin.version || '—'}</td>
-                                      <td>
-                                        <span className="badge bg-secondary bg-opacity-10 text-secondary">
-                                          {plugin.status === 'active' ? 'Active' : 'Inactive'}
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  ))
-                                : sitesWithItem.map(({ site, theme }) => (
-                                    <tr key={site.$id}>
-                                      <td>
-                                        <Link
-                                          to={`${ROUTE_PATHS.siteDetailPath(site.$id)}?tab=themes`}
-                                          className="fw-medium text-decoration-none"
-                                        >
-                                          {site.siteName?.trim() || site.$id}
-                                        </Link>
-                                      </td>
-                                      <td>{theme.version || '—'}</td>
-                                    </tr>
-                                  ))}
+                              {sitesWithTheme.map(({ site, theme }) => (
+                                <tr key={site.$id}>
+                                  <td>
+                                    <Link
+                                      to={`${ROUTE_PATHS.siteDetailPath(site.$id)}?tab=themes`}
+                                      className="fw-medium text-decoration-none"
+                                    >
+                                      {site.siteName?.trim() || site.$id}
+                                    </Link>
+                                  </td>
+                                  <td>{theme.version || '—'}</td>
+                                </tr>
+                              ))}
                             </tbody>
                           </Table>
                         </div>
@@ -519,17 +504,10 @@ const LibraryItemDetailPage = () => {
                 displayName={displayName}
                 itemKind={itemKind}
                 descriptionShort={descriptionShort}
-                defaultVersionLabel={defaultVersionLabel}
-                latestKnownLabel={latestSidebar}
+                latestReleaseLabel={latestReleaseLabel}
                 authorLabel={displayAuthor || '—'}
                 authorHref={authorHref}
                 projectHref={projectHref}
-                mergedTags={mergedTags}
-                families={familiesForSlug}
-                collections={collectionsForSlug}
-                routeSlug={slug}
-                removeDisabled={deleteMutation.isPending}
-                onRemoveFromLibrary={() => void handleRemoveAll()}
               />
             </Col>
           </Row>

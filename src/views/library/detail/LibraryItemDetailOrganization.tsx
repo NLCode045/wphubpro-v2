@@ -23,7 +23,7 @@ type LibraryItemDetailOrganizationProps = {
   categoryId?: string;
   tags: string[];
   categories: LibraryCategory[];
-  collections: LibraryFamily extends infer _ ? LibraryCollection[] : never;
+  collections: LibraryCollection[];
   families: LibraryFamily[];
   duplicateLibraryDocuments: boolean;
 };
@@ -99,10 +99,10 @@ const LibraryItemDetailOrganization = ({
     updateCollectionItems.isPending ||
     createCollection.isPending;
 
-  const memberPayload = useMemo(
-    () => ({ slug, type: itemKind, versionMode: 'default' as const }),
-    [slug, itemKind],
-  );
+  const memberPayload = useMemo(() => {
+    const type: LibraryItemType = itemKind;
+    return { slug, type, versionMode: 'default' as const };
+  }, [slug, itemKind]);
 
   const handleCategoryChange = (next: string | null) => {
     patchMutation.mutate({

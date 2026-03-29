@@ -1,0 +1,10 @@
+{
+  "name": "site-heartbeat-poke",
+  "version": "1.0.0",
+  "description": "Every minute: GET heartbeat/poke on active connected sites",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}

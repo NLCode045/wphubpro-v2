@@ -1,0 +1,14 @@
+
+{
+  "name": "wp-proxy",
+  "version": "1.0.0",
+  "description": "Appwrite function to proxy requests to WordPress REST API.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "node-appwrite": "^22.1.3",
+    "node-fetch": "^2.6.7"
+  }
+}

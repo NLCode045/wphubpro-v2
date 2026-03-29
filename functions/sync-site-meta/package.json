@@ -1,0 +1,9 @@
+{
+  "name": "sync-site-meta",
+  "version": "1.0.0",
+  "description": "Sync plugins_meta and themes_meta from WordPress bridge to sites collection",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0"
+  }
+}

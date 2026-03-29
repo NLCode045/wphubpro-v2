@@ -1,0 +1,10 @@
+{
+  "name": "site-heartbeat-check",
+  "version": "1.0.0",
+  "description": "Scheduled check for stale heartbeats (>3 min), tries reconnect, sets bridge_status disconnected on failure",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0",
+    "node-fetch": "^2.6.7"
+  }
+}

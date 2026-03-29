@@ -1,0 +1,9 @@
+{
+  "name": "site-heartbeat",
+  "version": "1.0.0",
+  "description": "Receives heartbeat from WordPress bridge, updates bridge_status and heartbeat_success_at",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0"
+  }
+}

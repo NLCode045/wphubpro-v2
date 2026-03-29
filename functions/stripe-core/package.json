@@ -1,0 +1,9 @@
+{
+  "name": "stripe-core",
+  "version": "1.0.0",
+  "description": "Consolidated Stripe webhook and billing portal handler",
+  "main": "index.js",
+  "dependencies": {
+    "stripe": "^20.4.1"
+  }
+}

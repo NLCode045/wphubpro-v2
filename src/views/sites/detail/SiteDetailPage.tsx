@@ -64,7 +64,7 @@ function SiteDetailOverview({
               </div>
               <div className="flex-grow-1 d-flex flex-column min-h-0">
                 <Card className="border-0 shadow-none mb-0 flex-grow-1 d-flex flex-column min-h-0 bg-transparent">
-                  <CardBody className="p-0 d-flex flex-column flex-grow-1 min-h-0 bg-white rounded">
+                  <CardBody className="p-0 d-flex flex-column flex-grow-1 min-h-0 rounded">
                     <Tab.Container
                       activeKey={updatesTab}
                       onSelect={(k) => {
@@ -291,7 +291,7 @@ const SiteDetailPage = () => {
                     })}
                   </Nav>
                 </CardBody>
-                <CardBody className="bg-white pt-4 pb-4">
+                <CardBody className="pt-4 pb-4">
               {tab === 0 && (
                 <SiteDetailOverview
                   site={site}

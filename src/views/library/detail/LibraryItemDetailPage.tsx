@@ -342,7 +342,7 @@ const LibraryItemDetailPage = () => {
                     })}
                   </Nav>
                 </CardBody>
-                <CardBody className="bg-white pt-4 pb-4">
+                <CardBody className="pt-4 pb-4">
                   {tab === 0 && (
                     <div>
                       <h6 className="text-muted text-uppercase fs-xs fw-semibold mb-2">About</h6>

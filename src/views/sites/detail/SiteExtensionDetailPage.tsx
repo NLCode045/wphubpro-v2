@@ -297,7 +297,7 @@ const SiteExtensionDetailPage = () => {
                     </Nav>
                   </CardBody>
                 ) : null}
-                <CardBody className={`bg-white pb-4 ${kind === 'theme' ? 'pt-4' : 'pt-3'}`}>
+                <CardBody className={` pb-4 ${kind === 'theme' ? 'pt-4' : 'pt-3'}`}>
                   {kind === 'plugin' ? (
                     <SiteExtensionOverview site={site} kind={kind} plugin={plugin} theme={theme} />
                   ) : (

@@ -4,7 +4,7 @@ import { ROUTE_PATHS } from '@/config/routePaths';
 import { decodeHtmlEntities, filterLibraryItemsBySlugAndType } from '@/domains/library';
 import { parsePluginsMeta, parseThemesMeta } from '@/domains/sites/installedMeta';
 import { useFetchSiteMetaIfNeeded, useSites } from '@/domains/sites';
-import { useDeleteLibraryItem, useLibraryItems } from '@/hooks/useLibrary';
+import { useDeleteLibraryItem, useLibraryItems, useSetLibraryDefaultVersion } from '@/hooks/useLibrary';
 import { useLibraryCategories } from '@/hooks/useLibraryCategories';
 import { useLibraryCollections, useLibraryFamilies } from '@/hooks/useLibraryFamiliesAndCollections';
 import { getWpPluginInfo } from '@/services/wordpress';

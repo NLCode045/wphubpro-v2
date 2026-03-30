@@ -627,7 +627,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 240,
+            "timeout": 300,
             "commands": "npm install",
             "scopes": [
                 "users.read",

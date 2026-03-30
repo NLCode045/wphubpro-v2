@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 // https://vite.dev/config/
 export default defineConfig({
     server: {
-        allowedHosts: ['local.code045.nl', 'localhost', 'wphubpro.jhbdesigns.nl'],
+        allowedHosts: [ 'dev.wphub.pro', 'app.wphub.pro', 'local.code045.nl', 'localhost', 'wphubpro.jhbdesigns.nl'],
         host: true,
         port: 5173,
         strictPort: true,

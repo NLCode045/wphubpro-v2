@@ -2,7 +2,7 @@ import { parseActionLogForAudit } from '@/domains/sites';
 import type { Site } from '@/types';
 import SiteActionHistoryList from '@/views/sites/detail/SiteActionHistoryList';
 import SiteHealthMetaPanel from '@/views/sites/detail/SiteHealthMetaPanel';
-import { formatChecked } from '@/views/sites/detail/siteDetailFormat';
+import { formatChecked, formatSiteHealthCheckedOn } from '@/views/sites/detail/siteDetailFormat';
 import { useMemo } from 'react';
 import { Card, CardBody, Table } from 'react-bootstrap';
 
@@ -13,7 +13,20 @@ type OutgoingLogRow = NonNullable<Site['logData']>['outgoing'][number];
 export function SiteDetailHealthPanel({ site }: { site: Site }) {
   return (
     <div>
-      <h5 className="fs-base mb-3">Health</h5>
+      <div className="d-flex flex-wrap justify-content-between align-items-start column-gap-3 row-gap-2 mb-3">
+        <h5 className="fs-base mb-0">Health</h5>
+        <div className="text-end ms-auto">
+          <div className="fs-sm mb-1 text-body">
+            Site Health Checked on: {formatSiteHealthCheckedOn(site.lastChecked)}
+          </div>
+          <div className="fs-sm d-flex flex-wrap align-items-center justify-content-end gap-1">
+            <span className="text-body">Health Status:</span>
+            <span className={`badge badge-soft-${site.healthStatus === 'healthy' ? 'success' : 'warning'}`}>
+              {site.healthStatus === 'healthy' ? 'Healthy' : 'Needs attention'}
+            </span>
+          </div>
+        </div>
+      </div>
       <SiteHealthMetaPanel site={site} />
     </div>
   );

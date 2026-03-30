@@ -11,6 +11,13 @@ const ORDERED_CATEGORIES = ['Performance', 'Security', 'Privacy'] as const;
 
 const SEVERITIES: SiteHealthSeverity[] = ['ok', 'warning', 'critical', 'pending', 'unknown'];
 
+/** Severity groups in UI lists: critical first, warning second, then the rest in {@link SEVERITIES} order. */
+const RESULT_SEVERITY_ORDER: SiteHealthSeverity[] = [
+  'critical',
+  'warning',
+  ...SEVERITIES.filter((s) => s !== 'critical' && s !== 'warning'),
+];
+
 export function normalizeSiteHealthSeverity(value: string | undefined | null): SiteHealthSeverity {
   const v = String(value ?? '').toLowerCase();
   if (v === 'ok' || v === 'warning' || v === 'critical' || v === 'pending' || v === 'unknown') {
@@ -50,6 +57,12 @@ export function getChecksForDashboard(snapshot: SiteHealthMetaSnapshot): SiteHea
   return Array.from(byId.values());
 }
 
+/** Same grouping key as {@link groupChecksByCategory}. */
+export function categoryLabelForCheck(c: SiteHealthCheck): string {
+  const raw = c.category?.trim();
+  return raw && raw.length > 0 ? raw : SITE_HEALTH_UNCATEGORIZED;
+}
+
 function compareCategoryLabels(a: string, b: string): number {
   if (a === SITE_HEALTH_UNCATEGORIZED && b === SITE_HEALTH_UNCATEGORIZED) return 0;
   if (a === SITE_HEALTH_UNCATEGORIZED) return 1;
@@ -67,13 +80,44 @@ export type SiteHealthChecksByCategory = { categoryLabel: string; checks: SiteHe
 export function groupChecksByCategory(checks: SiteHealthCheck[]): SiteHealthChecksByCategory[] {
   const map = new Map<string, SiteHealthCheck[]>();
   for (const c of checks) {
-    const raw = c.category?.trim();
-    const key = raw && raw.length > 0 ? raw : SITE_HEALTH_UNCATEGORIZED;
+    const key = categoryLabelForCheck(c);
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(c);
   }
   const keys = Array.from(map.keys()).sort(compareCategoryLabels);
   return keys.map((categoryLabel) => ({ categoryLabel, checks: map.get(categoryLabel)! }));
+}
+
+function categoryHasCritical(checks: SiteHealthCheck[]): boolean {
+  return checks.some((c) => normalizeSiteHealthSeverity(c.severity) === 'critical');
+}
+
+/** Categories with at least one critical check first; ties keep {@link compareCategoryLabels} order. */
+export function sortCategoryGroupsCriticalFirst(
+  groups: SiteHealthChecksByCategory[],
+): SiteHealthChecksByCategory[] {
+  return [...groups].sort((a, b) => {
+    const ac = categoryHasCritical(a.checks);
+    const bc = categoryHasCritical(b.checks);
+    if (ac && !bc) return -1;
+    if (!ac && bc) return 1;
+    return compareCategoryLabels(a.categoryLabel, b.categoryLabel);
+  });
+}
+
+export type SiteHealthChecksByResult = { severity: SiteHealthSeverity; checks: SiteHealthCheck[] };
+
+/** Groups by normalized severity; only severities with at least one check appear; critical first, warning second. */
+export function groupChecksByResult(checks: SiteHealthCheck[]): SiteHealthChecksByResult[] {
+  const map = new Map<SiteHealthSeverity, SiteHealthCheck[]>();
+  for (const s of SEVERITIES) map.set(s, []);
+  for (const c of checks) {
+    map.get(normalizeSiteHealthSeverity(c.severity))!.push(c);
+  }
+  return RESULT_SEVERITY_ORDER.filter((s) => map.get(s)!.length > 0).map((severity) => ({
+    severity,
+    checks: map.get(severity)!,
+  }));
 }
 
 export type SiteHealthCategorySeverityRow = {

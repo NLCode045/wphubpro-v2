@@ -15,6 +15,7 @@ import SiteActionHistoryList from '@/views/sites/detail/SiteActionHistoryList';
 import SiteDetailSidebarCard from '@/views/sites/detail/SiteDetailSidebarCard';
 import SiteOverviewSitespeedCard from '@/views/sites/detail/SiteOverviewSitespeedCard';
 import { SiteDetailHealthPanel, SiteDetailLogsPanel } from '@/views/sites/detail/SiteDetailSharedPanels';
+import { SiteHealthTabStatusBadge } from '@/views/sites/detail/SiteHealthTabStatusBadge';
 import { SITE_DETAIL_TAB_CONFIG } from '@/views/sites/detail/siteDetailNavTabs';
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardBody, Col, Container, Nav, Row, Spinner } from 'react-bootstrap';
@@ -289,7 +290,10 @@ const SiteExtensionDetailPage = () => {
                                 setTabKey(key);
                               }}
                             >
-                              <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
+                              <span className="d-inline-flex align-items-center gap-2">
+                                <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
+                                {key === 'health' ? <SiteHealthTabStatusBadge healthMeta={site.healthMeta} /> : null}
+                              </span>
                             </Nav.Link>
                           </Nav.Item>
                         );

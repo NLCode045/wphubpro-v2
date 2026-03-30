@@ -1,20 +1,69 @@
 import { parseActionLogForAudit } from '@/domains/sites';
-import type { Site } from '@/types';
+import { getChecksForDashboard, parseSiteHealthMeta, severityTotalsForChecks } from '@/lib/parseSiteHealthMeta';
+import type { Site, SiteHealthSeverity } from '@/types';
 import SiteActionHistoryList from '@/views/sites/detail/SiteActionHistoryList';
 import SiteHealthMetaPanel from '@/views/sites/detail/SiteHealthMetaPanel';
 import { formatChecked, formatSiteHealthCheckedOn } from '@/views/sites/detail/siteDetailFormat';
-import { useMemo } from 'react';
-import { Card, CardBody, Table } from 'react-bootstrap';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Card, CardBody, Table } from 'react-bootstrap';
 
 export { formatChecked } from '@/views/sites/detail/siteDetailFormat';
 
 type OutgoingLogRow = NonNullable<Site['logData']>['outgoing'][number];
 
 export function SiteDetailHealthPanel({ site }: { site: Site }) {
+  const snapshot = useMemo(() => parseSiteHealthMeta(site.healthMeta), [site.healthMeta]);
+  const headerChecks = useMemo(() => (snapshot ? getChecksForDashboard(snapshot) : []), [snapshot]);
+  const headerTotals = useMemo(() => severityTotalsForChecks(headerChecks), [headerChecks]);
+  const criticalCount = headerTotals.critical;
+  const warningCount = headerTotals.warning;
+
+  const [severityFilters, setSeverityFilters] = useState<Set<SiteHealthSeverity>>(() => new Set());
+
+  useEffect(() => {
+    setSeverityFilters(new Set());
+  }, [site.$id, site.healthMeta]);
+
+  const titleFilterActive = (sev: 'critical' | 'warning') =>
+    severityFilters.size === 1 && severityFilters.has(sev);
+
+  const onTitleSeverityClick = (sev: 'critical' | 'warning') => {
+    setSeverityFilters((prev) => {
+      if (prev.size === 1 && prev.has(sev)) return new Set();
+      return new Set([sev]);
+    });
+  };
+
   return (
     <div>
       <div className="d-flex flex-wrap justify-content-between align-items-start column-gap-3 row-gap-2 mb-3">
-        <h5 className="fs-base mb-0">Health</h5>
+        <div className="d-flex flex-wrap align-items-center gap-2 min-w-0">
+          <h5 className="fs-base mb-0">Health</h5>
+          {criticalCount > 0 ? (
+            <Button
+              type="button"
+              variant={titleFilterActive('critical') ? 'danger' : 'outline-danger'}
+              size="sm"
+              className="text-nowrap"
+              aria-pressed={titleFilterActive('critical')}
+              onClick={() => onTitleSeverityClick('critical')}
+            >
+              Critical ({criticalCount})
+            </Button>
+          ) : null}
+          {warningCount > 0 ? (
+            <Button
+              type="button"
+              variant={titleFilterActive('warning') ? 'warning' : 'outline-warning'}
+              size="sm"
+              className="text-nowrap"
+              aria-pressed={titleFilterActive('warning')}
+              onClick={() => onTitleSeverityClick('warning')}
+            >
+              Warning ({warningCount})
+            </Button>
+          ) : null}
+        </div>
         <div className="text-end ms-auto">
           <div className="fs-sm mb-1 text-body">
             Site Health Checked on: {formatSiteHealthCheckedOn(site.lastChecked)}
@@ -27,7 +76,7 @@ export function SiteDetailHealthPanel({ site }: { site: Site }) {
           </div>
         </div>
       </div>
-      <SiteHealthMetaPanel site={site} />
+      <SiteHealthMetaPanel site={site} severityFilters={severityFilters} setSeverityFilters={setSeverityFilters} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Query } from 'appwrite';
-import { account, databases } from '../../services/appwrite';
+import { account, COLLECTIONS, databases, DATABASE_ID } from '../../services/appwrite';
 import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
 import type {
   Site,
@@ -28,9 +28,6 @@ function isMetaEmpty(s: string | undefined | null): boolean {
   return t.length <= 2 || t === '[]' || t === '{}';
 }
 
-const DATABASE_ID = 'platform_db';
-const SITES_COLLECTION_ID = 'sites';
-
 const STATUS_POLL_INTERVAL_MS = 60_000;
 
 export const useSites = () => {
@@ -40,7 +37,7 @@ export const useSites = () => {
     queryKey: ['sites', user?.$id],
     queryFn: async () => {
       if (!user?.$id) return [];
-      const response = await databases.listDocuments(DATABASE_ID, SITES_COLLECTION_ID, [
+      const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.SITES, [
         Query.equal('user_id', user.$id),
         Query.limit(100),
       ]);
@@ -58,7 +55,7 @@ export const useSite = (siteId: string | undefined) => {
     queryFn: async () => {
       if (!siteId) throw new Error('Site ID is required.');
 
-      const document = await databases.getDocument(DATABASE_ID, SITES_COLLECTION_ID, siteId);
+      const document = await databases.getDocument(DATABASE_ID, COLLECTIONS.SITES, siteId);
 
       if ((document as { user_id?: string }).user_id !== user?.$id) {
         throw new Error('No access to this site.');

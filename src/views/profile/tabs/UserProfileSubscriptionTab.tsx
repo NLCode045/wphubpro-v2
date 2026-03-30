@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  Form,
   Modal,
   Spinner,
   Table,
@@ -12,6 +13,9 @@ import {
 import { useSearchParams } from 'react-router';
 import type { BillingAccountContext } from '@/domains/billing';
 import {
+  checkoutUpdateTypeForPlanChange,
+  findPlanSelectionByPriceId,
+  selectedPlanAmountCents,
   useCancelSubscription,
   useCreateCheckoutSession,
   useInvoices,
@@ -27,8 +31,9 @@ import { useAuth } from '@/domains/auth';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import { StripeElementsModal } from '@/integrations/stripe/StripeElementsModal';
 import { redirectToBillingPortal } from '@/services/stripe';
-import type { StripePlan } from '@/types';
+import type { StripePlan, SubscriptionDetailsResponse } from '@/types';
 
+/** Amounts in cents (Stripe `unit_amount`, invoice lines, etc.). */
 const formatMoney = (amountCents: number, currency = 'eur') =>
   (amountCents / 100).toLocaleString('nl-NL', {
     style: 'currency',
@@ -36,6 +41,35 @@ const formatMoney = (amountCents: number, currency = 'eur') =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+/** `stripe-products` list: `monthlyPrice` / `yearlyPrice` are already major units (`unit_amount / 100`). */
+const formatMoneyMajorUnits = (amount: number, currency = 'eur') =>
+  amount.toLocaleString('nl-NL', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+const formatBillingDate = (unixSeconds: number) =>
+  new Date(unixSeconds * 1000).toLocaleDateString('nl-NL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+function nextInvoiceFromDetails(details: SubscriptionDetailsResponse) {
+  const ui = details.upcoming_invoice;
+  const sub = details.subscription;
+  const paymentAttempt = ui?.next_payment_attempt ?? null;
+  const fallbackTs = ui?.period_end ?? sub?.current_period_end ?? null;
+  const dateTs = paymentAttempt ?? fallbackTs;
+  return {
+    dateTs,
+    isPaymentAttempt: Boolean(paymentAttempt),
+    upcoming: ui,
+  };
+}
 
 const UserProfileSubscriptionTab = () => {
   const { user } = useAuth();
@@ -74,7 +108,15 @@ const UserProfileSubscriptionTab = () => {
 
   const [addCardOpen, setAddCardOpen] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
+  /** Modal-only: yearly when true, monthly when false */
+  const [changePlanYearly, setChangePlanYearly] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
+
+  useEffect(() => {
+    if (!changePlanOpen) return;
+    if (subscription?.interval === 'year') setChangePlanYearly(true);
+    else if (subscription?.interval === 'month') setChangePlanYearly(false);
+  }, [changePlanOpen, subscription?.interval]);
 
   useEffect(() => {
     const success = searchParams.get('success');
@@ -106,6 +148,9 @@ const UserProfileSubscriptionTab = () => {
   const planId = accountDoc?.current_plan_id?.trim() || '';
   const hasStripeCustomer = Boolean(stripeCustomerId);
 
+  const nextInvoice =
+    subscriptionDetails != null ? nextInvoiceFromDetails(subscriptionDetails) : null;
+
   const isFree =
     !subscription?.priceAmount ||
     subscription.priceAmount === 0 ||
@@ -132,11 +177,29 @@ const UserProfileSubscriptionTab = () => {
     cancelSubscription.mutate();
   };
 
-  const handleSelectPlanPrice = (priceId: string | null) => {
-    if (!priceId) return;
+  const handleSelectPlanPrice = (priceId: string | null, yearly: boolean) => {
+    if (!priceId || !stripePlans?.length) return;
+    const selection = findPlanSelectionByPriceId(priceId, stripePlans);
+    if (!selection) {
+      showNotification({
+        title: 'Plan',
+        message: 'Could not resolve the selected price.',
+        variant: 'danger',
+        delay: 4000,
+      });
+      return;
+    }
+    const newCents = selectedPlanAmountCents(selection.plan, yearly);
+    const hasActivePaid = Boolean(subscription && !isFree);
+    const currentCents = subscription?.priceAmount ?? 0;
+    const updateType = checkoutUpdateTypeForPlanChange({
+      hasActivePaidSubscription: hasActivePaid,
+      currentPriceAmountCents: currentCents,
+      newPriceAmountCents: newCents,
+    });
     const returnUrl = `${window.location.origin}${window.location.pathname}?tab=subscription`;
     createCheckout.mutate(
-      { priceId, returnUrl, updateType: undefined },
+      { priceId, returnUrl, updateType },
       {
         onSuccess: (data) => {
           if (data?.url) window.location.href = data.url;
@@ -198,7 +261,7 @@ const UserProfileSubscriptionTab = () => {
                     <p className="text-muted fs-sm mb-0">
                       Status: {subscription.status ?? '—'}
                       {subscription.currentPeriodEnd
-                        ? ` · Period ends ${new Date(subscription.currentPeriodEnd * 1000).toLocaleDateString('nl-NL')}`
+                        ? ` · Period ends ${formatBillingDate(subscription.currentPeriodEnd)}`
                         : null}
                     </p>
                   </>
@@ -250,7 +313,7 @@ const UserProfileSubscriptionTab = () => {
 
             {subscription && subscriptionDetails ? (
               <div className="p-3 rounded bg-light">
-                <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Stripe details</p>
+                <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Current plan</p>
                 {subscriptionDetails.plan?.product_name ? (
                   <p className="fs-sm mb-1">
                     <span className="text-muted">Product:</span> {subscriptionDetails.plan.product_name}
@@ -265,33 +328,76 @@ const UserProfileSubscriptionTab = () => {
                       : null}
                   </p>
                 ) : null}
-                {subscriptionDetails.subscription?.current_period_end ? (
-                  <p className="fs-sm mb-1">
-                    <span className="text-muted">Current period ends:</span>{' '}
-                    {new Date(subscriptionDetails.subscription.current_period_end * 1000).toLocaleDateString(
-                      'nl-NL'
-                    )}
-                  </p>
+
+                {subscriptionDetails.subscription ? (
+                  <>
+                    <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-3">Billing period</p>
+                    {subscriptionDetails.subscription.current_period_start ? (
+                      <p className="fs-sm mb-1">
+                        <span className="text-muted">Current period started:</span>{' '}
+                        {formatBillingDate(subscriptionDetails.subscription.current_period_start)}
+                      </p>
+                    ) : null}
+                    {subscriptionDetails.subscription.current_period_end ? (
+                      <p className="fs-sm mb-1">
+                        <span className="text-muted">Current period ends:</span>{' '}
+                        {formatBillingDate(subscriptionDetails.subscription.current_period_end)}
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
-                {subscriptionDetails.upcoming_invoice ? (
-                  <p className="fs-sm mb-1">
-                    <span className="text-muted">Next charge:</span>{' '}
-                    {formatMoney(
-                      subscriptionDetails.upcoming_invoice.amount_due,
-                      subscriptionDetails.upcoming_invoice.currency
-                    )}
-                    {subscriptionDetails.upcoming_invoice.next_payment_attempt
-                      ? ` on ${new Date(
-                          subscriptionDetails.upcoming_invoice.next_payment_attempt * 1000
-                        ).toLocaleDateString('nl-NL')}`
-                      : null}
-                  </p>
-                ) : null}
+
                 {subscriptionDetails.pending_update ? (
-                  <p className="fs-sm mb-0 text-primary">
-                    Scheduled change: {subscriptionDetails.pending_update.plan_name} on{' '}
-                    {new Date(subscriptionDetails.pending_update.date * 1000).toLocaleDateString('nl-NL')}
-                  </p>
+                  <>
+                    <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-3">New plan</p>
+                    <p className="fs-sm mb-1">
+                      <span className="text-muted">Plan:</span> {subscriptionDetails.pending_update.plan_name}
+                    </p>
+                    <p className="fs-sm mb-1">
+                      <span className="text-muted">Price:</span>{' '}
+                      {formatMoney(
+                        subscriptionDetails.pending_update.price_amount,
+                        subscriptionDetails.pending_update.currency
+                      )}
+                      {subscriptionDetails.pending_update.interval
+                        ? ` / ${subscriptionDetails.pending_update.interval}`
+                        : null}
+                    </p>
+                    <p className="fs-sm mb-0 text-primary fw-medium">
+                      <span className="text-muted fw-normal">Starts:</span>{' '}
+                      {formatBillingDate(subscriptionDetails.pending_update.date)}
+                    </p>
+                  </>
+                ) : null}
+
+                {nextInvoice &&
+                (subscriptionDetails.upcoming_invoice ||
+                  subscriptionDetails.subscription?.current_period_end) ? (
+                  <>
+                    <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-3">Next invoice</p>
+                    {nextInvoice.dateTs ? (
+                      <p className="fs-sm mb-1">
+                        <span className="text-muted">
+                          {nextInvoice.isPaymentAttempt ? 'Payment date:' : 'Expected date:'}
+                        </span>{' '}
+                        {formatBillingDate(nextInvoice.dateTs)}
+                        {!nextInvoice.isPaymentAttempt ? (
+                          <span className="text-muted"> (end of current period)</span>
+                        ) : null}
+                      </p>
+                    ) : (
+                      <p className="fs-sm mb-1 text-muted">No upcoming invoice scheduled yet.</p>
+                    )}
+                    {nextInvoice.upcoming ? (
+                      <p className="fs-sm mb-1">
+                        <span className="text-muted">Amount:</span>{' '}
+                        {formatMoney(
+                          nextInvoice.upcoming.amount_due,
+                          nextInvoice.upcoming.currency
+                        )}
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
             ) : null}
@@ -511,42 +617,107 @@ const UserProfileSubscriptionTab = () => {
           ) : !stripePlans?.length ? (
             <p className="text-muted fs-sm mb-0">No plans available.</p>
           ) : (
-            <div className="d-flex flex-column gap-3">
-              {stripePlans.map((plan: StripePlan) => (
-                <Card key={plan.id} className="border shadow-none">
-                  <Card.Body className="py-3">
-                    <div className="d-flex flex-wrap justify-content-between gap-2">
-                      <div>
-                        <h6 className="mb-1">{plan.name}</h6>
-                        <p className="text-muted fs-sm mb-0">{plan.description}</p>
-                      </div>
-                      <div className="d-flex flex-wrap gap-2">
-                        {plan.monthlyPriceId ? (
-                          <Button
-                            variant="outline-primary"
-                            size="sm"
-                            disabled={createCheckout.isPending}
-                            onClick={() => handleSelectPlanPrice(plan.monthlyPriceId)}
-                          >
-                            Monthly
-                          </Button>
-                        ) : null}
-                        {plan.yearlyPriceId ? (
-                          <Button
-                            variant="outline-primary"
-                            size="sm"
-                            disabled={createCheckout.isPending}
-                            onClick={() => handleSelectPlanPrice(plan.yearlyPriceId)}
-                          >
-                            Yearly
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </Card.Body>
-                </Card>
-              ))}
-            </div>
+            <>
+              <Alert variant="light" className="border mb-3 fs-sm">
+                <strong>Upgrades:</strong> a more expensive plan opens Stripe Checkout so you can pay the prorated
+                amount; your new plan starts right after payment. <strong>Downgrades:</strong> usually take effect at
+                the end of the current billing period (see &quot;New plan&quot; below once scheduled).
+              </Alert>
+              <div className="d-flex align-items-center justify-content-center gap-3 mb-4 pb-3 border-bottom">
+                <span className={`fs-sm ${!changePlanYearly ? 'fw-semibold text-body' : 'text-muted'}`}>
+                  Monthly
+                </span>
+                <Form.Check
+                  type="switch"
+                  role="switch"
+                  aria-label="Toggle yearly billing"
+                  id="change-plan-interval-switch"
+                  checked={changePlanYearly}
+                  onChange={(e) => setChangePlanYearly(e.target.checked)}
+                />
+                <span className={`fs-sm ${changePlanYearly ? 'fw-semibold text-body' : 'text-muted'}`}>
+                  Yearly
+                </span>
+              </div>
+              <div className="d-flex flex-column gap-3">
+                {stripePlans.map((plan: StripePlan) => {
+                  const priceId = changePlanYearly ? plan.yearlyPriceId : plan.monthlyPriceId;
+                  const amount = changePlanYearly ? plan.yearlyPrice : plan.monthlyPrice;
+                  const hasPrice = priceId != null && amount != null;
+                  const currentPriceId = subscription?.priceId?.trim() || null;
+                  const isCurrentPlan = Boolean(
+                    currentPriceId && priceId && currentPriceId === priceId
+                  );
+                  const currentCents =
+                    subscription && !isFree ? (subscription.priceAmount ?? 0) : 0;
+                  const rowCents = hasPrice ? selectedPlanAmountCents(plan, changePlanYearly) : 0;
+                  const switchLabel =
+                    !subscription || isFree
+                      ? 'Choose plan'
+                      : !hasPrice
+                        ? 'Switch to this plan'
+                        : rowCents > currentCents
+                          ? 'Upgrade & pay proration'
+                          : rowCents < currentCents
+                            ? 'Downgrade'
+                            : 'Switch to this plan';
+                  return (
+                    <Card
+                      key={plan.id}
+                      className={`border shadow-none ${isCurrentPlan ? 'border-primary border-2' : ''}`}
+                    >
+                      <Card.Body className="py-3">
+                        <div className="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                          <div className="flex-grow-1 min-w-0">
+                            <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+                              <h6 className="mb-0">{plan.name}</h6>
+                              {isCurrentPlan ? (
+                                <Badge bg="primary" className="fs-xxs">
+                                  Your current plan
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <p className="text-muted fs-sm mb-2">{plan.description}</p>
+                            {hasPrice ? (
+                              <p className="mb-0 fs-5 fw-semibold">
+                                {formatMoneyMajorUnits(amount, plan.currency)}
+                                <span className="fs-sm fw-normal text-muted ms-1">
+                                  / {changePlanYearly ? 'year' : 'month'}
+                                </span>
+                              </p>
+                            ) : (
+                              <p className="text-muted fs-sm mb-0">
+                                No {changePlanYearly ? 'yearly' : 'monthly'} price for this plan.
+                              </p>
+                            )}
+                          </div>
+                          <div className="d-flex align-items-center">
+                            {isCurrentPlan ? (
+                              <Button variant="light" size="sm" disabled>
+                                Current plan
+                              </Button>
+                            ) : hasPrice ? (
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                disabled={createCheckout.isPending}
+                                onClick={() => handleSelectPlanPrice(priceId, changePlanYearly)}
+                              >
+                                {switchLabel}
+                              </Button>
+                            ) : (
+                              <Button variant="outline-secondary" size="sm" disabled>
+                                Unavailable
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
           )}
         </Modal.Body>
       </Modal>

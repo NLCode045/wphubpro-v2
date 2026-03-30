@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
 // https://vite.dev/config/
 export default defineConfig({
+    /** Expose `APPWRITE_*` alongside `VITE_*` (used in `src/services/appwrite.ts`). */
+    envPrefix: ['VITE_', 'APPWRITE_'],
     server: {
         allowedHosts: [ 'dev.wphub.pro', 'app.wphub.pro', 'local.code045.nl', 'localhost', 'wphubpro.jhbdesigns.nl'],
         host: true,

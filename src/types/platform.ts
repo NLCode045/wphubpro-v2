@@ -30,7 +30,9 @@ export interface StripePlan {
   id: string;
   name: string;
   description: string;
+  /** Major currency units (euros), not cents — matches `stripe-products` (`unit_amount / 100`). */
   monthlyPrice: number;
+  /** Major currency units (euros), not cents. */
   yearlyPrice: number;
   monthlyPriceId: string | null;
   yearlyPriceId: string | null;

@@ -2,16 +2,21 @@ import { Client, Account, Databases, Functions, Storage, Teams, Avatars, ID, OAu
 
 export { OAuthProvider };
 
+const viteEnv = (import.meta as any).env as Record<string, string | undefined>;
+
+function envString(key: string, fallback: string): string {
+  const v = viteEnv[key];
+  return typeof v === 'string' && v.trim() !== '' ? v.trim() : fallback;
+}
+
 /**
- * Appwrite Productie Configuratie
- * Waarden uit .env (APPWRITE_*) of fallback. Zorg dat .env in project root staat.
+ * Appwrite config — keys match variables in the project root `.env`.
+ * Client-safe only; never put secret API keys in code that ships to the browser.
  */
-export const APPWRITE_ENDPOINT =
-  (import.meta as any).env?.APPWRITE_ENDPOINT || 'https://api.wphub.pro/v1';
-export const APPWRITE_PROJECT_ID =
-  (import.meta as any).env?.APPWRITE_PROJECT_ID || '698a55ce00010497b136';
-/** Function domain for heartbeat (JWT in header). Set APPWRITE_HEARTBEAT_URL in .env. */
-export const APPWRITE_HEARTBEAT_URL = (import.meta as any).env?.APPWRITE_HEARTBEAT_URL || '';
+export const APPWRITE_ENDPOINT = envString('APPWRITE_ENDPOINT', 'https://api.wphub.pro/v1');
+export const APPWRITE_PROJECT_ID = envString('APPWRITE_PROJECT_ID', '698a55ce00010497b136');
+/** Function domain for heartbeat (JWT in header). */
+export const APPWRITE_HEARTBEAT_URL = envString('APPWRITE_HEARTBEAT_URL', '');
 
 if (!APPWRITE_PROJECT_ID || APPWRITE_PROJECT_ID.trim() === '') {
   throw new Error(
@@ -20,10 +25,9 @@ if (!APPWRITE_PROJECT_ID || APPWRITE_PROJECT_ID.trim() === '') {
 }
 
 const client = new Client()
-    .setEndpoint(APPWRITE_ENDPOINT)
-    .setProject(APPWRITE_PROJECT_ID);
+  .setEndpoint(APPWRITE_ENDPOINT)
+  .setProject(APPWRITE_PROJECT_ID);
 
-// Initialiseer de services voor gebruik in de rest van de applicatie
 export const account = new Account(client);
 export const databases = new Databases(client);
 export const functions = new Functions(client);
@@ -33,28 +37,35 @@ export const avatars = new Avatars(client);
 
 export { client, ID };
 
-/**
- * Voorbeeld van het gebruik van een database ID (zoals gedefinieerd in je setup script)
- * Zie: wearecode045/wphubpro.v2/.../appwrite-setup/setup.js
- */
-export const DATABASE_ID = 'platform_db';
+/** Database — `APPWRITE_DATABASE_ID` in `.env` */
+export const DATABASE_ID = envString('APPWRITE_DATABASE_ID', 'platform_db');
+
+/** Collections — `APPWRITE_*_COLLECTION_ID` in `.env` */
+export const ACCOUNTS_COLLECTION_ID = envString('APPWRITE_ACCOUNTS_COLLECTION_ID', 'accounts');
+export const SITES_COLLECTION_ID = envString('APPWRITE_SITES_COLLECTION_ID', 'sites');
+export const LIBRARY_COLLECTION_ID = envString('APPWRITE_LIBRARY_COLLECTION_ID', 'library');
+export const PLANS_COLLECTION_ID = envString('APPWRITE_PLANS_COLLECTION_ID', 'plans');
+export const SUBSCRIPTIONS_COLLECTION_ID = envString(
+  'APPWRITE_SUBSCRIPTIONS_COLLECTION_ID',
+  'subscriptions'
+);
 
 /**
- * Collectie IDs conform je database schema
- *
+ * Collectie IDs — waar mogelijk uit `.env`; overige vaste schema-namen.
  */
 export const COLLECTIONS = {
-  SITES: 'sites',
-  LIBRARY: 'library',
+  SITES: SITES_COLLECTION_ID,
+  LIBRARY: LIBRARY_COLLECTION_ID,
+  PLANS: PLANS_COLLECTION_ID,
+  SUBSCRIPTIONS: SUBSCRIPTIONS_COLLECTION_ID,
   LIBRARY_CATEGORIES: 'library_categories',
   LIBRARY_FAMILIES: 'library_families',
   LIBRARY_COLLECTIONS: 'library_collections',
   SETTINGS: 'platform_settings',
-  ACCOUNTS: 'accounts',
+  ACCOUNTS: ACCOUNTS_COLLECTION_ID,
   NOTIFICATIONS: 'notifications',
   TICKETS: 'tickets',
   TICKET_MESSAGES: 'ticket_messages',
-  /** User/team threaded messages (legacy flat thread; prefer conversations + function) */
   MESSAGES: 'messages',
   CONVERSATIONS: 'conversations',
   CONVERSATION_MESSAGES: 'conversation_messages',

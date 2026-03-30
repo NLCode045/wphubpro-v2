@@ -11,6 +11,7 @@ import {
   sortCategoryGroupsCriticalFirst,
 } from '@/lib/parseSiteHealthMeta';
 import type { Site, SiteHealthCheck, SiteHealthSeverity } from '@/types';
+import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button, ButtonGroup, Card, CardBody, Collapse, Form } from 'react-bootstrap';
 
@@ -136,11 +137,13 @@ function SiteHealthCheckRow({ check }: CheckRowProps) {
 
 type SiteHealthMetaPanelProps = {
   site: Site;
+  severityFilters: Set<SiteHealthSeverity>;
+  setSeverityFilters: Dispatch<SetStateAction<Set<SiteHealthSeverity>>>;
 };
 
 type HealthChecksListView = 'category' | 'result';
 
-export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) {
+export default function SiteHealthMetaPanel({ site, severityFilters, setSeverityFilters }: SiteHealthMetaPanelProps) {
   const raw = site.healthMeta?.trim() ?? '';
   const snapshot = useMemo(() => parseSiteHealthMeta(site.healthMeta), [site.healthMeta]);
   const parseFailed = raw.length > 2 && snapshot === null;
@@ -152,13 +155,11 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
 
   const checks = useMemo(() => (snapshot ? getChecksForDashboard(snapshot) : []), [snapshot]);
   const checkTotals = useMemo(() => severityTotalsForChecks(checks), [checks]);
-  const [severityFilters, setSeverityFilters] = useState<Set<SiteHealthSeverity>>(() => new Set());
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [listView, setListView] = useState<HealthChecksListView>('category');
   const [showRaw, setShowRaw] = useState(false);
 
   useEffect(() => {
-    setSeverityFilters(new Set());
     setSelectedCategoryKey(null);
     setListView('category');
   }, [site.$id, site.healthMeta]);

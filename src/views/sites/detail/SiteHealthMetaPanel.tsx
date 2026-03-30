@@ -29,50 +29,6 @@ function severitySoftClass(sev: SiteHealthSeverity): string {
   }
 }
 
-/** Higher = more urgent; used to order categories and checks. */
-const SEVERITY_URGENCY: Record<SiteHealthSeverity, number> = {
-  critical: 5,
-  warning: 4,
-  pending: 3,
-  unknown: 2,
-  ok: 1,
-};
-
-function urgencyOfCheck(c: SiteHealthCheck): number {
-  return SEVERITY_URGENCY[normalizeSiteHealthSeverity(c.severity)];
-}
-
-function worstUrgencyInCategory(checks: SiteHealthCheck[]): number {
-  let w = 0;
-  for (const c of checks) {
-    const u = urgencyOfCheck(c);
-    if (u > w) w = u;
-  }
-  return w;
-}
-
-function sortCategoriesByUrgency(groups: SiteHealthChecksByCategory[]): SiteHealthChecksByCategory[] {
-  return [...groups].sort((a, b) => {
-    const diff = worstUrgencyInCategory(b.checks) - worstUrgencyInCategory(a.checks);
-    if (diff !== 0) return diff;
-    return a.categoryLabel.localeCompare(b.categoryLabel);
-  });
-}
-
-function sortChecksByUrgency(checks: SiteHealthCheck[]): SiteHealthCheck[] {
-  return [...checks].sort((a, b) => {
-    const diff = urgencyOfCheck(b) - urgencyOfCheck(a);
-    if (diff !== 0) return diff;
-    return a.label.localeCompare(b.label);
-  });
-}
-
-/** Same bucket key as {@link groupChecksByCategory}. */
-function categoryKeyForCheck(c: SiteHealthCheck): string {
-  const raw = c.category?.trim();
-  return raw && raw.length > 0 ? raw : SITE_HEALTH_UNCATEGORIZED;
-}
-
 function displayCategoryTitle(categoryLabel: string): string {
   return categoryLabel === SITE_HEALTH_UNCATEGORIZED ? 'Uncategorized / pending' : categoryLabel;
 }
@@ -121,10 +77,6 @@ function FilterSeverityBadge({ severity, count, active, onToggle }: FilterSeveri
       {label} {count}
     </button>
   );
-}
-
-function displayCategoryTitle(label: string): string {
-  return label === SITE_HEALTH_UNCATEGORIZED ? 'Uncategorized / pending' : label;
 }
 
 function formatCategoryMixLine(checks: SiteHealthCheck[]): string {
@@ -193,6 +145,11 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
   const snapshot = useMemo(() => parseSiteHealthMeta(site.healthMeta), [site.healthMeta]);
   const parseFailed = raw.length > 2 && snapshot === null;
 
+  const totalFromSummary =
+    snapshot != null && typeof snapshot.summary?.total_checks === 'number'
+      ? snapshot.summary.total_checks
+      : undefined;
+
   const checks = useMemo(() => (snapshot ? getChecksForDashboard(snapshot) : []), [snapshot]);
   const checkTotals = useMemo(() => severityTotalsForChecks(checks), [checks]);
   const [severityFilters, setSeverityFilters] = useState<Set<SiteHealthSeverity>>(() => new Set());
@@ -254,7 +211,6 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
   if (parseFailed) {
     return (
       <div className="d-flex flex-column gap-3">
-        {lastCheckLine}
         <p className="text-danger mb-0">Health snapshot could not be read (invalid JSON).</p>
         <Button variant="outline-secondary" size="sm" className="align-self-start" onClick={() => setShowRaw((v) => !v)}>
           {showRaw ? 'Hide raw data' : 'Show raw data'}

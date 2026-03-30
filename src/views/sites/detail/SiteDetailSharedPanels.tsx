@@ -14,15 +14,6 @@ export function SiteDetailHealthPanel({ site }: { site: Site }) {
   return (
     <div>
       <h5 className="fs-base mb-3">Health</h5>
-      <p className="mb-1">
-        <span className="text-muted">Bridge status:</span>{' '}
-        <span className={`badge badge-soft-${site.healthStatus === 'healthy' ? 'success' : 'warning'}`}>
-          {site.healthStatus === 'healthy' ? 'Healthy' : 'Needs attention'}
-        </span>
-      </p>
-      <p className="mb-3">
-        <span className="text-muted">Last check:</span> {formatChecked(site.lastChecked)}
-      </p>
       <SiteHealthMetaPanel site={site} />
     </div>
   );

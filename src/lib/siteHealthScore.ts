@@ -130,6 +130,35 @@ function scorePendingUpdates(site: Site): number {
   return clampScore(100 - n * PENALTY_PER_UPDATE);
 }
 
+/**
+ * Health snapshot score from `summary.counts`: starts at 100 and subtracts **per-check penalties**
+ * (not an average over checks — many OKs do not cancel a critical).
+ * Weights increase from warning upward: critical > warning > unknown > pending > ok (0).
+ */
+const HEALTH_META_PENALTY_CRITICAL = 38;
+const HEALTH_META_PENALTY_WARNING = 15;
+const HEALTH_META_PENALTY_UNKNOWN = 6;
+const HEALTH_META_PENALTY_PENDING = 3;
+/** Extra deduction whenever there is at least one critical check (severity impact beyond count). */
+const HEALTH_META_ANY_CRITICAL_EXTRA = 22;
+/** Max total deduction (allows score to reach 0 when many issues stack). */
+const HEALTH_META_PENALTY_CAP = 100;
+
+function scoreFromHealthMetaCounts(counts: Record<string, number>): number {
+  const crit = typeof counts.critical === 'number' ? counts.critical : 0;
+  const warn = typeof counts.warning === 'number' ? counts.warning : 0;
+  const unk = typeof counts.unknown === 'number' ? counts.unknown : 0;
+  const pend = typeof counts.pending === 'number' ? counts.pending : 0;
+  const rawPenalty =
+    crit * HEALTH_META_PENALTY_CRITICAL +
+    warn * HEALTH_META_PENALTY_WARNING +
+    unk * HEALTH_META_PENALTY_UNKNOWN +
+    pend * HEALTH_META_PENALTY_PENDING +
+    (crit > 0 ? HEALTH_META_ANY_CRITICAL_EXTRA : 0);
+  const penalty = Math.min(rawPenalty, HEALTH_META_PENALTY_CAP);
+  return clampScore(100 - penalty);
+}
+
 /** 0–100 uit health_meta samenvatting (checks), anders 50. */
 function scoreHealthMetaOverview(healthMeta: string | undefined): number {
   const raw = healthMeta?.trim();
@@ -146,13 +175,7 @@ function scoreHealthMetaOverview(healthMeta: string | undefined): number {
           : 0;
 
     if (total > 0 && counts && typeof counts === 'object') {
-      const ok = counts.ok ?? 0;
-      const pend = counts.pending ?? 0;
-      const unk = counts.unknown ?? 0;
-      const warn = counts.warning ?? 0;
-      const crit = counts.critical ?? 0;
-      const weighted = ok * 100 + pend * 85 + unk * 60 + warn * 38 + crit * 12;
-      return clampScore(weighted / total);
+      return scoreFromHealthMetaCounts(counts as Record<string, number>);
     }
 
     const overall = s?.overall;
@@ -168,8 +191,8 @@ function scoreHealthMetaOverview(healthMeta: string | undefined): number {
 }
 
 /**
- * Core & Security: gemiddelde van WP, PHP, SSL, updates, health_meta-snapshot.
- * Elk deel 0–100 (clamp).
+ * Core & Security: WP/PHP/SSL/updates elk 12%, Site Health-snapshot **52%**
+ * zodat een critical in `health_meta` het totaal sterk naar beneden trekt (niet 1/5 van alleen core).
  */
 function scoreCoreSecurityBlock(site: Site): number {
   const { wp, php } = wpPhpFromSite(site);
@@ -179,7 +202,9 @@ function scoreCoreSecurityBlock(site: Site): number {
   const sslS = refineSslWithHealthMeta(site.healthMeta, sslBase);
   const updS = scorePendingUpdates(site);
   const healthS = scoreHealthMetaOverview(site.healthMeta);
-  return clampScore((wpS + phpS + sslS + updS + healthS) / 5);
+  const wInfra = 0.12;
+  const wHealth = 0.52;
+  return clampScore(wpS * wInfra + phpS * wInfra + sslS * wInfra + updS * wInfra + healthS * wHealth);
 }
 
 /** Lighthouse Performance + SEO uit performance_meta (desktop/mobile gemiddeld). */

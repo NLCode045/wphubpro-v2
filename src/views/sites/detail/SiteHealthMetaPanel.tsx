@@ -1,8 +1,4 @@
-import { getColor } from '@/helpers/color';
-import { useLayoutContext } from '@/context/useLayoutContext.tsx';
 import {
-  aggregateByCategory,
-  buildCategoryStackedBarSeries,
   getChecksForDashboard,
   groupChecksByCategory,
   normalizeSiteHealthSeverity,
@@ -10,25 +6,15 @@ import {
   severityDisplayName,
   severityTotalsForChecks,
   SITE_HEALTH_UNCATEGORIZED,
+  type SiteHealthChecksByCategory,
 } from '@/lib/parseSiteHealthMeta';
 import { parseSiteHealthScore } from '@/lib/siteHealthScore.ts';
 import type { Site, SiteHealthCheck, SiteHealthSeverity } from '@/types';
-import type { ApexOptions } from 'apexcharts';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button, Card, CardBody, Col, Collapse, Row } from 'react-bootstrap';
-import ReactApexChart from 'react-apexcharts';
 import SiteHealthScoreDonut from '@/views/sites/detail/SiteHealthScoreDonut';
 
-import Loader from '@/components/Loader.tsx';
 import { formatChecked } from '@/views/sites/detail/siteDetailFormat';
-
-const CHART_COLORS = {
-  ok: 'success',
-  warning: 'warning',
-  critical: 'danger',
-  pending: 'info',
-  unknown: 'secondary',
-} as const satisfies Record<SiteHealthSeverity, string>;
 
 function overallBadgeVariant(
   overall: string | undefined,
@@ -70,6 +56,54 @@ function severitySoftClass(sev: SiteHealthSeverity): string {
     default:
       return 'badge-soft-secondary';
   }
+}
+
+/** Higher = more urgent; used to order categories and checks. */
+const SEVERITY_URGENCY: Record<SiteHealthSeverity, number> = {
+  critical: 5,
+  warning: 4,
+  pending: 3,
+  unknown: 2,
+  ok: 1,
+};
+
+function urgencyOfCheck(c: SiteHealthCheck): number {
+  return SEVERITY_URGENCY[normalizeSiteHealthSeverity(c.severity)];
+}
+
+function worstUrgencyInCategory(checks: SiteHealthCheck[]): number {
+  let w = 0;
+  for (const c of checks) {
+    const u = urgencyOfCheck(c);
+    if (u > w) w = u;
+  }
+  return w;
+}
+
+function sortCategoriesByUrgency(groups: SiteHealthChecksByCategory[]): SiteHealthChecksByCategory[] {
+  return [...groups].sort((a, b) => {
+    const diff = worstUrgencyInCategory(b.checks) - worstUrgencyInCategory(a.checks);
+    if (diff !== 0) return diff;
+    return a.categoryLabel.localeCompare(b.categoryLabel);
+  });
+}
+
+function sortChecksByUrgency(checks: SiteHealthCheck[]): SiteHealthCheck[] {
+  return [...checks].sort((a, b) => {
+    const diff = urgencyOfCheck(b) - urgencyOfCheck(a);
+    if (diff !== 0) return diff;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+/** Same bucket key as {@link groupChecksByCategory}. */
+function categoryKeyForCheck(c: SiteHealthCheck): string {
+  const raw = c.category?.trim();
+  return raw && raw.length > 0 ? raw : SITE_HEALTH_UNCATEGORIZED;
+}
+
+function displayCategoryTitle(categoryLabel: string): string {
+  return categoryLabel === SITE_HEALTH_UNCATEGORIZED ? 'Uncategorized / pending' : categoryLabel;
 }
 
 function formatCategorySummaryLine(counts: Record<SiteHealthSeverity, number>): string {
@@ -114,64 +148,6 @@ function FilterSeverityBadge({ severity, count, active, onToggle }: FilterSeveri
     >
       {label} {count}
     </button>
-  );
-}
-
-type SiteHealthCategoryChartProps = {
-  rows: ReturnType<typeof aggregateByCategory>;
-};
-
-function SiteHealthCategoryChart({ rows }: SiteHealthCategoryChartProps) {
-  const { skin, theme } = useLayoutContext();
-  const { categories, series } = useMemo(() => buildCategoryStackedBarSeries(rows), [rows]);
-
-  const options: ApexOptions = useMemo(() => {
-    const sevOrder: SiteHealthSeverity[] = ['ok', 'warning', 'critical', 'pending', 'unknown'];
-    const colors = sevOrder.map((s) => getColor(CHART_COLORS[s]));
-    const chartHeight = Math.min(420, Math.max(160, 40 + categories.length * 36));
-
-    return {
-      chart: {
-        type: 'bar',
-        stacked: true,
-        stackType: '100%',
-        toolbar: { show: false },
-        fontFamily: 'inherit',
-        height: chartHeight,
-      },
-      plotOptions: {
-        bar: {
-          horizontal: true,
-          barHeight: '72%',
-          borderRadius: 4,
-          borderRadiusApplication: 'end',
-        },
-      },
-      stroke: { show: true, width: 1, colors: ['#fff'] },
-      colors,
-      dataLabels: { enabled: false },
-      xaxis: { categories, labels: { style: { fontSize: '12px' } } },
-      yaxis: { labels: { maxWidth: 160, style: { fontSize: '12px' } } },
-      legend: { position: 'top', horizontalAlign: 'left', offsetY: 0 },
-      grid: {
-        borderColor: getColor('border-color'),
-        strokeDashArray: 4,
-        padding: { left: 8, right: 8, top: 0, bottom: 0 },
-      },
-      tooltip: {
-        y: {
-          formatter: (val: number) => `${val} checks`,
-        },
-      },
-    };
-  }, [categories, skin, theme]);
-
-  if (categories.length === 0) return null;
-
-  return (
-    <Suspense fallback={<Loader />}>
-      <ReactApexChart type="bar" options={options} series={series} height={options.chart?.height} />
-    </Suspense>
   );
 }
 
@@ -230,31 +206,66 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
   const checks = useMemo(() => (snapshot ? getChecksForDashboard(snapshot) : []), [snapshot]);
   const checkTotals = useMemo(() => severityTotalsForChecks(checks), [checks]);
   const [severityFilter, setSeverityFilter] = useState<SiteHealthSeverity | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
 
   useEffect(() => {
     setSeverityFilter(null);
+    setCategoryFilter(null);
   }, [site.$id, site.healthMeta]);
 
-  const displayedChecks = useMemo(() => {
+  const severityFilteredChecks = useMemo(() => {
     if (!severityFilter) return checks;
     return checks.filter((c) => normalizeSiteHealthSeverity(c.severity) === severityFilter);
   }, [checks, severityFilter]);
 
-  const byCategory = useMemo(() => groupChecksByCategory(displayedChecks), [displayedChecks]);
-  const aggRows = useMemo(() => aggregateByCategory(displayedChecks), [displayedChecks]);
-  const score = useMemo(() => parseSiteHealthScore(site), [site]);
+  const categoryOptions = useMemo(() => {
+    const grouped = groupChecksByCategory(severityFilteredChecks);
+    return sortCategoriesByUrgency(grouped).map(({ categoryLabel, checks: catChecks }) => ({
+      categoryLabel,
+      count: catChecks.length,
+    }));
+  }, [severityFilteredChecks]);
 
-  const totalFromSummary =
-    typeof snapshot?.summary?.total_checks === 'number' ? snapshot.summary.total_checks : undefined;
+  useEffect(() => {
+    if (categoryFilter == null) return;
+    const stillExists = categoryOptions.some((o) => o.categoryLabel === categoryFilter);
+    if (!stillExists) setCategoryFilter(null);
+  }, [categoryOptions, categoryFilter]);
+
+  const displayedChecks = useMemo(() => {
+    if (!categoryFilter) return severityFilteredChecks;
+    return severityFilteredChecks.filter((c) => categoryKeyForCheck(c) === categoryFilter);
+  }, [severityFilteredChecks, categoryFilter]);
+
+  const byCategorySorted = useMemo(() => {
+    const grouped = groupChecksByCategory(displayedChecks);
+    return sortCategoriesByUrgency(grouped).map(({ categoryLabel, checks: catChecks }) => ({
+      categoryLabel,
+      checks: sortChecksByUrgency(catChecks),
+    }));
+  }, [displayedChecks]);
+
+  const score = useMemo(() => parseSiteHealthScore(site), [site]);
 
   const toggleSeverityFilter = (s: SiteHealthSeverity) => {
     setSeverityFilter((prev) => (prev === s ? null : s));
   };
 
+  const toggleCategoryFilter = (label: string) => {
+    setCategoryFilter((prev) => (prev === label ? null : label));
+  };
+
+  const lastCheckLine = (
+    <p className="text-muted fs-xs mb-0">
+      <span className="text-muted">Last check:</span> {formatChecked(site.lastChecked)}
+    </p>
+  );
+
   if (parseFailed) {
     return (
       <div className="d-flex flex-column gap-3">
+        {lastCheckLine}
         <p className="text-danger mb-0">Health snapshot could not be read (invalid JSON).</p>
         <Button variant="outline-secondary" size="sm" className="align-self-start" onClick={() => setShowRaw((v) => !v)}>
           {showRaw ? 'Hide raw data' : 'Show raw data'}
@@ -269,7 +280,12 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
   }
 
   if (!snapshot || checks.length === 0) {
-    return <p className="text-muted mb-0">No detailed health snapshot stored for this site yet.</p>;
+    return (
+      <div className="d-flex flex-column gap-2">
+        {lastCheckLine}
+        <p className="text-muted mb-0">No detailed health snapshot stored for this site yet.</p>
+      </div>
+    );
   }
 
   const overall = snapshot.summary?.overall;
@@ -280,17 +296,17 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
   return (
     <div className="d-flex flex-column gap-3">
       <Row className="g-3 align-items-stretch">
-        <Col md={4} lg={3} className="d-flex">
-          <Card className="border shadow-none flex-grow-1 bg-transparent">
-            <CardBody className="d-flex flex-column align-items-center justify-content-center text-center py-3">
+        <Col md={4} lg={3} className="d-flex flex-column">
+          <Card className="border shadow-none flex-grow-1 w-100 bg-transparent d-flex flex-column">
+            <CardBody className="d-flex flex-column align-items-center justify-content-center text-center py-3 flex-grow-1">
               <SiteHealthScoreDonut site={site} size={80} surface="light" showHeading />
               <div className="fs-xxs text-muted mt-2">Score {score}/100</div>
             </CardBody>
           </Card>
         </Col>
-        <Col md={8} lg={9}>
-          <Card className="border shadow-none h-100 bg-transparent">
-            <CardBody>
+        <Col md={8} lg={9} className="d-flex flex-column">
+          <Card className="border shadow-none flex-grow-1 w-100 bg-transparent d-flex flex-column">
+            <CardBody className="flex-grow-1 d-flex flex-column">
               <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
                 <span className="text-muted fs-sm">Overall</span>
                 <Button
@@ -313,20 +329,19 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
                 </Button>
               </div>
               <p className="text-muted fs-xs mb-2">
-                Snapshot: {formatChecked(snapshot.collected_at)}
-                {typeof snapshot.collection_duration_ms === 'number' ? (
-                  <> · Collected in {snapshot.collection_duration_ms} ms</>
-                ) : null}
+                <span className="text-muted">Last check:</span> {formatChecked(site.lastChecked)}
               </p>
-              {severityFilter ? (
+              {severityFilter || categoryFilter ? (
                 <p className="text-primary fs-xs fw-semibold mb-2">
-                  Showing {displayedChecks.length} of {checks.length} checks (
-                  {severityDisplayName(severityFilter)} only). Click the same badge again to show all.
+                  Showing {displayedChecks.length} of {checks.length} checks
+                  {severityFilter ? <> ({severityDisplayName(severityFilter)} only)</> : null}
+                  {categoryFilter ? <> in {displayCategoryTitle(categoryFilter)}</> : null}. Toggle a filter badge
+                  again to clear it.
                 </p>
               ) : null}
               <div className="d-flex flex-wrap align-items-center gap-2">
                 <span className="text-muted fs-xs text-uppercase" style={{ letterSpacing: '0.04em' }}>
-                  Filter
+                  Severity
                 </span>
                 {SEVERITY_ORDER.map((sev) => (
                   <FilterSeverityBadge
@@ -342,36 +357,67 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
                   className="badge badge-soft-secondary border-0"
                   style={{ cursor: severityFilter ? 'pointer' : 'default' }}
                   disabled={!severityFilter}
-                  aria-label="Show all checks"
+                  aria-label="Clear severity filter"
                   onClick={() => setSeverityFilter(null)}
                 >
-                  All ({typeof totalFromSummary === 'number' ? totalFromSummary : checks.length})
+                  All severities
                 </button>
               </div>
+              {categoryOptions.length > 0 ? (
+                <div className="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top border-light">
+                  <span className="text-muted fs-xs text-uppercase" style={{ letterSpacing: '0.04em' }}>
+                    Category
+                  </span>
+                  {categoryOptions.map(({ categoryLabel, count }) => {
+                    const active = categoryFilter === categoryLabel;
+                    return (
+                      <button
+                        key={categoryLabel}
+                        type="button"
+                        className="badge badge-soft-light text-dark border-0"
+                        style={
+                          active
+                            ? { boxShadow: '0 0 0 2px var(--bs-primary)', cursor: 'pointer' }
+                            : { cursor: 'pointer' }
+                        }
+                        disabled={count <= 0}
+                        aria-pressed={active}
+                        aria-label={
+                          active
+                            ? `Clear category filter ${displayCategoryTitle(categoryLabel)}`
+                            : `Show only ${displayCategoryTitle(categoryLabel)}`
+                        }
+                        onClick={() => toggleCategoryFilter(categoryLabel)}
+                      >
+                        {displayCategoryTitle(categoryLabel)} {count}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="badge badge-soft-secondary border-0"
+                    style={{ cursor: categoryFilter ? 'pointer' : 'default' }}
+                    disabled={!categoryFilter}
+                    aria-label="Clear category filter"
+                    onClick={() => setCategoryFilter(null)}
+                  >
+                    All categories
+                  </button>
+                </div>
+              ) : null}
             </CardBody>
           </Card>
         </Col>
       </Row>
 
-      {aggRows.length > 0 ? (
-        <Card className="border shadow-none bg-transparent">
-          <CardBody>
-            <h6 className="fs-base mb-2">Checks by category</h6>
-            <p className="text-muted fs-xs mb-3">100% stacked: share of severities within each category.</p>
-            <SiteHealthCategoryChart rows={aggRows} />
-          </CardBody>
-        </Card>
-      ) : null}
-
-      {severityFilter && displayedChecks.length === 0 ? (
+      {(severityFilter || categoryFilter) && displayedChecks.length === 0 ? (
         <p className="text-muted mb-0">No checks match this filter.</p>
       ) : null}
 
       <div className="d-flex flex-column gap-3">
-        {byCategory.map(({ categoryLabel, checks: catChecks }) => {
+        {byCategorySorted.map(({ categoryLabel, checks: catChecks }) => {
           const totals = severityTotalsForChecks(catChecks);
-          const title =
-            categoryLabel === SITE_HEALTH_UNCATEGORIZED ? 'Uncategorized / pending' : categoryLabel;
+          const title = displayCategoryTitle(categoryLabel);
           return (
             <Card key={categoryLabel} className="border shadow-none bg-transparent">
               <CardBody>

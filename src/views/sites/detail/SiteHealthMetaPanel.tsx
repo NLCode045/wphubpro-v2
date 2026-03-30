@@ -44,7 +44,8 @@ function formatCategorySummaryLine(counts: Record<SiteHealthSeverity, number>): 
   return parts.length ? parts.join(' · ') : 'No checks';
 }
 
-const SEVERITY_ORDER: SiteHealthSeverity[] = ['ok', 'warning', 'critical', 'pending', 'unknown'];
+/** Order of chips under "Filter by Result" (critical & warning first). */
+const SEVERITY_ORDER: SiteHealthSeverity[] = ['critical', 'warning', 'ok', 'pending', 'unknown'];
 
 /** Subtle outline for filter chips that are part of the current selection. */
 const FILTER_CHIP_ACTIVE_CLASS = 'border border-secondary-subtle rounded';
@@ -109,11 +110,6 @@ function SiteHealthCheckRow({ check }: CheckRowProps) {
         ) : null}
         <div className="flex-grow-1 min-w-0">
           <div className="fw-semibold small">{check.label}</div>
-          {check.module_id ? (
-            <div className="text-muted fs-xxs text-truncate" title={check.module_id}>
-              {check.module_id}
-            </div>
-          ) : null}
         </div>
         {hasMessage ? (
           <Button

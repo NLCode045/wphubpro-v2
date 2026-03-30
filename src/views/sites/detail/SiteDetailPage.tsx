@@ -9,6 +9,7 @@ import SiteOverviewSitespeedCard from '@/views/sites/detail/SiteOverviewSitespee
 import SiteInstalledExtensionGrid from '@/views/sites/detail/SiteInstalledExtensionGrid';
 import { SiteInstalledPluginsTable, SiteInstalledThemesTable } from '@/views/sites/detail/SiteInstalledExtensionsTable';
 import { SiteDetailHealthPanel, SiteDetailLogsPanel } from '@/views/sites/detail/SiteDetailSharedPanels';
+import { SiteHealthTabStatusBadge } from '@/views/sites/detail/SiteHealthTabStatusBadge';
 import { SITE_DETAIL_TAB_CONFIG } from '@/views/sites/detail/siteDetailNavTabs';
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Card, CardBody, Col, Container, Nav, Row, Spinner, Tab, Table } from 'react-bootstrap';
@@ -284,7 +285,10 @@ const SiteDetailPage = () => {
                               setTabKey(key);
                             }}
                           >
-                            <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
+                            <span className="d-inline-flex align-items-center gap-2">
+                              <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
+                              {key === 'health' ? <SiteHealthTabStatusBadge healthMeta={site.healthMeta} /> : null}
+                            </span>
                           </Nav.Link>
                         </Nav.Item>
                       );

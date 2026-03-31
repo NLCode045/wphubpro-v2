@@ -6,7 +6,7 @@ export default defineConfig({
     /** Expose `APPWRITE_*` alongside `VITE_*` (used in `src/services/appwrite.ts`). */
     envPrefix: ['VITE_', 'APPWRITE_'],
     server: {
-        allowedHosts: [ 'dev.wphub.pro', 'app.wphub.pro', 'local.code045.nl', 'localhost', 'wphubpro.jhbdesigns.nl'],
+        allowedHosts: [ 'dev.wphub.pro', 'local.code045.nl', 'localhost', 'wphubpro.jhbdesigns.nl'],
         host: true,
         port: 5173,
         strictPort: true,

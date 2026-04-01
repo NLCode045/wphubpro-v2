@@ -32,15 +32,6 @@ function decryptApiKey(encrypted, key) {
   }
 }
 
-function encrypt(text, key) {
-  const iv = crypto.randomBytes(12);
-  const derivedKey = crypto.createHash('sha256').update(String(key), 'utf8').digest();
-  const cipher = crypto.createCipheriv('aes-256-gcm', derivedKey, iv);
-  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString('hex')}:${encrypted.toString('hex')}:${tag.toString('hex')}`;
-}
-
 function isSiteEnabled(site) {
   const meta = site.meta_data ?? site.metaData;
   if (!meta || typeof meta !== 'string') return true;
@@ -52,6 +43,66 @@ function isSiteEnabled(site) {
   }
 }
 
+<<<<<<< Updated upstream
+=======
+function isValidJwtFormat(t) {
+  const parts = t ? t.split('.') : [];
+  return parts.length === 3 && parts.every((p) => p && p.length >= 10);
+}
+
+/**
+ * @returns {Promise<{ ok: true, httpStatus: number } | { ok: false, reason: string, detail?: string, httpStatus?: number }>}
+ */
+async function pokeSingleSite(site, ENCRYPTION_KEY, log) {
+  let wpApiKey = site.api_key ?? site.apiKey ?? '';
+  const looksEncrypted =
+    wpApiKey && typeof wpApiKey === 'string' && wpApiKey.includes(':') && wpApiKey.split(':').length === 3;
+  if (wpApiKey && looksEncrypted) {
+    wpApiKey = decryptApiKey(wpApiKey, ENCRYPTION_KEY);
+  }
+  if (!wpApiKey || typeof wpApiKey !== 'string' || !wpApiKey.trim()) {
+    return {
+      ok: false,
+      reason: 'no_api_key',
+      detail: 'Site has no API key. Reconnect the WPHub Pro bridge from WordPress.',
+    };
+  }
+
+  // Bridge compares X-WPHub-Key to stored plaintext bridge_secret (hash_equals). Same as wp-proxy:
+  // re-encrypting with a new IV would never match.
+  const bridgeSecretForWp = wpApiKey.trim();
+  let siteUrl = (site.site_url || site.siteUrl || '').trim().replace(/\/$/, '');
+  if (!siteUrl.startsWith('http')) {
+    siteUrl = `https://${siteUrl}`;
+  }
+  const pokeUrl = `${siteUrl}/wp-json/wphubpro/v1/heartbeat/poke`;
+
+  try {
+    const resp = await fetch(pokeUrl, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'X-WPHub-Key': bridgeSecretForWp,
+      },
+      timeout: 10000,
+    });
+    const httpStatus = resp.status;
+    if (httpStatus >= 200 && httpStatus < 400) {
+      return { ok: true, httpStatus };
+    }
+    return {
+      ok: false,
+      reason: 'http_error',
+      httpStatus,
+      detail: `WordPress returned HTTP ${httpStatus}`,
+    };
+  } catch (e) {
+    log(`[site-heartbeat-poke] fetch error: ${e.message}`);
+    return { ok: false, reason: 'network', detail: e.message || String(e) };
+  }
+}
+
+>>>>>>> Stashed changes
 module.exports = async ({ req, res, log, error }) => {
   const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT;
   const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;

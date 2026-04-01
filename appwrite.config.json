@@ -480,7 +480,9 @@
             "runtime": "node-18.0",
             "path": "functions/site-heartbeat-poke",
             "entrypoint": "index.js",
-            "execute": [],
+            "execute": [
+                "users"
+            ],
             "enabled": true,
             "logging": true,
             "events": [],
@@ -488,6 +490,7 @@
             "timeout": 60,
             "commands": "npm install",
             "scopes": [
+                "users.read",
                 "databases.read",
                 "documents.read"
             ],

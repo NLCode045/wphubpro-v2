@@ -1,4 +1,5 @@
-import { parseActionLogForAudit, useSiteAppIconPreview } from '@/domains/sites';
+import { parseActionLogForAudit, useRequestBridgeHeartbeatPoke, useSiteAppIconPreview } from '@/domains/sites';
+import { useNotificationContext } from '@/context/useNotificationContext';
 import { formatRelativeHeartbeatLabel } from '@/lib/formatRelativeHeartbeat.ts';
 import type { Site } from '@/types';
 import SiteActionHistoryList from '@/views/sites/detail/SiteActionHistoryList';
@@ -51,6 +52,8 @@ const CONNECTED_FLASH_COLOR = '#ea580c';
 type SidebarFaviconPhase = 'site' | 'globe';
 
 const SiteDetailSidebarCard = ({ site, onViewFullLogs }: SiteDetailSidebarCardProps) => {
+  const { showNotification } = useNotificationContext();
+  const pokeHeartbeat = useRequestBridgeHeartbeatPoke();
   const [faviconPhase, setFaviconPhase] = useState<SidebarFaviconPhase>('site');
   const [appIconLoadError, setAppIconLoadError] = useState(false);
   const appIconQ = useSiteAppIconPreview(site.$id, site.siteUrl);
@@ -85,6 +88,9 @@ const SiteDetailSidebarCard = ({ site, onViewFullLogs }: SiteDetailSidebarCardPr
   const wpVersion = wpMeta?.wp_version || site.wpVersion || '—';
   const phpVersion = wpMeta?.php_version || site.phpVersion || '—';
 
+  const canPokeHeartbeat =
+    Boolean(site.siteUrl?.trim()) && site.enabled !== false && !pokeHeartbeat.isPending;
+
   const siteFaviconHref = fullUrl ? siteFaviconUrl(fullUrl) : null;
   const useAppIconAvatar = Boolean(appIconSrc && !appIconLoadError);
   const showSiteFaviconImg = !useAppIconAvatar && faviconPhase === 'site' && Boolean(siteFaviconHref);
@@ -100,13 +106,46 @@ const SiteDetailSidebarCard = ({ site, onViewFullLogs }: SiteDetailSidebarCardPr
         <div className="d-flex flex-column align-items-end text-end flex-shrink-0 ms-auto">
           <div
             className="d-flex align-items-center gap-1 flex-wrap justify-content-end"
-            title={heartbeatAbsoluteTitle ?? undefined}
+            title={
+              heartbeatAbsoluteTitle
+                ? `${heartbeatAbsoluteTitle}. Click the lightning icon to ping the bridge.`
+                : 'Click the lightning icon to ping the bridge and refresh the connection.'
+            }
           >
-            {isConnected ? (
-              <MdFlashOn style={{ fontSize: '1.35rem', color: CONNECTED_FLASH_COLOR }} aria-hidden />
-            ) : (
-              <MdFlashOff style={{ fontSize: '1.35rem', color: 'rgba(255,255,255,0.45)' }} aria-hidden />
-            )}
+            <button
+              type="button"
+              className="btn btn-link p-0 m-0 border-0 bg-transparent shadow-none lh-1 d-inline-flex align-items-center text-decoration-none"
+              style={{ color: 'inherit' }}
+              disabled={!canPokeHeartbeat}
+              aria-label="Ping bridge: ask WordPress to send a heartbeat and restore connection"
+              title="Ping bridge (heartbeat)"
+              onClick={() => {
+                pokeHeartbeat.mutate(site.$id, {
+                  onSuccess: (data) => {
+                    showNotification({
+                      title: 'Connection ping',
+                      message: data?.message ?? 'Bridge ping sent.',
+                      variant: 'success',
+                      delay: 4000,
+                    });
+                  },
+                  onError: (err) => {
+                    showNotification({
+                      title: 'Connection ping',
+                      message: err instanceof Error ? err.message : 'Request failed.',
+                      variant: 'danger',
+                      delay: 6000,
+                    });
+                  },
+                });
+              }}
+            >
+              {isConnected ? (
+                <MdFlashOn style={{ fontSize: '1.35rem', color: CONNECTED_FLASH_COLOR }} aria-hidden />
+              ) : (
+                <MdFlashOff style={{ fontSize: '1.35rem', color: 'rgba(255,255,255,0.45)' }} aria-hidden />
+              )}
+            </button>
             <span className="fs-xs text-white fw-medium">
               {isConnected ? 'Connected' : 'Disconnected'}
               {heartbeatRelative ? (

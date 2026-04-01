@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Query } from 'appwrite';
 import { account, COLLECTIONS, databases, DATABASE_ID } from '../../services/appwrite';
 import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
@@ -29,6 +29,50 @@ function isMetaEmpty(s: string | undefined | null): boolean {
 }
 
 const STATUS_POLL_INTERVAL_MS = 60_000;
+
+const SITE_HEARTBEAT_POKE_FUNCTION_ID = 'site-heartbeat-poke';
+
+type HeartbeatPokeResponse = {
+  success?: boolean;
+  message?: string;
+  httpStatus?: number;
+};
+
+/**
+ * Calls `site-heartbeat-poke` with `{ siteId, jwt }` so the platform GETs the WordPress
+ * `/heartbeat/poke` endpoint (nudges the bridge to send a heartbeat).
+ */
+export const useRequestBridgeHeartbeatPoke = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<HeartbeatPokeResponse, Error, string>({
+    mutationFn: async (siteId: string) => {
+      const jwtRes = await account.createJWT();
+      const jwt = typeof jwtRes === 'string' ? jwtRes : (jwtRes as { jwt?: string }).jwt ?? '';
+      const { data, statusCode } = await executeFunctionWithMeta<HeartbeatPokeResponse>(
+        SITE_HEARTBEAT_POKE_FUNCTION_ID,
+        { siteId, jwt },
+        { throwOnHttpError: false },
+      );
+      if (statusCode < 200 || statusCode >= 300) {
+        const msg =
+          typeof data?.message === 'string' && data.message
+            ? data.message
+            : `Request failed (${statusCode})`;
+        throw new Error(msg);
+      }
+      if (!data?.success) {
+        throw new Error(data?.message || 'Heartbeat poke did not succeed.');
+      }
+      return data;
+    },
+    onSuccess: (_, siteId) => {
+      void queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      if (user?.$id) void queryClient.invalidateQueries({ queryKey: ['sites', user.$id] });
+    },
+  });
+};
 
 export const useSites = () => {
   const { user } = useAuth();

@@ -4,6 +4,9 @@ import { Query } from 'appwrite';
 import { account, COLLECTIONS, databases, DATABASE_ID } from '../../services/appwrite';
 import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
 import type {
+  HealthAiExecuteOneResponse,
+  HealthAiSuggestResponse,
+  HealthAiSuggestion,
   Site,
   SiteAppIconPreviewResult,
   SitePagespeedResult,
@@ -32,7 +35,16 @@ const STATUS_POLL_INTERVAL_MS = 60_000;
 
 const SITE_HEARTBEAT_POKE_FUNCTION_ID = 'site-heartbeat-poke';
 
+const HEALTH_AI_AGENT_FUNCTION_ID =
+  import.meta.env.VITE_APPWRITE_FUNCTION_HEALTH_AI_AGENT ?? 'health-ai-agent';
+
 const WP_PROXY_FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_WP_PROXY ?? 'wp-proxy';
+
+function jwtFromCreateResponse(jwtRes: unknown): string {
+  if (typeof jwtRes === 'string') return jwtRes;
+  const o = jwtRes as { jwt?: string };
+  return typeof o?.jwt === 'string' ? o.jwt : '';
+}
 
 type HeartbeatPokeResponse = {
   success?: boolean;
@@ -50,8 +62,7 @@ export const useRequestBridgeHeartbeatPoke = () => {
 
   return useMutation<HeartbeatPokeResponse, Error, string>({
     mutationFn: async (siteId: string) => {
-      const jwtRes = await account.createJWT();
-      const jwt = typeof jwtRes === 'string' ? jwtRes : (jwtRes as { jwt?: string }).jwt ?? '';
+      const jwt = jwtFromCreateResponse(await account.createJWT());
       const { data, statusCode } = await executeFunctionWithMeta<HeartbeatPokeResponse>(
         SITE_HEARTBEAT_POKE_FUNCTION_ID,
         { siteId, jwt },
@@ -116,6 +127,55 @@ export const useRequestSiteHealthRefresh = () => {
     },
   });
 };
+
+/**
+ * Loads AI/heuristic fix suggestions from `health-ai-agent` (JWT + site health_meta on server).
+ */
+export const useHealthAiSuggest = () => {
+  return useMutation<HealthAiSuggestResponse, Error, string>({
+    mutationFn: async (siteId: string) => {
+      const jwt = jwtFromCreateResponse(await account.createJWT());
+      const { data, statusCode } = await executeFunctionWithMeta<HealthAiSuggestResponse>(
+        HEALTH_AI_AGENT_FUNCTION_ID,
+        { action: 'suggest', siteId, jwt },
+        { throwOnHttpError: false, longRunning: true, maxAsyncWaitMs: 120_000 },
+      );
+      if (statusCode < 200 || statusCode >= 300) {
+        const msg =
+          data && typeof data === 'object' && typeof (data as { message?: string }).message === 'string'
+            ? (data as { message: string }).message
+            : `Request failed (${statusCode})`;
+        throw new Error(msg);
+      }
+      return data ?? {};
+    },
+  });
+};
+
+/**
+ * Runs one allowlisted step on WordPress via `health-ai-agent` (bridge proxy on server).
+ */
+export async function healthAiExecuteOne(
+  siteId: string,
+  step: HealthAiSuggestion,
+): Promise<HealthAiExecuteOneResponse> {
+  const jwt = jwtFromCreateResponse(await account.createJWT());
+  const { data, statusCode } = await executeFunctionWithMeta<HealthAiExecuteOneResponse>(
+    HEALTH_AI_AGENT_FUNCTION_ID,
+    { action: 'executeOne', siteId, jwt, step },
+    { throwOnHttpError: false, longRunning: true, maxAsyncWaitMs: 120_000 },
+  );
+  const d = (data && typeof data === 'object' ? data : {}) as HealthAiExecuteOneResponse;
+  if (statusCode < 200 || statusCode >= 300) {
+    const msg =
+      typeof d.message === 'string' && d.message.trim() ? d.message.trim() : `Request failed (${statusCode})`;
+    throw new Error(msg);
+  }
+  if (!d.success && !d.skipped) {
+    throw new Error(d.message?.trim() || 'Step failed.');
+  }
+  return d;
+}
 
 export const useSites = () => {
   const { user } = useAuth();

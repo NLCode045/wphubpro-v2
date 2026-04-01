@@ -153,6 +153,36 @@ export interface SiteHealthMetaSnapshot {
   checks_flat?: SiteHealthCheck[];
 }
 
+/** Allowlisted automated fixes from `health-ai-agent` (bridge + optional OpenAI). */
+export type HealthAiSuggestionKind =
+  | 'health_refresh'
+  | 'plugin_activate'
+  | 'plugin_deactivate'
+  | 'plugin_update'
+  | 'advice_only';
+
+export interface HealthAiSuggestion {
+  id: string;
+  title: string;
+  description?: string;
+  kind: HealthAiSuggestionKind;
+  payload?: { plugin?: string; healthCheckId?: string };
+}
+
+export interface HealthAiSuggestResponse {
+  success?: boolean;
+  suggestions?: HealthAiSuggestion[];
+  source?: 'openai' | 'heuristic';
+  message?: string;
+}
+
+export interface HealthAiExecuteOneResponse {
+  success?: boolean;
+  message?: string;
+  skipped?: boolean;
+  httpStatus?: number;
+}
+
 export interface ConnectionStatus {
   status: 'connected' | 'disconnected';
   heartbeatUpdatedAt: string;

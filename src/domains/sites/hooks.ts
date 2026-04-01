@@ -32,6 +32,8 @@ const STATUS_POLL_INTERVAL_MS = 60_000;
 
 const SITE_HEARTBEAT_POKE_FUNCTION_ID = 'site-heartbeat-poke';
 
+const WP_PROXY_FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_WP_PROXY ?? 'wp-proxy';
+
 type HeartbeatPokeResponse = {
   success?: boolean;
   message?: string;
@@ -66,6 +68,47 @@ export const useRequestBridgeHeartbeatPoke = () => {
         throw new Error(data?.message || 'Heartbeat poke did not succeed.');
       }
       return data;
+    },
+    onSuccess: (_, siteId) => {
+      void queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      if (user?.$id) void queryClient.invalidateQueries({ queryKey: ['sites', user.$id] });
+    },
+  });
+};
+
+/**
+ * Proxies `POST wphubpro/v1/health/push` on the site so the bridge sends fresh health data to the Hub.
+ */
+export const useRequestSiteHealthRefresh = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<{ message: string }, Error, string>({
+    mutationFn: async (siteId: string) => {
+      const { statusCode, data } = await executeFunctionWithMeta<Record<string, unknown>>(
+        WP_PROXY_FUNCTION_ID,
+        {
+          siteId,
+          endpoint: 'wphubpro/v1/health/push',
+          method: 'POST',
+          body: {},
+        },
+        { throwOnHttpError: false, longRunning: true, maxAsyncWaitMs: 120_000 },
+      );
+      if (statusCode < 200 || statusCode >= 300) {
+        const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+        const msg =
+          typeof raw.message === 'string' && raw.message.trim()
+            ? raw.message.trim()
+            : `Request failed (${statusCode})`;
+        throw new Error(msg);
+      }
+      const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+      const message =
+        typeof raw.message === 'string' && raw.message.trim()
+          ? raw.message.trim()
+          : 'Updated health data was sent from the site to the hub.';
+      return { message };
     },
     onSuccess: (_, siteId) => {
       void queryClient.invalidateQueries({ queryKey: ['site', siteId] });

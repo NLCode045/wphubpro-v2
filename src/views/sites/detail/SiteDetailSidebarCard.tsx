@@ -1,7 +1,7 @@
 import { parseActionLogForAudit, useRequestBridgeHeartbeatPoke, useSiteAppIconPreview } from '@/domains/sites';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import { formatRelativeHeartbeatLabel } from '@/lib/formatRelativeHeartbeat.ts';
-import type { Site } from '@/types';
+import type { PluginMetaItem, Site } from '@/types';
 import SiteActionHistoryList from '@/views/sites/detail/SiteActionHistoryList';
 import SiteHealthScoreDonut from '@/views/sites/detail/SiteHealthScoreDonut.tsx';
 import { useEffect, useMemo, useState } from 'react';
@@ -9,15 +9,48 @@ import { Button, Card, CardBody, CardHeader, CardTitle } from 'react-bootstrap';
 import { MdFlashOff, MdFlashOn } from 'react-icons/md';
 import { TbExternalLink, TbWorld } from 'react-icons/tb';
 
-function parseWpMeta(site: Site): { wp_version?: string; php_version?: string } | null {
+type WpMetaParsed = {
+  wp_version?: string;
+  php_version?: string;
+  bridge_version?: string;
+  wphubpro_bridge_version?: string;
+};
+
+function parseWpMeta(site: Site): WpMetaParsed | null {
   const raw = site.wpMeta;
   if (!raw || typeof raw !== 'string') return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return typeof parsed === 'object' && parsed !== null ? (parsed as { wp_version?: string; php_version?: string }) : null;
+    return typeof parsed === 'object' && parsed !== null ? (parsed as WpMetaParsed) : null;
   } catch {
     return null;
   }
+}
+
+/** Installed bridge version from `plugins_meta` when `wp_meta.bridge_version` is not synced yet. */
+function bridgeVersionFromPluginsMeta(pluginsMeta: string | undefined): string | null {
+  if (!pluginsMeta?.trim()) return null;
+  try {
+    const parsed = JSON.parse(pluginsMeta) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as PluginMetaItem;
+      const file = typeof o.file === 'string' ? o.file.toLowerCase() : '';
+      const name = typeof o.name === 'string' ? o.name.toLowerCase() : '';
+      if (
+        file.includes('wphubpro-bridge') ||
+        name.includes('wphub pro bridge') ||
+        name.includes('wphubpro bridge')
+      ) {
+        const v = typeof o.version === 'string' ? o.version.trim() : '';
+        return v || null;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function normalizeSiteUrl(siteUrl: string): string {
@@ -87,6 +120,10 @@ const SiteDetailSidebarCard = ({ site, onViewFullLogs }: SiteDetailSidebarCardPr
 
   const wpVersion = wpMeta?.wp_version || site.wpVersion || '—';
   const phpVersion = wpMeta?.php_version || site.phpVersion || '—';
+  const bridgeVersion =
+    (wpMeta?.bridge_version ?? wpMeta?.wphubpro_bridge_version)?.trim() ||
+    bridgeVersionFromPluginsMeta(site.pluginsMeta) ||
+    '—';
 
   const canPokeHeartbeat =
     Boolean(site.siteUrl?.trim()) && site.enabled !== false && !pokeHeartbeat.isPending;
@@ -266,6 +303,10 @@ const SiteDetailSidebarCard = ({ site, onViewFullLogs }: SiteDetailSidebarCardPr
             <div className="col-6">
               <span className="text-white-50 d-block fs-xs">PHP</span>
               <span className="fw-medium">{phpVersion}</span>
+            </div>
+            <div className="col-12">
+              <span className="text-white-50 d-block fs-xs">WPHub Pro Bridge</span>
+              <span className="fw-medium">{bridgeVersion}</span>
             </div>
           </div>
         </div>

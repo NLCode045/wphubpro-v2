@@ -1,20 +1,64 @@
-import { parseActionLogForAudit } from '@/domains/sites';
+import { useNotificationContext } from '@/context/useNotificationContext';
+import { parseActionLogForAudit, useRequestSiteHealthRefresh } from '@/domains/sites';
 import type { Site } from '@/types';
 import SiteActionHistoryList from '@/views/sites/detail/SiteActionHistoryList';
 import SiteHealthMetaPanel from '@/views/sites/detail/SiteHealthMetaPanel';
 import { formatChecked, formatSiteHealthCheckedOn } from '@/views/sites/detail/siteDetailFormat';
 import { useMemo } from 'react';
-import { Card, CardBody, Table } from 'react-bootstrap';
+import { Button, Card, CardBody, Spinner, Table } from 'react-bootstrap';
 
 export { formatChecked } from '@/views/sites/detail/siteDetailFormat';
 
 type OutgoingLogRow = NonNullable<Site['logData']>['outgoing'][number];
 
 export function SiteDetailHealthPanel({ site }: { site: Site }) {
+  const { showNotification } = useNotificationContext();
+  const refreshHealth = useRequestSiteHealthRefresh();
+  const canRunHealthCheck =
+    Boolean(site.siteUrl?.trim()) && site.enabled !== false && !refreshHealth.isPending;
+
   return (
     <div>
       <div className="d-flex flex-wrap justify-content-between align-items-start column-gap-3 row-gap-2 mb-3">
-        <h5 className="fs-base mb-0">Health</h5>
+        <div className="d-flex flex-wrap align-items-center gap-2 column-gap-2 row-gap-2">
+          <h5 className="fs-base mb-0">Health</h5>
+          <Button
+            type="button"
+            variant="outline-primary"
+            size="sm"
+            disabled={!canRunHealthCheck}
+            onClick={() => {
+              refreshHealth.mutate(site.$id, {
+                onSuccess: (res) => {
+                  showNotification({
+                    title: 'Health check',
+                    message: res.message,
+                    variant: 'success',
+                    delay: 4000,
+                  });
+                },
+                onError: (err) => {
+                  showNotification({
+                    title: 'Health check',
+                    message: err instanceof Error ? err.message : 'Request failed.',
+                    variant: 'danger',
+                    delay: 6000,
+                  });
+                },
+              });
+            }}
+            aria-busy={refreshHealth.isPending}
+          >
+            {refreshHealth.isPending ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" className="me-1" aria-hidden />
+                Checking…
+              </>
+            ) : (
+              'Check health'
+            )}
+          </Button>
+        </div>
         <div className="text-end ms-auto">
           <div className="fs-sm mb-1 text-body">
             Site Health Checked on: {formatSiteHealthCheckedOn(site.lastChecked)}

@@ -250,8 +250,8 @@ module.exports = async ({ req, res, log, error }) => {
     for (const site of toPoke) {
       const result = await pokeSingleSite(site, ENCRYPTION_KEY, log);
       if (result.ok) {
-        okCount++;
-      } else {
+          okCount++;
+        } else {
         errCount++;
         log(
           `[site-heartbeat-poke] Site ${site.$id} poke failed: ${result.detail || result.httpStatus || result.reason}`,

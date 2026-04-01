@@ -11,6 +11,7 @@ import {
   sortCategoryGroupsCriticalFirst,
 } from '@/lib/parseSiteHealthMeta';
 import type { Site, SiteHealthCheck, SiteHealthSeverity } from '@/types';
+import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button, ButtonGroup, Card, CardBody, Collapse, Form } from 'react-bootstrap';
 
@@ -43,7 +44,8 @@ function formatCategorySummaryLine(counts: Record<SiteHealthSeverity, number>): 
   return parts.length ? parts.join(' · ') : 'No checks';
 }
 
-const SEVERITY_ORDER: SiteHealthSeverity[] = ['ok', 'warning', 'critical', 'pending', 'unknown'];
+/** Order of chips under "Filter by Result" (critical & warning first). */
+const SEVERITY_ORDER: SiteHealthSeverity[] = ['critical', 'warning', 'ok', 'pending', 'unknown'];
 
 /** Subtle outline for filter chips that are part of the current selection. */
 const FILTER_CHIP_ACTIVE_CLASS = 'border border-secondary-subtle rounded';
@@ -108,11 +110,6 @@ function SiteHealthCheckRow({ check }: CheckRowProps) {
         ) : null}
         <div className="flex-grow-1 min-w-0">
           <div className="fw-semibold small">{check.label}</div>
-          {check.module_id ? (
-            <div className="text-muted fs-xxs text-truncate" title={check.module_id}>
-              {check.module_id}
-            </div>
-          ) : null}
         </div>
         {hasMessage ? (
           <Button
@@ -136,11 +133,13 @@ function SiteHealthCheckRow({ check }: CheckRowProps) {
 
 type SiteHealthMetaPanelProps = {
   site: Site;
+  severityFilters: Set<SiteHealthSeverity>;
+  setSeverityFilters: Dispatch<SetStateAction<Set<SiteHealthSeverity>>>;
 };
 
 type HealthChecksListView = 'category' | 'result';
 
-export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) {
+export default function SiteHealthMetaPanel({ site, severityFilters, setSeverityFilters }: SiteHealthMetaPanelProps) {
   const raw = site.healthMeta?.trim() ?? '';
   const snapshot = useMemo(() => parseSiteHealthMeta(site.healthMeta), [site.healthMeta]);
   const parseFailed = raw.length > 2 && snapshot === null;
@@ -152,13 +151,11 @@ export default function SiteHealthMetaPanel({ site }: SiteHealthMetaPanelProps) 
 
   const checks = useMemo(() => (snapshot ? getChecksForDashboard(snapshot) : []), [snapshot]);
   const checkTotals = useMemo(() => severityTotalsForChecks(checks), [checks]);
-  const [severityFilters, setSeverityFilters] = useState<Set<SiteHealthSeverity>>(() => new Set());
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [listView, setListView] = useState<HealthChecksListView>('category');
   const [showRaw, setShowRaw] = useState(false);
 
   useEffect(() => {
-    setSeverityFilters(new Set());
     setSelectedCategoryKey(null);
     setListView('category');
   }, [site.$id, site.healthMeta]);

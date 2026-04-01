@@ -61,15 +61,6 @@ function decryptApiKey(encrypted, key) {
   }
 }
 
-function encrypt(text, key) {
-  const iv = crypto.randomBytes(12);
-  const derivedKey = crypto.createHash('sha256').update(String(key), 'utf8').digest();
-  const cipher = crypto.createCipheriv('aes-256-gcm', derivedKey, iv);
-  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString('hex')}:${encrypted.toString('hex')}:${tag.toString('hex')}`;
-}
-
 function isSiteEnabled(site) {
   const meta = site.meta_data ?? site.metaData;
   if (!meta || typeof meta !== 'string') return true;
@@ -104,7 +95,9 @@ async function pokeSingleSite(site, ENCRYPTION_KEY, log) {
     };
   }
 
-  const encryptedApiKeyForWp = encrypt(wpApiKey.trim(), ENCRYPTION_KEY);
+  // Bridge compares X-WPHub-Key to stored plaintext bridge_secret (hash_equals). Same as wp-proxy:
+  // re-encrypting with a new IV would never match.
+  const bridgeSecretForWp = wpApiKey.trim();
   let siteUrl = (site.site_url || site.siteUrl || '').trim().replace(/\/$/, '');
   if (!siteUrl.startsWith('http')) {
     siteUrl = `https://${siteUrl}`;
@@ -116,7 +109,7 @@ async function pokeSingleSite(site, ENCRYPTION_KEY, log) {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        'X-WPHub-Key': encryptedApiKeyForWp,
+        'X-WPHub-Key': bridgeSecretForWp,
       },
       timeout: 10000,
     });

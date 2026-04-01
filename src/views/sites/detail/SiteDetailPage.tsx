@@ -13,7 +13,7 @@ import { SiteDetailHealthPanel, SiteDetailLogsPanel } from '@/views/sites/detail
 import { SiteHealthTabStatusBadge } from '@/views/sites/detail/SiteHealthTabStatusBadge';
 import { SITE_DETAIL_TAB_CONFIG } from '@/views/sites/detail/siteDetailNavTabs';
 import { useEffect, useMemo, useState } from 'react';
-import { TbSubmarine } from 'react-icons/tb';
+import { TbStethoscope } from 'react-icons/tb';
 import { Button, Card, CardBody, Col, Container, Nav, Row, Spinner, Tab, Table } from 'react-bootstrap';
 import { Link, useParams, useSearchParams } from 'react-router';
 
@@ -331,7 +331,7 @@ const SiteDetailPage = () => {
                         });
                       }}
                     >
-                      <TbSubmarine className="fs-lg" aria-hidden />
+                      <TbStethoscope className="fs-lg" aria-hidden />
                     </Button>
                   </div>
                 </CardBody>

@@ -180,10 +180,12 @@ export const useHealthAiSuggest = () => {
   return useMutation<HealthAiSuggestResponse, Error, string>({
     mutationFn: async (siteId: string) => {
       const jwt = jwtFromCreateResponse(await account.createJWT());
+      // Must run synchronously: Appwrite async executions do not persist `responseBody` on
+      // `getExecution`, so polling returns 200 with an empty body and the UI sees no suggestions.
       const { data, statusCode } = await executeFunctionWithMeta<HealthAiSuggestResponse>(
         HEALTH_AI_AGENT_FUNCTION_ID,
         { action: 'suggest', siteId, jwt },
-        { throwOnHttpError: false, longRunning: true, maxAsyncWaitMs: 120_000 },
+        { throwOnHttpError: false, longRunning: false },
       );
       if (statusCode < 200 || statusCode >= 300) {
         const msg =
@@ -208,7 +210,7 @@ export async function healthAiExecuteOne(
   const { data, statusCode } = await executeFunctionWithMeta<HealthAiExecuteOneResponse>(
     HEALTH_AI_AGENT_FUNCTION_ID,
     { action: 'executeOne', siteId, jwt, step },
-    { throwOnHttpError: false, longRunning: true, maxAsyncWaitMs: 120_000 },
+    { throwOnHttpError: false, longRunning: false },
   );
   const d = (data && typeof data === 'object' ? data : {}) as HealthAiExecuteOneResponse;
   if (statusCode < 200 || statusCode >= 300) {

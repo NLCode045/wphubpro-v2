@@ -35,7 +35,6 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
   const { user } = useAuth();
 
   const [phase, setPhase] = useState<'review' | 'run' | 'done'>('review');
-  const [suggestions, setSuggestions] = useState<HealthAiSuggestion[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [progressItems, setProgressItems] = useState<ProgressRow[]>([]);
   const [nextHint, setNextHint] = useState('');
@@ -43,9 +42,13 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
   const [running, setRunning] = useState(false);
   const [statusHeadline, setStatusHeadline] = useState('');
 
-  const resetLocalState = useCallback(() => {
+  const suggestions = useMemo(() => {
+    if (!show) return [];
+    return buildLocalHealthAiSuggestions(site.healthMeta);
+  }, [show, sessionKey, site.$id, site.healthMeta]);
+
+  const resetRunUi = useCallback(() => {
     setPhase('review');
-    setSuggestions([]);
     setSelectedIds(new Set());
     setProgressItems([]);
     setNextHint('');
@@ -55,19 +58,14 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
   }, []);
 
   const handleClose = () => {
-    resetLocalState();
+    resetRunUi();
     onHide();
   };
 
-  // Suggestions from Appwrite-backed `site.healthMeta` (maps `health_meta`); no function call for the list.
   useEffect(() => {
     if (!show) return;
-    resetLocalState();
-    const built = buildLocalHealthAiSuggestions(site.healthMeta);
-    setSuggestions(built);
-    setPhase('review');
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-run when opening a new session
-  }, [show, sessionKey, site.$id, site.healthMeta]);
+    resetRunUi();
+  }, [show, sessionKey, site.$id, resetRunUi]);
 
   const toggleId = (id: string) => {
     setSelectedIds((prev) => {
@@ -137,7 +135,13 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
   const reviewReady = phase === 'review' || phase === 'run' || phase === 'done';
 
   const showEmptySuggestions =
-    reviewReady && !runError && suggestions.length === 0 && phase === 'review';
+    show &&
+    reviewReady &&
+    !runError &&
+    suggestions.length === 0 &&
+    phase === 'review';
+
+  const showMainList = show && suggestions.length > 0 && reviewReady;
 
   return (
     <Modal show={show} onHide={handleClose} centered size="lg" scrollable>
@@ -152,13 +156,13 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
           </Alert>
         ) : null}
 
-        {runError && phase === 'review' && suggestions.length === 0 ? (
+        {show && runError && phase === 'review' && suggestions.length === 0 ? (
           <Alert variant="danger" className="mb-0">
             {runError}
           </Alert>
         ) : null}
 
-        {suggestions.length > 0 && reviewReady ? (
+        {showMainList ? (
           <>
             <p className="text-muted fs-sm mb-3">
               Suggestions are built from this site&apos;s stored Site Health snapshot (<code>health_meta</code> in

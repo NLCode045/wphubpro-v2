@@ -18,12 +18,25 @@ const REFRESH_HINT: HealthAiSuggestion = {
   payload: {},
 };
 
+function healthMetaToRawString(healthMeta: unknown): string {
+  if (healthMeta == null) return '';
+  if (typeof healthMeta === 'string') return healthMeta.trim();
+  if (typeof healthMeta === 'object') {
+    try {
+      return JSON.stringify(healthMeta).trim();
+    } catch {
+      return '';
+    }
+  }
+  return String(healthMeta).trim();
+}
+
 /**
  * Builds the Health assistant checklist from the site’s `health_meta` JSON (Appwrite `sites.health_meta`),
  * same shape as the bridge snapshot — no server round-trip for the suggestion list.
  */
-export function buildLocalHealthAiSuggestions(healthMeta: string | undefined | null): HealthAiSuggestion[] {
-  const raw = healthMeta?.trim() ?? '';
+export function buildLocalHealthAiSuggestions(healthMeta: string | undefined | null | unknown): HealthAiSuggestion[] {
+  const raw = healthMetaToRawString(healthMeta);
   if (raw.length <= 2 || raw === '[]' || raw === '{}') {
     return [
       {
@@ -37,7 +50,7 @@ export function buildLocalHealthAiSuggestions(healthMeta: string | undefined | n
     ];
   }
 
-  const snapshot = parseSiteHealthMeta(healthMeta);
+  const snapshot = parseSiteHealthMeta(raw || null);
   if (!snapshot) {
     return [
       {

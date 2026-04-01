@@ -159,6 +159,10 @@ export type HealthAiSuggestionKind =
   | 'plugin_activate'
   | 'plugin_deactivate'
   | 'plugin_update'
+  | 'plugin_uninstall'
+  | 'theme_activate'
+  | 'theme_update'
+  | 'theme_delete'
   | 'hub_invoke'
   | 'advice_only';
 
@@ -167,8 +171,12 @@ export interface HealthAiSuggestion {
   title: string;
   description?: string;
   kind: HealthAiSuggestionKind;
+  /** Set when the step came from a dry-run preview (informational). */
+  simulated?: boolean;
   payload?: {
     plugin?: string;
+    /** Active theme stylesheet slug (themes/manage/*). */
+    theme?: string;
     healthCheckId?: string;
     /** Bridge `hub/invoke` registry key */
     handler?: string;
@@ -188,6 +196,52 @@ export interface HealthAiExecuteOneResponse {
   message?: string;
   skipped?: boolean;
   httpStatus?: number;
+}
+
+/** Answers for dry-run plan building (Health assistant questionnaire). */
+export interface HealthDryRunAnswers {
+  removeInactivePlugins?: boolean;
+  maxInactivePluginsToRemove?: number;
+  removeInactiveThemes?: boolean;
+  maxInactiveThemesToRemove?: number;
+  runPluginUpdates?: boolean;
+  maxPluginUpdates?: number;
+  runThemeUpdatesForInactive?: boolean;
+  maxThemeUpdates?: number;
+  includeHealthRefresh?: boolean;
+  flushCaches?: boolean;
+  optimizeDatabase?: boolean;
+  purgeSpamComments?: boolean;
+  spamCommentLimit?: number;
+  /** Leave unchanged | allow indexing | discourage indexing */
+  searchVisibility?: 'unchanged' | 'allow' | 'discourage';
+}
+
+/** Summarized hub data for dry-run analyze phase. */
+export interface HealthDryRunAnalyzeSummary {
+  hasHealthSnapshot: boolean;
+  criticalOrWarningChecks: number;
+  inactivePlugins: { file: string; name: string }[];
+  inactiveThemes: { slug: string; name: string }[];
+  pluginsWithUpdates: { file: string; name: string }[];
+  inactiveThemesWithUpdates: { slug: string; name: string }[];
+}
+
+export interface HealthAiDryRunAnalyzeResponse {
+  success?: boolean;
+  phase?: 'analyze';
+  summary?: HealthDryRunAnalyzeSummary;
+  warnings?: string[];
+  message?: string;
+}
+
+export interface HealthAiDryRunPlanResponse {
+  success?: boolean;
+  phase?: 'plan';
+  plannedSteps?: HealthAiSuggestion[];
+  warnings?: string[];
+  answersEcho?: HealthDryRunAnswers;
+  message?: string;
 }
 
 export interface ConnectionStatus {

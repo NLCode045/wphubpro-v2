@@ -1,7 +1,8 @@
 /**
- * health-ai-agent: JWT-authenticated suggest + executeOne for Site Health–driven fixes.
- * suggest: reads site health_meta, optional Gemini (GEMINI_API_KEY), else heuristic advice_only rows.
- * executeOne: allowlisted bridge calls (health push, plugins, hub/invoke registry handlers).
+ * health-ai-agent: JWT-authenticated suggest, executeOne, and dryRun for Site Health–driven fixes.
+ * suggest: site health_meta + plugins_meta/themes_meta, optional Gemini, else heuristic advice_only rows.
+ * executeOne: allowlisted bridge calls (health push, plugins, themes, hub/invoke registry handlers).
+ * dryRun: analyze/plan from hub-stored meta only — no WordPress HTTP calls; plan validates like executeOne.
  */
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
@@ -15,6 +16,10 @@ const ALLOWED_KINDS = new Set([
   'plugin_activate',
   'plugin_deactivate',
   'plugin_update',
+  'plugin_uninstall',
+  'theme_activate',
+  'theme_update',
+  'theme_delete',
   'hub_invoke',
   'advice_only',
 ]);
@@ -117,6 +122,266 @@ function heuristicSuggestions(snapshot) {
   }));
 }
 
+/**
+ * Prefer request body overrides, then Appwrite site document fields.
+ */
+function resolveMetaStrings(siteDoc, body) {
+  const pick = (bKey, dKeyAlt, dKey) => {
+    const fromBody = body && typeof body === 'object' ? body[bKey] : undefined;
+    if (typeof fromBody === 'string' && fromBody.trim().length > 2) return fromBody.trim();
+    const v = siteDoc[dKeyAlt] ?? siteDoc[dKey] ?? '';
+    return typeof v === 'string' ? v.trim() : '';
+  };
+  return {
+    health: pick('health_meta', 'healthMeta', 'health_meta'),
+    plugins: pick('plugins_meta', 'pluginsMeta', 'plugins_meta'),
+    themes: pick('themes_meta', 'themesMeta', 'themes_meta'),
+  };
+}
+
+function parsePluginsMetaArray(raw) {
+  if (!raw || typeof raw !== 'string' || raw.length < 2) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((p) => {
+        if (!p || typeof p !== 'object') return null;
+        const file = String(p.file ?? p.plugin ?? '').trim();
+        const name = String(p.name ?? '').trim();
+        const active = p.active === true || p.active === 1 || p.status === 'active';
+        const update = p.update != null && String(p.update).trim() !== '' ? String(p.update).trim() : null;
+        if (!file) return null;
+        return { file, name, active, update };
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function parseThemesMetaArray(raw) {
+  if (!raw || typeof raw !== 'string' || raw.length < 2) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((t) => {
+        if (!t || typeof t !== 'object') return null;
+        const slug = String(t.stylesheet ?? t.file ?? t.slug ?? '').trim();
+        const name = String(t.name ?? '').trim();
+        const active = t.active === true || t.active === 1 || t.status === 'active';
+        const update = t.update != null && String(t.update).trim() !== '' ? String(t.update).trim() : null;
+        if (!slug) return null;
+        return { slug, name, active, update };
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function buildDryRunAnalyzeSummary(siteDoc, body) {
+  const meta = resolveMetaStrings(siteDoc, body);
+  const warnings = [];
+  let hasHealthSnapshot = false;
+  let criticalOrWarningChecks = 0;
+  if (!isMetaEmpty(meta.health)) {
+    try {
+      const snapshot = JSON.parse(meta.health);
+      hasHealthSnapshot = true;
+      const checks = flattenChecks(snapshot);
+      criticalOrWarningChecks = checks.filter((c) => {
+        const sev = String(c.severity || '').toLowerCase();
+        return sev === 'critical' || sev === 'warning';
+      }).length;
+    } catch {
+      warnings.push('health_meta could not be parsed; Site Health counts may be missing.');
+    }
+  } else {
+    warnings.push('No Site Health snapshot in the hub. Run Check health for richer analysis.');
+  }
+
+  const plugins = parsePluginsMetaArray(meta.plugins);
+  const themes = parseThemesMetaArray(meta.themes);
+  if (plugins.length === 0 && !isMetaEmpty(meta.plugins)) {
+    warnings.push('plugins_meta is present but could not be parsed.');
+  }
+  if (themes.length === 0 && !isMetaEmpty(meta.themes)) {
+    warnings.push('themes_meta is present but could not be parsed.');
+  }
+  if (plugins.length === 0 && isMetaEmpty(meta.plugins)) {
+    warnings.push('No plugins_meta on this site; sync plugins from WordPress or open the site in the hub to refresh metadata.');
+  }
+
+  const inactivePlugins = plugins.filter((p) => !p.active).map((p) => ({ file: p.file, name: p.name || p.file }));
+  const inactiveThemes = themes.filter((t) => !t.active).map((t) => ({ slug: t.slug, name: t.name || t.slug }));
+  const pluginsWithUpdates = plugins.filter((p) => p.update).map((p) => ({ file: p.file, name: p.name || p.file }));
+  const inactiveThemesWithUpdates = themes
+    .filter((t) => !t.active && t.update)
+    .map((t) => ({ slug: t.slug, name: t.name || t.slug }));
+
+  return {
+    summary: {
+      hasHealthSnapshot,
+      criticalOrWarningChecks,
+      inactivePlugins,
+      inactiveThemes,
+      pluginsWithUpdates,
+      inactiveThemesWithUpdates,
+    },
+    warnings,
+  };
+}
+
+function clampInt(n, min, max, fallback) {
+  const x = parseInt(String(n), 10);
+  if (Number.isNaN(x)) return fallback;
+  return Math.min(max, Math.max(min, x));
+}
+
+/**
+ * Heuristic plan from questionnaire + analyze summary (no bridge calls).
+ */
+function buildDryRunPlanFromAnswers(summary, answers) {
+  const warnings = [];
+  const steps = [];
+  let stepIdx = 0;
+  const add = (step) => {
+    const n = normalizeSuggestion(step, stepIdx++);
+    if (n) steps.push({ ...n, simulated: true });
+  };
+
+  const a = answers && typeof answers === 'object' ? answers : {};
+
+  if (a.includeHealthRefresh !== false) {
+    add({
+      id: 'plan-health-refresh',
+      title: 'Refresh Site Health snapshot from WordPress',
+      description: 'Pushes a fresh health snapshot to the hub (safe).',
+      kind: 'health_refresh',
+      payload: {},
+    });
+  }
+
+  if (a.flushCaches) {
+    add({
+      id: 'plan-flush-caches',
+      title: 'Flush object cache and expired transients',
+      description: 'Runs hub handler maintenance_flush_caches on the bridge.',
+      kind: 'hub_invoke',
+      payload: { handler: 'maintenance_flush_caches', args: {} },
+    });
+  }
+
+  if (a.optimizeDatabase) {
+    add({
+      id: 'plan-db-optimize',
+      title: 'Optimize database tables (WordPress prefix)',
+      description: 'Runs hub handler maintenance_optimize_db. Large databases may take time.',
+      kind: 'hub_invoke',
+      payload: { handler: 'maintenance_optimize_db', args: {} },
+    });
+  }
+
+  if (a.purgeSpamComments) {
+    const limit = clampInt(a.spamCommentLimit, 1, 2000, 200);
+    add({
+      id: 'plan-purge-spam',
+      title: `Permanently delete up to ${limit} spam comments`,
+      description: 'Runs maintenance_purge_spam_comments on the bridge.',
+      kind: 'hub_invoke',
+      payload: { handler: 'maintenance_purge_spam_comments', args: { limit } },
+    });
+  }
+
+  const sv = String(a.searchVisibility || 'unchanged');
+  if (sv === 'allow') {
+    add({
+      id: 'plan-search-allow',
+      title: 'Allow search engines to index the site',
+      description: 'Sets blog_public so search engines are not discouraged.',
+      kind: 'hub_invoke',
+      payload: { handler: 'reading_search_visibility', args: { discourage: false } },
+    });
+  } else if (sv === 'discourage') {
+    add({
+      id: 'plan-search-discourage',
+      title: 'Discourage search engines from indexing the site',
+      description: 'Sets Reading → Search engine visibility to discourage indexing.',
+      kind: 'hub_invoke',
+      payload: { handler: 'reading_search_visibility', args: { discourage: true } },
+    });
+  }
+
+  if (a.runPluginUpdates) {
+    const cap = clampInt(a.maxPluginUpdates, 1, 50, 10);
+    const list = (summary.pluginsWithUpdates || []).slice(0, cap);
+    if (list.length === 0) warnings.push('No plugins with available updates in synced plugins_meta.');
+    list.forEach((p, i) => {
+      add({
+        id: `plan-plugin-up-${i}`,
+        title: `Update plugin: ${p.name}`,
+        description: `Would update ${p.file}`,
+        kind: 'plugin_update',
+        payload: { plugin: p.file },
+      });
+    });
+  }
+
+  if (a.removeInactivePlugins) {
+    const cap = clampInt(a.maxInactivePluginsToRemove, 1, 30, 5);
+    const list = (summary.inactivePlugins || []).filter((p) => !isProtectedBridgePlugin(p.file)).slice(0, cap);
+    if (list.length === 0) warnings.push('No inactive plugins to remove (or only the bridge is inactive).');
+    list.forEach((p, i) => {
+      add({
+        id: `plan-plugin-un-${i}`,
+        title: `Uninstall inactive plugin: ${p.name}`,
+        description: `Would uninstall ${p.file} (deactivate, uninstall hook, delete files).`,
+        kind: 'plugin_uninstall',
+        payload: { plugin: p.file },
+      });
+    });
+  }
+
+  if (a.removeInactiveThemes) {
+    const cap = clampInt(a.maxInactiveThemesToRemove, 1, 20, 3);
+    const list = (summary.inactiveThemes || []).slice(0, cap);
+    if (list.length === 0) warnings.push('No inactive themes in synced themes_meta.');
+    else warnings.push('Deleting themes can break child themes; confirm in WordPress before running.');
+    list.forEach((t, i) => {
+      const slug = validateThemeSlug(t.slug);
+      if (!slug) return;
+      add({
+        id: `plan-theme-del-${i}`,
+        title: `Delete inactive theme: ${t.name}`,
+        description: `Would delete theme slug ${slug}`,
+        kind: 'theme_delete',
+        payload: { theme: slug },
+      });
+    });
+  }
+
+  if (a.runThemeUpdatesForInactive) {
+    const cap = clampInt(a.maxThemeUpdates, 1, 20, 5);
+    const list = (summary.inactiveThemesWithUpdates || []).slice(0, cap);
+    if (list.length === 0) warnings.push('No inactive themes with updates in synced themes_meta.');
+    list.forEach((t, i) => {
+      const slug = validateThemeSlug(t.slug);
+      if (!slug) return;
+      add({
+        id: `plan-theme-up-${i}`,
+        title: `Update inactive theme: ${t.name}`,
+        description: `Would update theme ${slug}`,
+        kind: 'theme_update',
+        payload: { theme: slug },
+      });
+    });
+  }
+
+  return { plannedSteps: steps, warnings };
+}
+
 function validatePluginFile(plugin) {
   if (!plugin || typeof plugin !== 'string') return 'Missing plugin file path.';
   const p = plugin.trim();
@@ -130,6 +395,14 @@ function validatePluginFile(plugin) {
 function isProtectedBridgePlugin(plugin) {
   const lower = String(plugin).toLowerCase();
   return lower.includes('wphubpro-bridge') && lower.endsWith('.php');
+}
+
+function validateThemeSlug(slug) {
+  if (!slug || typeof slug !== 'string') return null;
+  const s = slug.trim();
+  if (s.length < 1 || s.length > 120) return null;
+  if (!/^[a-zA-Z0-9_-]+$/.test(s)) return null;
+  return s;
 }
 
 /** Matches bridge HubInvoke handler keys after normalize. */
@@ -161,12 +434,24 @@ function normalizeSuggestion(raw, index) {
   const kind = String(raw.kind || '').trim();
   if (!title || !ALLOWED_KINDS.has(kind)) return null;
   const payload = raw.payload && typeof raw.payload === 'object' && !Array.isArray(raw.payload) ? { ...raw.payload } : {};
-  if (kind === 'plugin_activate' || kind === 'plugin_deactivate' || kind === 'plugin_update') {
+  if (
+    kind === 'plugin_activate' ||
+    kind === 'plugin_deactivate' ||
+    kind === 'plugin_update' ||
+    kind === 'plugin_uninstall'
+  ) {
     const plugin = String(payload.plugin || '').trim();
     const err = validatePluginFile(plugin);
     if (err) return null;
-    if (kind === 'plugin_deactivate' && isProtectedBridgePlugin(plugin)) return null;
+    if ((kind === 'plugin_deactivate' || kind === 'plugin_uninstall') && isProtectedBridgePlugin(plugin)) {
+      return null;
+    }
     return { id, title, description, kind, payload: { plugin } };
+  }
+  if (kind === 'theme_activate' || kind === 'theme_update' || kind === 'theme_delete') {
+    const theme = validateThemeSlug(String(payload.theme || payload.slug || ''));
+    if (!theme) return null;
+    return { id, title, description, kind, payload: { theme } };
   }
   if (kind === 'hub_invoke') {
     const handler = validateHubHandlerKey(String(payload.handler || ''));
@@ -180,18 +465,27 @@ function normalizeSuggestion(raw, index) {
   return null;
 }
 
-async function callGeminiForSuggestions(checksSummary, log) {
+async function callGeminiForSuggestions(checksSummary, extras, log) {
   const key = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '').trim();
   if (!key) return null;
 
   const model = String(process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim() || 'gemini-2.0-flash';
 
-  const system = `You are a WordPress Site Health assistant for WPHub Pro. Given a JSON summary of Site Health checks, propose concrete fixes.
+  const system = `You are a WordPress Site Health assistant for WPHub Pro. Given Site Health checks and optional plugin/theme lists from the hub, propose concrete fixes.
 Return a single JSON object with key "suggestions" (array). Each item: id (short slug), title, description, kind, payload.
-Allowed kind values ONLY: "advice_only" (no automated change — PHP upgrade, HTTPS, general guidance), "health_refresh" (re-run health push — use when stale data might help), "plugin_deactivate" | "plugin_activate" | "plugin_update" with payload.plugin = exact plugin file path like "akismet/akismet.php" ONLY when the check text clearly names one plugin file or slug you can map safely, "hub_invoke" with payload.handler = a registered bridge handler key (lowercase a-z, 0-9, underscore, hyphen; e.g. "site_summary", "ping") and optional payload.args object — ONLY when the site owner may have registered that handler via wphubpro_hub_invoke_handlers; prefer built-in "ping" or "site_summary" for diagnostics, never invent risky handler names.
-Never target WPHub Pro Bridge (paths containing wphubpro-bridge). Max 8 suggestions. Prefer advice_only when unsure.`;
+Allowed kind values ONLY:
+- "advice_only" — no automated change (PHP upgrade, HTTPS, ambiguous guidance).
+- "health_refresh" — re-push Site Health snapshot when stale data might help.
+- "plugin_activate" | "plugin_deactivate" | "plugin_update" | "plugin_uninstall" with payload.plugin = exact file path like "akismet/akismet.php" only when clearly justified; for uninstall only inactive plugins from the provided plugins list; never uninstall the WPHub Pro Bridge (paths containing wphubpro-bridge).
+- "theme_activate" | "theme_update" | "theme_delete" with payload.theme = stylesheet slug from the themes list (inactive themes only for delete).
+- "hub_invoke" with payload.handler and optional payload.args. Built-in handlers include: "ping", "site_summary", "maintenance_flush_caches", "maintenance_optimize_db", "maintenance_purge_spam_comments" (args.limit number 1-2000), "reading_search_visibility" (args.discourage boolean). Prefer safe diagnostics when unsure.
+Max 8 suggestions. Prefer advice_only when unsure.`;
 
-  const userContent = JSON.stringify({ checks: checksSummary });
+  const userContent = JSON.stringify({
+    checks: checksSummary,
+    plugins: (extras && extras.plugins) || [],
+    themes: (extras && extras.themes) || [],
+  });
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
 
   try {
@@ -298,7 +592,12 @@ async function wpProxyRequest(siteDoc, bridgeSecret, { path, method, jsonBody },
     'X-WPHub-Key': bridgeSecret,
     'User-Agent': 'WPHub-HealthAiAgent/1.0',
   };
-  if ((path.includes('plugins/manage/') || path.includes('hub/invoke')) && wpAdminLogin) {
+  if (
+    (path.includes('plugins/manage/') ||
+      path.includes('themes/manage/') ||
+      path.includes('hub/invoke')) &&
+    wpAdminLogin
+  ) {
     headers['X-WPHub-Admin-Login'] = wpAdminLogin;
   }
   const bodyObj = { ...jsonBody, bridge_secret: bridgeSecret };
@@ -375,6 +674,25 @@ async function runExecuteOne(siteDoc, ENCRYPTION_KEY, step, log) {
     case 'plugin_update':
       path = 'wphubpro/v1/plugins/manage/update';
       jsonBody = { plugin: validated.payload.plugin };
+      break;
+    case 'plugin_uninstall':
+      if (isProtectedBridgePlugin(validated.payload.plugin)) {
+        return { json: { success: false, message: 'Cannot uninstall WPHub Pro Bridge from the hub.' }, status: 403 };
+      }
+      path = 'wphubpro/v1/plugins/manage/uninstall';
+      jsonBody = { plugin: validated.payload.plugin };
+      break;
+    case 'theme_activate':
+      path = 'wphubpro/v1/themes/manage/activate';
+      jsonBody = { slug: validated.payload.theme };
+      break;
+    case 'theme_update':
+      path = 'wphubpro/v1/themes/manage/update';
+      jsonBody = { slug: validated.payload.theme };
+      break;
+    case 'theme_delete':
+      path = 'wphubpro/v1/themes/manage/delete';
+      jsonBody = { slug: validated.payload.theme };
       break;
     case 'hub_invoke': {
       const h = validated.payload?.handler;
@@ -523,7 +841,21 @@ module.exports = async ({ req, res, log, error }) => {
         message: typeof c.message === 'string' ? c.message.replace(/<[^>]+>/g, '').slice(0, 400) : '',
       }));
 
-    let aiList = await callGeminiForSuggestions(checksSummary, log);
+    const metaCtx = resolveMetaStrings(siteDoc, body);
+    const pluginsCtx = parsePluginsMetaArray(metaCtx.plugins).slice(0, 80).map((p) => ({
+      file: p.file,
+      name: p.name,
+      active: p.active,
+      update: p.update,
+    }));
+    const themesCtx = parseThemesMetaArray(metaCtx.themes).slice(0, 60).map((t) => ({
+      slug: t.slug,
+      name: t.name,
+      active: t.active,
+      update: t.update,
+    }));
+
+    let aiList = await callGeminiForSuggestions(checksSummary, { plugins: pluginsCtx, themes: themesCtx }, log);
     let source = 'gemini';
     if (!aiList || aiList.length === 0) {
       aiList = heuristicSuggestions(snapshot);
@@ -556,5 +888,30 @@ module.exports = async ({ req, res, log, error }) => {
     }
   }
 
-  return fail(res, 'Unknown action. Use suggest or executeOne.', 400);
+  if (action === 'dryRun') {
+    const phase = String(body.dryRunPhase || body.phase || 'analyze')
+      .trim()
+      .toLowerCase();
+    if (phase === 'analyze') {
+      const { summary, warnings } = buildDryRunAnalyzeSummary(siteDoc, body);
+      return ok(res, { success: true, phase: 'analyze', summary, warnings });
+    }
+    if (phase === 'plan') {
+      const { summary, warnings: analyzeWarnings } = buildDryRunAnalyzeSummary(siteDoc, body);
+      const answers =
+        body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers : {};
+      const { plannedSteps, warnings: planWarnings } = buildDryRunPlanFromAnswers(summary, answers);
+      const warnings = [...(analyzeWarnings || []), ...(planWarnings || [])];
+      return ok(res, {
+        success: true,
+        phase: 'plan',
+        plannedSteps,
+        warnings,
+        answersEcho: answers,
+      });
+    }
+    return fail(res, 'dryRunPhase must be "analyze" or "plan".', 400);
+  }
+
+  return fail(res, 'Unknown action. Use suggest, executeOne, or dryRun.', 400);
 };

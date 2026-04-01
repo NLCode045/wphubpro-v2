@@ -4,8 +4,11 @@ import { Query } from 'appwrite';
 import { account, COLLECTIONS, databases, DATABASE_ID } from '../../services/appwrite';
 import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
 import type {
+  HealthAiDryRunAnalyzeResponse,
+  HealthAiDryRunPlanResponse,
   HealthAiExecuteOneResponse,
   HealthAiSuggestion,
+  HealthDryRunAnswers,
   Site,
   SiteAppIconPreviewResult,
   SitePagespeedResult,
@@ -148,6 +151,76 @@ export async function healthAiExecuteOne(
   }
   if (!d.success && !d.skipped) {
     throw new Error(d.message?.trim() || 'Step failed.');
+  }
+  return d;
+}
+
+export type HealthAiDryRunContextOverrides = {
+  health_meta?: string;
+  plugins_meta?: string;
+  themes_meta?: string;
+};
+
+/**
+ * Dry-run analyze: summary counts from hub-stored health/plugins/themes meta (no WordPress mutations).
+ */
+export async function healthAiDryRunAnalyze(
+  siteId: string,
+  contextOverrides?: HealthAiDryRunContextOverrides,
+): Promise<HealthAiDryRunAnalyzeResponse> {
+  const jwt = jwtFromCreateResponse(await account.createJWT());
+  const { data, statusCode } = await executeFunctionWithMeta<HealthAiDryRunAnalyzeResponse>(
+    HEALTH_AI_AGENT_FUNCTION_ID,
+    {
+      action: 'dryRun',
+      dryRunPhase: 'analyze',
+      siteId,
+      jwt,
+      ...contextOverrides,
+    },
+    { throwOnHttpError: false, longRunning: false },
+  );
+  const d = (data && typeof data === 'object' ? data : {}) as HealthAiDryRunAnalyzeResponse;
+  if (statusCode < 200 || statusCode >= 300) {
+    const msg =
+      typeof d.message === 'string' && d.message.trim() ? d.message.trim() : `Request failed (${statusCode})`;
+    throw new Error(msg);
+  }
+  if (!d.success) {
+    throw new Error(d.message?.trim() || 'Dry run analyze failed.');
+  }
+  return d;
+}
+
+/**
+ * Dry-run plan: validated planned steps from questionnaire (still no WordPress mutations).
+ */
+export async function healthAiDryRunPlan(
+  siteId: string,
+  answers: HealthDryRunAnswers,
+  contextOverrides?: HealthAiDryRunContextOverrides,
+): Promise<HealthAiDryRunPlanResponse> {
+  const jwt = jwtFromCreateResponse(await account.createJWT());
+  const { data, statusCode } = await executeFunctionWithMeta<HealthAiDryRunPlanResponse>(
+    HEALTH_AI_AGENT_FUNCTION_ID,
+    {
+      action: 'dryRun',
+      dryRunPhase: 'plan',
+      siteId,
+      jwt,
+      answers,
+      ...contextOverrides,
+    },
+    { throwOnHttpError: false, longRunning: false },
+  );
+  const d = (data && typeof data === 'object' ? data : {}) as HealthAiDryRunPlanResponse;
+  if (statusCode < 200 || statusCode >= 300) {
+    const msg =
+      typeof d.message === 'string' && d.message.trim() ? d.message.trim() : `Request failed (${statusCode})`;
+    throw new Error(msg);
+  }
+  if (!d.success) {
+    throw new Error(d.message?.trim() || 'Dry run plan failed.');
   }
   return d;
 }

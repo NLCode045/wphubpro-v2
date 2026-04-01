@@ -10,6 +10,7 @@ const KIND_LABELS: Record<HealthAiSuggestionKind, string> = {
   plugin_activate: 'Activate plugin',
   plugin_deactivate: 'Deactivate plugin',
   plugin_update: 'Update plugin',
+  hub_invoke: 'Registered hub handler',
   advice_only: 'Guidance only',
 };
 
@@ -180,7 +181,8 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
               <>
                 <p className="mb-3">
                   Select the actions you want the hub to run on <strong>{site.siteName || site.siteUrl}</strong>.
-                  Plugin steps use the bridge with your linked WordPress admin user.
+                  Plugin and hub-handler steps use the bridge with your linked WordPress admin user when the site
+                  document has a username.
                 </p>
                 <div className="d-flex flex-column gap-3 mb-3">
                   {suggestions.map((s) => (
@@ -209,6 +211,14 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
                       {s.payload?.plugin ? (
                         <p className="fs-xs text-muted mb-0 mt-1 ms-4 ps-1">
                           <code>{s.payload.plugin}</code>
+                        </p>
+                      ) : null}
+                      {s.payload?.handler ? (
+                        <p className="fs-xs text-muted mb-0 mt-1 ms-4 ps-1">
+                          Handler: <code>{s.payload.handler}</code>
+                          {s.payload.args && Object.keys(s.payload.args).length > 0 ? (
+                            <span className="ms-1">({JSON.stringify(s.payload.args)})</span>
+                          ) : null}
                         </p>
                       ) : null}
                     </div>

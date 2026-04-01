@@ -159,6 +159,7 @@ export type HealthAiSuggestionKind =
   | 'plugin_activate'
   | 'plugin_deactivate'
   | 'plugin_update'
+  | 'hub_invoke'
   | 'advice_only';
 
 export interface HealthAiSuggestion {
@@ -166,7 +167,13 @@ export interface HealthAiSuggestion {
   title: string;
   description?: string;
   kind: HealthAiSuggestionKind;
-  payload?: { plugin?: string; healthCheckId?: string };
+  payload?: {
+    plugin?: string;
+    healthCheckId?: string;
+    /** Bridge `hub/invoke` registry key */
+    handler?: string;
+    args?: Record<string, unknown>;
+  };
 }
 
 export interface HealthAiSuggestResponse {

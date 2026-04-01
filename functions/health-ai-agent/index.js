@@ -1,7 +1,7 @@
 /**
  * health-ai-agent: JWT-authenticated suggest + executeOne for Site Health–driven fixes.
  * suggest: reads site health_meta, optional OpenAI (OPENAI_API_KEY), else heuristic advice_only rows.
- * executeOne: allowlisted bridge calls only (health push, plugin activate/deactivate/update).
+ * executeOne: allowlisted bridge calls (health push, plugins, hub/invoke registry handlers).
  */
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
@@ -15,6 +15,7 @@ const ALLOWED_KINDS = new Set([
   'plugin_activate',
   'plugin_deactivate',
   'plugin_update',
+  'hub_invoke',
   'advice_only',
 ]);
 
@@ -131,6 +132,27 @@ function isProtectedBridgePlugin(plugin) {
   return lower.includes('wphubpro-bridge') && lower.endsWith('.php');
 }
 
+/** Matches bridge HubInvoke handler keys after normalize. */
+function validateHubHandlerKey(handler) {
+  if (!handler || typeof handler !== 'string') return null;
+  const h = handler.trim().toLowerCase();
+  if (!/^[a-z0-9_-]{1,64}$/.test(h)) return null;
+  return h;
+}
+
+/** Plain object args only, size-capped (JSON round-trip). */
+function sanitizeHubInvokeArgs(args) {
+  if (args == null || typeof args !== 'object' || Array.isArray(args)) return {};
+  try {
+    const s = JSON.stringify(args);
+    if (s.length > 8000) return {};
+    const parsed = JSON.parse(s);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function normalizeSuggestion(raw, index) {
   if (!raw || typeof raw !== 'object') return null;
   const id = String(raw.id || `s-${index}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || `s-${index}`;
@@ -146,6 +168,12 @@ function normalizeSuggestion(raw, index) {
     if (kind === 'plugin_deactivate' && isProtectedBridgePlugin(plugin)) return null;
     return { id, title, description, kind, payload: { plugin } };
   }
+  if (kind === 'hub_invoke') {
+    const handler = validateHubHandlerKey(String(payload.handler || ''));
+    if (!handler) return null;
+    const args = sanitizeHubInvokeArgs(payload.args);
+    return { id, title, description, kind, payload: { handler, args } };
+  }
   if (kind === 'health_refresh' || kind === 'advice_only') {
     return { id, title, description, kind, payload: {} };
   }
@@ -158,7 +186,7 @@ async function callOpenAiForSuggestions(checksSummary, log) {
 
   const system = `You are a WordPress Site Health assistant for WPHub Pro. Given a JSON summary of Site Health checks, propose concrete fixes.
 Return a single JSON object with key "suggestions" (array). Each item: id (short slug), title, description, kind, payload.
-Allowed kind values ONLY: "advice_only" (no automated change — PHP upgrade, HTTPS, general guidance), "health_refresh" (re-run health push — use when stale data might help), "plugin_deactivate" | "plugin_activate" | "plugin_update" with payload.plugin = exact plugin file path like "akismet/akismet.php" ONLY when the check text clearly names one plugin file or slug you can map safely.
+Allowed kind values ONLY: "advice_only" (no automated change — PHP upgrade, HTTPS, general guidance), "health_refresh" (re-run health push — use when stale data might help), "plugin_deactivate" | "plugin_activate" | "plugin_update" with payload.plugin = exact plugin file path like "akismet/akismet.php" ONLY when the check text clearly names one plugin file or slug you can map safely, "hub_invoke" with payload.handler = a registered bridge handler key (lowercase a-z, 0-9, underscore, hyphen; e.g. "site_summary", "ping") and optional payload.args object — ONLY when the site owner may have registered that handler via wphubpro_hub_invoke_handlers; prefer built-in "ping" or "site_summary" for diagnostics, never invent risky handler names.
 Never target WPHub Pro Bridge (paths containing wphubpro-bridge). Max 8 suggestions. Prefer advice_only when unsure.`;
 
   const userContent = JSON.stringify({ checks: checksSummary });
@@ -251,7 +279,7 @@ async function wpProxyRequest(siteDoc, bridgeSecret, { path, method, jsonBody },
     'X-WPHub-Key': bridgeSecret,
     'User-Agent': 'WPHub-HealthAiAgent/1.0',
   };
-  if (path.includes('plugins/manage/') && wpAdminLogin) {
+  if ((path.includes('plugins/manage/') || path.includes('hub/invoke')) && wpAdminLogin) {
     headers['X-WPHub-Admin-Login'] = wpAdminLogin;
   }
   const bodyObj = { ...jsonBody, bridge_secret: bridgeSecret };
@@ -271,10 +299,14 @@ async function wpProxyRequest(siteDoc, bridgeSecret, { path, method, jsonBody },
       data = { raw: text.slice(0, 500) };
     }
     if (httpStatus >= 200 && httpStatus < 300) {
-      const msg =
-        data && typeof data === 'object' && typeof data.message === 'string' && data.message
-          ? data.message
-          : 'OK';
+      let msg = 'OK';
+      if (data && typeof data === 'object') {
+        if (typeof data.message === 'string' && data.message) {
+          msg = data.message;
+        } else if (data.success === true && typeof data.handler === 'string' && data.handler) {
+          msg = `Handler “${data.handler}” completed.`;
+        }
+      }
       return { ok: true, message: msg, httpStatus };
     }
     const msg =
@@ -325,6 +357,16 @@ async function runExecuteOne(siteDoc, ENCRYPTION_KEY, step, log) {
       path = 'wphubpro/v1/plugins/manage/update';
       jsonBody = { plugin: validated.payload.plugin };
       break;
+    case 'hub_invoke': {
+      const h = validated.payload?.handler;
+      const invokeArgs =
+        validated.payload?.args && typeof validated.payload.args === 'object' && !Array.isArray(validated.payload.args)
+          ? validated.payload.args
+          : {};
+      path = 'wphubpro/v1/hub/invoke';
+      jsonBody = { handler: h, args: invokeArgs };
+      break;
+    }
     default:
       return { json: { success: false, message: 'Unsupported action.' }, status: 400 };
   }

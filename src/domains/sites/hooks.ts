@@ -130,7 +130,52 @@ export const useRequestSiteHealthRefresh = () => {
 
 /**
  * Loads AI/heuristic fix suggestions from `health-ai-agent` (JWT + site health_meta on server).
+ * Unwraps double-encoded JSON or `{ body: "..." }` shapes Appwrite sometimes returns in `responseBody`.
  */
+function normalizeHealthAiSuggestBody(raw: unknown, depth = 0): HealthAiSuggestResponse {
+  if (depth > 6) return {};
+
+  let o: unknown = raw;
+  if (typeof o === 'string') {
+    const t = o.trim();
+    if (!t.startsWith('{') && !t.startsWith('[')) return {};
+    try {
+      o = JSON.parse(t);
+    } catch {
+      return {};
+    }
+    return normalizeHealthAiSuggestBody(o, depth + 1);
+  }
+
+  if (!o || typeof o !== 'object') return {};
+  const obj = o as Record<string, unknown>;
+
+  if (typeof obj.body === 'string' && obj.body.trim().startsWith('{')) {
+    const inner = normalizeHealthAiSuggestBody(obj.body, depth + 1);
+    if ((inner.suggestions?.length ?? 0) > 0 || inner.message) return inner;
+  }
+
+  const suggestions = Array.isArray(obj.suggestions) ? (obj.suggestions as HealthAiSuggestion[]) : [];
+
+  const out: HealthAiSuggestResponse = {
+    success: typeof obj.success === 'boolean' ? obj.success : undefined,
+    suggestions,
+    source: obj.source === 'gemini' || obj.source === 'heuristic' ? obj.source : undefined,
+    message: typeof obj.message === 'string' ? obj.message : undefined,
+  };
+
+  if (suggestions.length > 0 || out.message || out.success === false) {
+    return out;
+  }
+
+  if (obj.data != null) {
+    const inner = normalizeHealthAiSuggestBody(obj.data, depth + 1);
+    if ((inner.suggestions?.length ?? 0) > 0 || inner.message) return inner;
+  }
+
+  return out;
+}
+
 export const useHealthAiSuggest = () => {
   return useMutation<HealthAiSuggestResponse, Error, string>({
     mutationFn: async (siteId: string) => {
@@ -147,7 +192,7 @@ export const useHealthAiSuggest = () => {
             : `Request failed (${statusCode})`;
         throw new Error(msg);
       }
-      return data ?? {};
+      return normalizeHealthAiSuggestBody(data);
     },
   });
 };

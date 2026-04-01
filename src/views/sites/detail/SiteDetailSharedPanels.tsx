@@ -97,6 +97,7 @@ export function SiteDetailHealthPanel({ site }: { site: Site }) {
       </div>
       <SiteHealthMetaPanel site={site} severityFilters={severityFilters} setSeverityFilters={setSeverityFilters} />
       <SiteHealthAiAgentModal
+        key={`health-ai-${site.$id}-${healthAiSession}`}
         site={site}
         show={healthAiOpen}
         sessionKey={healthAiSession}

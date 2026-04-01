@@ -1,8 +1,8 @@
 import { useAuth } from '@/domains/auth';
 import { healthAiExecuteOne, useHealthAiSuggest } from '@/domains/sites';
-import type { HealthAiSuggestion, HealthAiSuggestionKind, Site } from '@/types';
+import type { HealthAiSuggestion, HealthAiSuggestionKind, HealthAiSuggestResponse, Site } from '@/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Form, Modal, Spinner } from 'react-bootstrap';
 
 const KIND_LABELS: Record<HealthAiSuggestionKind, string> = {
@@ -14,6 +14,12 @@ const KIND_LABELS: Record<HealthAiSuggestionKind, string> = {
   advice_only: 'Guidance only',
 };
 
+function suggestionsFromResponse(data: HealthAiSuggestResponse | undefined | null): HealthAiSuggestion[] {
+  if (!data || typeof data !== 'object') return [];
+  const raw = (data as { suggestions?: unknown }).suggestions;
+  return Array.isArray(raw) ? (raw as HealthAiSuggestion[]) : [];
+}
+
 type ProgressRow = {
   id: string;
   title: string;
@@ -24,7 +30,7 @@ type ProgressRow = {
 export type SiteHealthAiAgentModalProps = {
   site: Site;
   show: boolean;
-  /** Increment when opening so analysis re-runs (avoids stale Strict Mode / duplicate issues). */
+  /** Increment when opening so analysis re-runs (parent also sets key for a clean remount). */
   sessionKey: number;
   onHide: () => void;
 };
@@ -42,10 +48,8 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
   const [runError, setRunError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [statusHeadline, setStatusHeadline] = useState('');
-  const lastSessionRef = useRef<number | null>(null);
 
-  const resetForSession = useCallback(() => {
-    suggest.reset();
+  const resetLocalState = useCallback(() => {
     setPhase('analyze');
     setSuggestions([]);
     setSelectedIds(new Set());
@@ -54,19 +58,21 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
     setRunError(null);
     setRunning(false);
     setStatusHeadline('');
-  }, [suggest]);
+  }, []);
 
+  const handleClose = () => {
+    suggest.reset();
+    resetLocalState();
+    onHide();
+  };
+
+  // Kick off suggest when the modal opens (sessionKey changes → new mount from parent key, or show flips true).
   useEffect(() => {
-    if (!show) {
-      lastSessionRef.current = null;
-      return;
-    }
-    if (lastSessionRef.current === sessionKey) return;
-    lastSessionRef.current = sessionKey;
-    resetForSession();
+    if (!show) return;
+    resetLocalState();
     suggest.mutate(site.$id, {
       onSuccess: (d) => {
-        setSuggestions(d.suggestions ?? []);
+        setSuggestions(suggestionsFromResponse(d));
         setPhase('review');
       },
       onError: (e) => {
@@ -74,8 +80,22 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
         setPhase('review');
       },
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one analysis per sessionKey when modal opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-run when opening a new session
   }, [show, sessionKey, site.$id]);
+
+  // Recover from React Strict Mode / races where mutate callbacks do not run but the mutation still settles.
+  useEffect(() => {
+    if (!show || phase !== 'analyze') return;
+    if (suggest.isSuccess && suggest.data) {
+      setSuggestions(suggestionsFromResponse(suggest.data));
+      setPhase('review');
+      return;
+    }
+    if (suggest.isError && suggest.error) {
+      setRunError(suggest.error.message);
+      setPhase('review');
+    }
+  }, [show, phase, suggest.isSuccess, suggest.isError, suggest.data, suggest.error]);
 
   const toggleId = (id: string) => {
     setSelectedIds((prev) => {
@@ -142,18 +162,18 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
     if (user?.$id) void queryClient.invalidateQueries({ queryKey: ['sites', user.$id] });
   };
 
-  const handleClose = () => {
-    resetForSession();
-    onHide();
-  };
-
-  const analyzing = phase === 'analyze' && suggest.isPending;
+  const analyzing = show && phase === 'analyze' && suggest.isPending;
+  const reviewReady = phase === 'review' || phase === 'run' || phase === 'done';
   const sourceNote =
     suggest.data?.source === 'gemini'
       ? 'Suggestions from AI (Gemini — review carefully before applying).'
       : suggest.data?.source === 'heuristic'
         ? 'Rule-based suggestions (set GEMINI_API_KEY on the function for richer ideas).'
         : null;
+
+  const showSuggestError = reviewReady && runError && suggestions.length === 0;
+  const showEmptySuggestions =
+    reviewReady && !runError && !suggest.isPending && suggestions.length === 0 && phase === 'review';
 
   return (
     <Modal show={show} onHide={handleClose} centered size="lg" scrollable>
@@ -168,13 +188,21 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
           </div>
         ) : null}
 
-        {!analyzing && phase === 'review' && runError && !suggestions.length ? (
+        {showSuggestError ? (
           <Alert variant="danger" className="mb-0">
             {runError}
           </Alert>
         ) : null}
 
-        {!analyzing && suggestions.length > 0 && (phase === 'review' || phase === 'run' || phase === 'done') ? (
+        {showEmptySuggestions ? (
+          <Alert variant="secondary" className="mb-0">
+            No suggestions were returned. Check that the <code>health-ai-agent</code> function is deployed and that
+            Site Health data exists for this site. If the problem continues, open the browser network tab and inspect
+            the function response.
+          </Alert>
+        ) : null}
+
+        {!analyzing && suggestions.length > 0 && reviewReady ? (
           <>
             {sourceNote ? <p className="text-muted fs-sm mb-3">{sourceNote}</p> : null}
             {phase === 'review' ? (

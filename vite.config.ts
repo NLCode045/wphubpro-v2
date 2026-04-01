@@ -7,7 +7,7 @@ export default defineConfig({
         allowedHosts: ['local.code045.nl', 'localhost', 'wphubpro.jhbdesigns.nl', 'dev.wphub.pro', 'api.wphub.pro', 'app.wphub.pro', 'code045.wphub.pro'],
         host: true,
         port: 5173,
-        strictPort: true,
+        strictPort: false,
         open: true,
         https: false,
         warmup: {

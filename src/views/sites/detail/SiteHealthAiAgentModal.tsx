@@ -1,6 +1,7 @@
 import { useAuth } from '@/domains/auth';
-import { healthAiExecuteOne, useHealthAiSuggest } from '@/domains/sites';
-import type { HealthAiSuggestion, HealthAiSuggestionKind, HealthAiSuggestResponse, Site } from '@/types';
+import { healthAiExecuteOne } from '@/domains/sites';
+import { buildLocalHealthAiSuggestions } from '@/lib/healthAiLocalSuggestions';
+import type { HealthAiSuggestion, HealthAiSuggestionKind, Site } from '@/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Form, Modal, Spinner } from 'react-bootstrap';
@@ -13,12 +14,6 @@ const KIND_LABELS: Record<HealthAiSuggestionKind, string> = {
   hub_invoke: 'Registered hub handler',
   advice_only: 'Guidance only',
 };
-
-function suggestionsFromResponse(data: HealthAiSuggestResponse | undefined | null): HealthAiSuggestion[] {
-  if (!data || typeof data !== 'object') return [];
-  const raw = (data as { suggestions?: unknown }).suggestions;
-  return Array.isArray(raw) ? (raw as HealthAiSuggestion[]) : [];
-}
 
 type ProgressRow = {
   id: string;
@@ -38,9 +33,8 @@ export type SiteHealthAiAgentModalProps = {
 export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteHealthAiAgentModalProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const suggest = useHealthAiSuggest();
 
-  const [phase, setPhase] = useState<'analyze' | 'review' | 'run' | 'done'>('analyze');
+  const [phase, setPhase] = useState<'review' | 'run' | 'done'>('review');
   const [suggestions, setSuggestions] = useState<HealthAiSuggestion[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [progressItems, setProgressItems] = useState<ProgressRow[]>([]);
@@ -50,7 +44,7 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
   const [statusHeadline, setStatusHeadline] = useState('');
 
   const resetLocalState = useCallback(() => {
-    setPhase('analyze');
+    setPhase('review');
     setSuggestions([]);
     setSelectedIds(new Set());
     setProgressItems([]);
@@ -61,41 +55,19 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
   }, []);
 
   const handleClose = () => {
-    suggest.reset();
     resetLocalState();
     onHide();
   };
 
-  // Kick off suggest when the modal opens (sessionKey changes → new mount from parent key, or show flips true).
+  // Suggestions from Appwrite-backed `site.healthMeta` (maps `health_meta`); no function call for the list.
   useEffect(() => {
     if (!show) return;
     resetLocalState();
-    suggest.mutate(site.$id, {
-      onSuccess: (d) => {
-        setSuggestions(suggestionsFromResponse(d));
-        setPhase('review');
-      },
-      onError: (e) => {
-        setRunError(e.message);
-        setPhase('review');
-      },
-    });
+    const built = buildLocalHealthAiSuggestions(site.healthMeta);
+    setSuggestions(built);
+    setPhase('review');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-run when opening a new session
-  }, [show, sessionKey, site.$id]);
-
-  // Recover from React Strict Mode / races where mutate callbacks do not run but the mutation still settles.
-  useEffect(() => {
-    if (!show || phase !== 'analyze') return;
-    if (suggest.isSuccess && suggest.data) {
-      setSuggestions(suggestionsFromResponse(suggest.data));
-      setPhase('review');
-      return;
-    }
-    if (suggest.isError && suggest.error) {
-      setRunError(suggest.error.message);
-      setPhase('review');
-    }
-  }, [show, phase, suggest.isSuccess, suggest.isError, suggest.data, suggest.error]);
+  }, [show, sessionKey, site.$id, site.healthMeta]);
 
   const toggleId = (id: string) => {
     setSelectedIds((prev) => {
@@ -162,18 +134,10 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
     if (user?.$id) void queryClient.invalidateQueries({ queryKey: ['sites', user.$id] });
   };
 
-  const analyzing = show && phase === 'analyze' && suggest.isPending;
   const reviewReady = phase === 'review' || phase === 'run' || phase === 'done';
-  const sourceNote =
-    suggest.data?.source === 'gemini'
-      ? 'Suggestions from AI (Gemini — review carefully before applying).'
-      : suggest.data?.source === 'heuristic'
-        ? 'Rule-based suggestions (set GEMINI_API_KEY on the function for richer ideas).'
-        : null;
 
-  const showSuggestError = reviewReady && runError && suggestions.length === 0;
   const showEmptySuggestions =
-    reviewReady && !runError && !suggest.isPending && suggestions.length === 0 && phase === 'review';
+    reviewReady && !runError && suggestions.length === 0 && phase === 'review';
 
   return (
     <Modal show={show} onHide={handleClose} centered size="lg" scrollable>
@@ -181,30 +145,26 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
         <Modal.Title>Health assistant</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        {analyzing ? (
-          <div className="d-flex align-items-center gap-2 py-4">
-            <Spinner animation="border" size="sm" />
-            <span className="text-muted">Analyzing Site Health data…</span>
-          </div>
+        {showEmptySuggestions ? (
+          <Alert variant="secondary" className="mb-0">
+            No suggestions to show. Run <strong>Check health</strong> on this site so the hub stores a Site Health
+            snapshot in <code>health_meta</code>, then open the assistant again.
+          </Alert>
         ) : null}
 
-        {showSuggestError ? (
+        {runError && phase === 'review' && suggestions.length === 0 ? (
           <Alert variant="danger" className="mb-0">
             {runError}
           </Alert>
         ) : null}
 
-        {showEmptySuggestions ? (
-          <Alert variant="secondary" className="mb-0">
-            No suggestions were returned. Check that the <code>health-ai-agent</code> function is deployed and that
-            Site Health data exists for this site. If the problem continues, open the browser network tab and inspect
-            the function response.
-          </Alert>
-        ) : null}
-
-        {!analyzing && suggestions.length > 0 && reviewReady ? (
+        {suggestions.length > 0 && reviewReady ? (
           <>
-            {sourceNote ? <p className="text-muted fs-sm mb-3">{sourceNote}</p> : null}
+            <p className="text-muted fs-sm mb-3">
+              Suggestions are built from this site&apos;s stored Site Health snapshot (<code>health_meta</code> in
+              the hub). Running steps still uses the <code>health-ai-agent</code> function to call your WordPress
+              bridge.
+            </p>
             {phase === 'review' ? (
               <>
                 <p className="mb-3">

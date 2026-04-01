@@ -1,6 +1,6 @@
 /**
  * health-ai-agent: JWT-authenticated suggest + executeOne for Site Health–driven fixes.
- * suggest: reads site health_meta, optional OpenAI (OPENAI_API_KEY), else heuristic advice_only rows.
+ * suggest: reads site health_meta, optional Gemini (GEMINI_API_KEY), else heuristic advice_only rows.
  * executeOne: allowlisted bridge calls (health push, plugins, hub/invoke registry handlers).
  */
 const sdk = require('node-appwrite');
@@ -180,9 +180,11 @@ function normalizeSuggestion(raw, index) {
   return null;
 }
 
-async function callOpenAiForSuggestions(checksSummary, log) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key || typeof key !== 'string' || !key.trim()) return null;
+async function callGeminiForSuggestions(checksSummary, log) {
+  const key = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '').trim();
+  if (!key) return null;
+
+  const model = String(process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim() || 'gemini-2.0-flash';
 
   const system = `You are a WordPress Site Health assistant for WPHub Pro. Given a JSON summary of Site Health checks, propose concrete fixes.
 Return a single JSON object with key "suggestions" (array). Each item: id (short slug), title, description, kind, payload.
@@ -190,27 +192,31 @@ Allowed kind values ONLY: "advice_only" (no automated change — PHP upgrade, HT
 Never target WPHub Pro Bridge (paths containing wphubpro-bridge). Max 8 suggestions. Prefer advice_only when unsure.`;
 
   const userContent = JSON.stringify({ checks: checksSummary });
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
 
   try {
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    const resp = await fetch(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key.trim()}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: userContent },
+        systemInstruction: {
+          parts: [{ text: system }],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: `Site Health checks JSON:\n${userContent}` }],
+          },
         ],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: 'application/json',
+        },
       }),
     });
     const text = await resp.text();
     if (!resp.ok) {
-      log(`[health-ai-agent] OpenAI HTTP ${resp.status}: ${text.slice(0, 200)}`);
+      log(`[health-ai-agent] Gemini HTTP ${resp.status}: ${text.slice(0, 300)}`);
       return null;
     }
     let parsed;
@@ -219,11 +225,24 @@ Never target WPHub Pro Bridge (paths containing wphubpro-bridge). Max 8 suggesti
     } catch {
       return null;
     }
-    const content = parsed?.choices?.[0]?.message?.content;
-    if (!content || typeof content !== 'string') return null;
+    const block = parsed?.promptFeedback?.blockReason;
+    if (block) {
+      log(`[health-ai-agent] Gemini blocked: ${block}`);
+      return null;
+    }
+    const parts = parsed?.candidates?.[0]?.content?.parts;
+    let rawText =
+      Array.isArray(parts) && parts[0] && typeof parts[0].text === 'string' ? parts[0].text.trim() : '';
+    if (!rawText) {
+      log(`[health-ai-agent] Gemini empty response`);
+      return null;
+    }
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    }
     let obj;
     try {
-      obj = JSON.parse(content);
+      obj = JSON.parse(rawText);
     } catch {
       return null;
     }
@@ -239,7 +258,7 @@ Never target WPHub Pro Bridge (paths containing wphubpro-bridge). Max 8 suggesti
     }
     return normalized.length > 0 ? normalized : null;
   } catch (e) {
-    log(`[health-ai-agent] OpenAI error: ${e.message}`);
+    log(`[health-ai-agent] Gemini error: ${e.message}`);
     return null;
   }
 }
@@ -504,8 +523,8 @@ module.exports = async ({ req, res, log, error }) => {
         message: typeof c.message === 'string' ? c.message.replace(/<[^>]+>/g, '').slice(0, 400) : '',
       }));
 
-    let aiList = await callOpenAiForSuggestions(checksSummary, log);
-    let source = 'openai';
+    let aiList = await callGeminiForSuggestions(checksSummary, log);
+    let source = 'gemini';
     if (!aiList || aiList.length === 0) {
       aiList = heuristicSuggestions(snapshot);
       source = 'heuristic';

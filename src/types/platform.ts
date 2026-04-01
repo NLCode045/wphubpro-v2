@@ -179,7 +179,7 @@ export interface HealthAiSuggestion {
 export interface HealthAiSuggestResponse {
   success?: boolean;
   suggestions?: HealthAiSuggestion[];
-  source?: 'openai' | 'heuristic';
+  source?: 'gemini' | 'heuristic';
   message?: string;
 }
 

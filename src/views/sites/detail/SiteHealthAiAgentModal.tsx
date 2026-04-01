@@ -149,10 +149,10 @@ export function SiteHealthAiAgentModal({ site, show, sessionKey, onHide }: SiteH
 
   const analyzing = phase === 'analyze' && suggest.isPending;
   const sourceNote =
-    suggest.data?.source === 'openai'
-      ? 'Suggestions from AI (review carefully before applying).'
+    suggest.data?.source === 'gemini'
+      ? 'Suggestions from AI (Gemini — review carefully before applying).'
       : suggest.data?.source === 'heuristic'
-        ? 'Rule-based suggestions (set OPENAI_API_KEY on the function for richer ideas).'
+        ? 'Rule-based suggestions (set GEMINI_API_KEY on the function for richer ideas).'
         : null;
 
   return (

@@ -28,6 +28,14 @@ function recordFromValue(v: unknown): Record<string, string> {
   return {};
 }
 
+function valueToJsonDraft(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 const AdminPlatformSettingsPage = () => {
   const { isAdmin, user } = useAuth();
   const { setMode } = useDashboardNav();
@@ -47,6 +55,7 @@ const AdminPlatformSettingsPage = () => {
   const [bridgeUploadedAt, setBridgeUploadedAt] = useState('');
 
   const [stripeDefaultPriceId, setStripeDefaultPriceId] = useState('');
+  const [otherKeyDrafts, setOtherKeyDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isAdmin) {
@@ -77,6 +86,14 @@ const AdminPlatformSettingsPage = () => {
     () => items.filter((i) => !KNOWN_KEYS.has(i.key)),
     [items],
   );
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const row of items.filter((i) => !KNOWN_KEYS.has(i.key))) {
+      next[row.key] = valueToJsonDraft(row.value);
+    }
+    setOtherKeyDrafts(next);
+  }, [items]);
 
   const notifyError = (err: unknown) => {
     showNotification({
@@ -137,6 +154,42 @@ const AdminPlatformSettingsPage = () => {
       showNotification({
         title: 'Saved',
         message: 'Stripe signup plan settings were updated.',
+        variant: 'success',
+      });
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  const saveOtherKey = async (key: string) => {
+    const text = (otherKeyDrafts[key] ?? '').trim();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text.length > 0 ? text : '{}');
+    } catch {
+      showNotification({
+        title: 'Invalid JSON',
+        message: 'Fix the JSON syntax before saving.',
+        variant: 'danger',
+      });
+      return;
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      showNotification({
+        title: 'Invalid shape',
+        message: 'Root value must be a JSON object (use { }, not arrays or bare strings).',
+        variant: 'danger',
+      });
+      return;
+    }
+    try {
+      await upsert.mutateAsync({
+        category: key,
+        settings: parsed as Record<string, unknown>,
+      });
+      showNotification({
+        title: 'Saved',
+        message: `Settings for "${key}" were updated.`,
         variant: 'success',
       });
     } catch (err) {
@@ -300,26 +353,42 @@ const AdminPlatformSettingsPage = () => {
               </Card>
             </Col>
 
-            {otherSettings.length > 0 && (
-              <Col lg={12}>
+            {otherSettings.map((row) => (
+              <Col lg={12} key={row.key}>
                 <Card className="border">
                   <Card.Body>
-                    <Card.Title as="h5">Other keys</Card.Title>
+                    <Card.Title as="h5">
+                      <code className="text-body">{row.key}</code>
+                    </Card.Title>
                     <Card.Text className="text-muted small mb-3">
-                      Additional documents in <code>platform_settings</code> (read-only here).
+                      JSON object stored under this key in <code>platform_settings</code>. Invalid JSON or
+                      non-object roots are rejected.
                     </Card.Text>
-                    {otherSettings.map((row) => (
-                      <div key={row.key} className="mb-3">
-                        <div className="fw-semibold mb-1">{row.key}</div>
-                        <pre className="small bg-light p-2 rounded mb-0 overflow-auto">
-                          {JSON.stringify(row.value, null, 2)}
-                        </pre>
-                      </div>
-                    ))}
+                    <Form.Group className="mb-3">
+                      <Form.Label className="small text-muted">Value (JSON)</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={12}
+                        className="font-monospace small"
+                        spellCheck={false}
+                        value={otherKeyDrafts[row.key] ?? valueToJsonDraft(row.value)}
+                        onChange={(e) =>
+                          setOtherKeyDrafts((prev) => ({ ...prev, [row.key]: e.target.value }))
+                        }
+                        aria-label={`JSON value for ${row.key}`}
+                      />
+                    </Form.Group>
+                    <Button
+                      variant="primary"
+                      type="button"
+                      disabled={upsert.isPending}
+                      onClick={() => void saveOtherKey(row.key)}>
+                      {upsert.isPending ? 'Saving…' : `Save ${row.key}`}
+                    </Button>
                   </Card.Body>
                 </Card>
               </Col>
-            )}
+            ))}
           </Row>
         )}
       </Container>

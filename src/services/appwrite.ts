@@ -113,6 +113,7 @@ export const APPWRITE_FUNCTION_IDS = {
   STRIPE_SUBSCRIPTIONS: envString('APPWRITE_FUNCTION_STRIPE_SUBSCRIPTIONS', 'stripe-subscriptions'),
   STRIPE_INVOICES: envString('APPWRITE_FUNCTION_STRIPE_INVOICES', 'stripe-invoices'),
   STRIPE_PAYMENT_METHODS: envString('APPWRITE_FUNCTION_STRIPE_PAYMENT_METHODS', 'stripe-payment-methods'),
+  STRIPE_CREATE_CUSTOMER: envString('APPWRITE_FUNCTION_STRIPE_CREATE_CUSTOMER', 'stripe-create-customer'),
 } as const;
 
 export const COLLECTIONS = {

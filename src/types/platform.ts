@@ -61,6 +61,36 @@ export interface StripeProrationPreview {
   lines?: Array<{ description: string; amount: number; period: { start: number; end: number } }>;
 }
 
+/** Proration preview from `stripe-subscriptions` action `preview-proration`. */
+export interface StripeProrationPreviewResponse {
+  amountDue: number;
+  currency: string;
+  nextPaymentDate: number | null;
+  lines: Array<{ description: string; amount: number; period: { start: number; end: number } }>;
+}
+
+/** When subscription change creates an open invoice, client confirms via Payment Element. */
+export interface StripeInlinePaymentPayload {
+  clientSecret: string;
+  invoiceId: string;
+  amountDue: number;
+  currency: string;
+  status: string;
+}
+
+/** `stripe-invoices` action `prepare-pay-invoice`. */
+export interface PreparePayInvoiceResponse {
+  success: boolean;
+  paid?: boolean;
+  status?: string;
+  clientSecret?: string;
+  invoiceId?: string;
+  amountDue?: number;
+  currency?: string;
+  paymentIntentStatus?: string;
+  message?: string;
+}
+
 export interface Subscription {
   stripeSubscriptionId?: string | null;
   stripe_subscription_id?: string | null;
@@ -540,6 +570,15 @@ export interface SubscriptionDetailsUpcomingInvoice {
   next_payment_attempt: number | null;
 }
 
+export interface SubscriptionDetailsCustomerAddress {
+  line1?: string | null;
+  line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+}
+
 export interface SubscriptionDetailsResponse {
   subscription: {
     id: string;
@@ -547,14 +586,25 @@ export interface SubscriptionDetailsResponse {
     current_period_start: number;
     current_period_end: number;
     created: number;
+    start_date?: number;
     cancel_at: number | null;
     canceled_at: number | null;
+    ended_at?: number | null;
+    trial_start?: number | null;
+    trial_end?: number | null;
     metadata: Record<string, string>;
+    collection_method?: string;
+    days_until_due?: number | null;
   };
   customer: {
     id: string;
     email: string | null;
     name: string | null;
+    phone?: string | null;
+    address?: SubscriptionDetailsCustomerAddress | null;
+    created?: number | null;
+    balance?: number;
+    currency?: string | null;
   };
   plan: SubscriptionDetailsPlan;
   pending_update: SubscriptionDetailsPendingUpdate | null;

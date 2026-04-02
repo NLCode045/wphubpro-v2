@@ -2,10 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Query } from 'appwrite';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import type {
+  PreparePayInvoiceResponse,
+  StripeInlinePaymentPayload,
   StripeInvoice,
   StripePaymentMethod,
   StripePlan,
+  StripeProrationPreviewResponse,
   Subscription,
+  SubscriptionDetailsCustomerAddress,
   SubscriptionDetailsResponse,
 } from '@/types';
 import { useAuth } from '@/domains/auth';
@@ -18,6 +22,7 @@ const STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_SUBS
 const LIST_INVOICES_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_INVOICES;
 const GET_SUBSCRIPTION_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS;
 const STRIPE_PAYMENT_METHODS_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_PAYMENT_METHODS;
+const STRIPE_CREATE_CUSTOMER_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_CREATE_CUSTOMER;
 
 /** Pass from profile after `useMyAccountDoc` resolves to avoid duplicate account reads and unnecessary Stripe calls. */
 export type BillingAccountContext = {
@@ -45,9 +50,10 @@ function stripeBillingEnabled(userId: string | undefined, ctx: BillingAccountCon
 export type CheckoutSessionResult = {
   sessionId?: string;
   url?: string | null;
-  subscriptionId?: string;
+  subscriptionId?: string | null;
   status?: string;
   message?: string;
+  payment?: StripeInlinePaymentPayload | null;
 };
 
 export const useInvoices = (ctx?: BillingAccountContext) => {
@@ -64,15 +70,21 @@ export const useInvoices = (ctx?: BillingAccountContext) => {
   });
 };
 
-export const useStripePlans = (ctx?: BillingAccountContext) => {
+export type UseStripePlansOptions = {
+  /** When true, include hidden and non-sellable products (e.g. admin default-signup picker). */
+  listAllProducts?: boolean;
+};
+
+export const useStripePlans = (ctx?: BillingAccountContext, options?: UseStripePlansOptions) => {
   const { user } = useAuth();
+  const listAll = Boolean(options?.listAllProducts);
   return useQuery<StripePlan[], Error>({
-    queryKey: ['stripePlans', user?.$id, ctx?.stripeCustomerId],
+    queryKey: ['stripePlans', user?.$id, ctx?.stripeCustomerId, listAll],
     queryFn: async () => {
       const response = await executeFunction<{ plans: StripePlan[] }>(STRIPE_LIST_PRODUCTS_FUNCTION_ID, {
         action: 'list',
-        exclude_hidden: true,
-        exclude_non_sellable: true,
+        exclude_hidden: !listAll,
+        exclude_non_sellable: !listAll,
       });
       return response.plans || [];
     },
@@ -98,9 +110,16 @@ export const useCreateCheckoutSession = () => {
       return result ?? {};
     },
     onSuccess: (data) => {
-      if (data?.subscriptionId && !data?.url) {
+      if (data?.payment?.clientSecret) {
+        return;
+      }
+      if (data?.url) {
+        return;
+      }
+      if (data?.subscriptionId) {
         queryClient.invalidateQueries({ queryKey: ['subscription'] });
         queryClient.invalidateQueries({ queryKey: ['subscriptionDetails'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
         notify.success('Plan updated', data.message ?? 'Your plan has been updated.');
       }
     },
@@ -110,23 +129,33 @@ export const useCreateCheckoutSession = () => {
   });
 };
 
+export type CancelSubscriptionResult = {
+  success: boolean;
+  message?: string;
+  cancelAt?: number;
+};
+
 export const useCancelSubscription = () => {
   const queryClient = useQueryClient();
   const notify = useBillingNotify();
-  return useMutation<{ success: boolean }, Error, void>({
+  return useMutation<CancelSubscriptionResult, Error, void>({
     mutationFn: async () => {
-      return await executeFunction<{ success: boolean }>(STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID, {
+      return await executeFunction<CancelSubscriptionResult>(STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID, {
         action: 'cancel',
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
       queryClient.invalidateQueries({ queryKey: ['subscriptionDetails'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      notify.success(
-        'Subscription cancelled',
-        'Your subscription will end at the end of the current billing period.'
-      );
+      const endMsg = data.cancelAt
+        ? `You keep access until ${new Date(data.cancelAt * 1000).toLocaleDateString('nl-NL', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })}.`
+        : (data.message ?? 'Your subscription will end at the end of the billing period.');
+      notify.success('Subscription cancelled', endMsg);
     },
     onError: (error) => {
       notify.error('Error', `Could not cancel subscription: ${error.message}`);
@@ -188,6 +217,35 @@ export const useSubscription = (ctx?: BillingAccountContext) => {
     enabled:
       !!user?.$id && (ctx ? ctx.accountReady && Boolean(ctx.stripeCustomerId.trim()) : true),
     staleTime: 1000 * 60 * 5,
+  });
+};
+
+export type StripeCustomerBilling = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  phone: string | null;
+  address: SubscriptionDetailsCustomerAddress | null;
+};
+
+export const useStripeCustomerProfile = (
+  ctx?: BillingAccountContext,
+  options?: { enabled?: boolean }
+) => {
+  const { user } = useAuth();
+  const enabled =
+    (options?.enabled ?? true) && stripeBillingEnabled(user?.$id, ctx);
+  return useQuery<StripeCustomerBilling | null, Error>({
+    queryKey: ['stripeCustomerProfile', user?.$id, ctx?.stripeCustomerId],
+    queryFn: async () => {
+      const result = await executeFunction<{ success?: boolean; customer?: StripeCustomerBilling }>(
+        STRIPE_PAYMENT_METHODS_FUNCTION_ID,
+        { action: 'get-customer' }
+      );
+      return result?.customer ?? null;
+    },
+    enabled,
+    staleTime: 1000 * 60 * 2,
   });
 };
 
@@ -306,5 +364,132 @@ export const useSubscriptionDetails = (
     },
     enabled: Boolean(user && subscriptionId && stripeBillingEnabled(user.$id, ctx)),
     staleTime: 1000 * 60 * 2,
+  });
+};
+
+export const usePreviewProration = () => {
+  const notify = useBillingNotify();
+  return useMutation<
+    StripeProrationPreviewResponse,
+    Error,
+    { subscriptionId: string; newPriceId: string }
+  >({
+    mutationFn: async ({ subscriptionId, newPriceId }) => {
+      return await executeFunction<StripeProrationPreviewResponse>(GET_SUBSCRIPTION_FUNCTION_ID, {
+        action: 'preview-proration',
+        subscriptionId,
+        newPriceId,
+      });
+    },
+    onError: (error) => {
+      notify.error('Preview', error.message || 'Could not load proration estimate.');
+    },
+  });
+};
+
+export const usePreparePayInvoice = () => {
+  const queryClient = useQueryClient();
+  const notify = useBillingNotify();
+  return useMutation<PreparePayInvoiceResponse, Error, { invoiceId: string }>({
+    mutationFn: async ({ invoiceId }) => {
+      return await executeFunction<PreparePayInvoiceResponse>(LIST_INVOICES_FUNCTION_ID, {
+        action: 'prepare-pay-invoice',
+        invoiceId,
+      });
+    },
+    onSuccess: (data) => {
+      if (data.paid) {
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        queryClient.invalidateQueries({ queryKey: ['subscriptionDetails'] });
+        notify.success('Invoice paid', 'Payment completed.');
+      }
+    },
+    onError: (error) => {
+      notify.error('Invoice', error.message || 'Could not prepare payment.');
+    },
+  });
+};
+
+export type UpdateBillingDetailsPayload = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: SubscriptionDetailsCustomerAddress | null;
+};
+
+export const useUpdateBillingDetails = () => {
+  const queryClient = useQueryClient();
+  const notify = useBillingNotify();
+  return useMutation<void, Error, UpdateBillingDetailsPayload>({
+    mutationFn: async (body) => {
+      await executeFunction(STRIPE_PAYMENT_METHODS_FUNCTION_ID, {
+        action: 'update-customer',
+        ...body,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscriptionDetails'] });
+      queryClient.invalidateQueries({ queryKey: ['stripeCustomerProfile'] });
+      notify.success('Billing details', 'Your billing information was updated.');
+    },
+    onError: (error) => {
+      notify.error('Billing details', error.message || 'Could not save.');
+    },
+  });
+};
+
+export type EnsureStripeCustomerResult = {
+  success: boolean;
+  skipped?: boolean;
+  stripeCustomerId?: string;
+  message?: string;
+};
+
+export const useEnsureStripeCustomer = () => {
+  const queryClient = useQueryClient();
+  const notify = useBillingNotify();
+  const { user } = useAuth();
+  return useMutation<EnsureStripeCustomerResult, Error, void>({
+    mutationFn: async () => {
+      return await executeFunction<EnsureStripeCustomerResult>(STRIPE_CREATE_CUSTOMER_FUNCTION_ID, {
+        action: 'ensure',
+      });
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['my-account-doc', user?.$id] });
+      notify.success(
+        'Billing ready',
+        data.skipped ? 'Your billing profile was already set up.' : (data.message ?? 'Stripe customer created.'),
+      );
+    },
+    onError: (error) => {
+      notify.error('Billing setup', error.message || 'Could not set up billing.');
+    },
+  });
+};
+
+export const useCancelScheduledPlanChange = () => {
+  const queryClient = useQueryClient();
+  const notify = useBillingNotify();
+  return useMutation<
+    { success: boolean; scheduleId?: string },
+    Error,
+    { scheduleId?: string; subscriptionId?: string }
+  >({
+    mutationFn: async (payload) => {
+      return await executeFunction<{ success: boolean; scheduleId?: string }>(
+        STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID,
+        { action: 'cancel-schedule-update', ...payload }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['subscriptionDetails'] });
+      notify.success('Plan change', 'Scheduled downgrade was cancelled.');
+    },
+    onError: (error) => {
+      notify.error('Plan change', error.message || 'Could not cancel scheduled change.');
+    },
   });
 };

@@ -1,12 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Badge,
   Button,
   Card,
+  Col,
   Form,
   Modal,
+  Row,
   Spinner,
   Table,
 } from 'react-bootstrap';
@@ -16,24 +18,29 @@ import {
   checkoutUpdateTypeForPlanChange,
   findPlanSelectionByPriceId,
   selectedPlanAmountCents,
+  useCancelScheduledPlanChange,
   useCancelSubscription,
   useCreateCheckoutSession,
+  useEnsureStripeCustomer,
   useInvoices,
   useDetachPaymentMethod,
   usePaymentMethods,
+  usePreparePayInvoice,
+  usePreviewProration,
   useSetDefaultPaymentMethod,
+  useStripeCustomerProfile,
   useStripePlans,
   useSubscription,
   useSubscriptionDetails,
+  useUpdateBillingDetails,
 } from '@/domains/billing';
 import { useMyAccountDoc } from '@/domains/profile/useMyAccountDoc';
 import { useAuth } from '@/domains/auth';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import { StripeElementsModal } from '@/integrations/stripe/StripeElementsModal';
-import { redirectToBillingPortal } from '@/services/stripe';
-import type { StripePlan, SubscriptionDetailsResponse } from '@/types';
+import { StripePaymentIntentModal } from '@/integrations/stripe/StripePaymentIntentModal';
+import type { StripePlan, StripeProrationPreviewResponse, SubscriptionDetailsResponse } from '@/types';
 
-/** Amounts in cents (Stripe `unit_amount`, invoice lines, etc.). */
 const formatMoney = (amountCents: number, currency = 'eur') =>
   (amountCents / 100).toLocaleString('nl-NL', {
     style: 'currency',
@@ -42,7 +49,6 @@ const formatMoney = (amountCents: number, currency = 'eur') =>
     maximumFractionDigits: 2,
   });
 
-/** `stripe-products` list: `monthlyPrice` / `yearlyPrice` are already major units (`unit_amount / 100`). */
 const formatMoneyMajorUnits = (amount: number, currency = 'eur') =>
   amount.toLocaleString('nl-NL', {
     style: 'currency',
@@ -71,6 +77,13 @@ function nextInvoiceFromDetails(details: SubscriptionDetailsResponse) {
   };
 }
 
+type PayIntentState = { clientSecret: string; title: string } | null;
+
+type UpgradeConfirmState = {
+  preview: StripeProrationPreviewResponse;
+  priceId: string;
+} | null;
+
 const UserProfileSubscriptionTab = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -93,6 +106,9 @@ const UserProfileSubscriptionTab = () => {
   const { data: subscription, isLoading: subscriptionLoading } = useSubscription(billingCtx);
   const subscriptionId =
     subscription?.stripeSubscriptionId ?? subscription?.stripe_subscription_id ?? null;
+  const { data: customerProfile } = useStripeCustomerProfile(billingCtx, {
+    enabled: Boolean(stripeCustomerId.trim()) && !subscriptionId,
+  });
   const { data: subscriptionDetails, isLoading: detailsLoading } = useSubscriptionDetails(
     subscriptionId,
     billingCtx
@@ -102,21 +118,51 @@ const UserProfileSubscriptionTab = () => {
   const { data: stripePlans, isLoading: plansLoading } = useStripePlans(billingCtx);
 
   const cancelSubscription = useCancelSubscription();
+  const cancelSchedule = useCancelScheduledPlanChange();
   const setDefaultPm = useSetDefaultPaymentMethod();
   const detachPm = useDetachPaymentMethod();
   const createCheckout = useCreateCheckoutSession();
+  const previewProration = usePreviewProration();
+  const preparePayInvoice = usePreparePayInvoice();
+  const updateBilling = useUpdateBillingDetails();
+  const ensureCustomer = useEnsureStripeCustomer();
 
   const [addCardOpen, setAddCardOpen] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
-  /** Modal-only: yearly when true, monthly when false */
   const [changePlanYearly, setChangePlanYearly] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
+  const [payIntent, setPayIntent] = useState<PayIntentState>(null);
+  const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmState>(null);
+
+  const [billingName, setBillingName] = useState('');
+  const [billingEmail, setBillingEmail] = useState('');
+  const [billingPhone, setBillingPhone] = useState('');
+  const [billingLine1, setBillingLine1] = useState('');
+  const [billingLine2, setBillingLine2] = useState('');
+  const [billingCity, setBillingCity] = useState('');
+  const [billingState, setBillingState] = useState('');
+  const [billingPostal, setBillingPostal] = useState('');
+  const [billingCountry, setBillingCountry] = useState('');
 
   useEffect(() => {
     if (!changePlanOpen) return;
     if (subscription?.interval === 'year') setChangePlanYearly(true);
     else if (subscription?.interval === 'month') setChangePlanYearly(false);
   }, [changePlanOpen, subscription?.interval]);
+
+  useEffect(() => {
+    const c = subscriptionDetails?.customer ?? customerProfile;
+    if (!c) return;
+    setBillingName(c.name ?? '');
+    setBillingEmail(c.email ?? '');
+    setBillingPhone(c.phone ?? '');
+    const a = c.address;
+    setBillingLine1(a?.line1 ?? '');
+    setBillingLine2(a?.line2 ?? '');
+    setBillingCity(a?.city ?? '');
+    setBillingState(a?.state ?? '');
+    setBillingPostal(a?.postal_code ?? '');
+    setBillingCountry(a?.country ?? '');
+  }, [subscriptionDetails?.customer, customerProfile]);
 
   useEffect(() => {
     const success = searchParams.get('success');
@@ -156,25 +202,56 @@ const UserProfileSubscriptionTab = () => {
     subscription.priceAmount === 0 ||
     (subscription.planId ?? '').toUpperCase() === 'FREE';
 
-  const handleOpenPortal = async () => {
-    setPortalLoading(true);
-    try {
-      await redirectToBillingPortal(window.location.href);
-    } catch (e) {
-      showNotification({
-        title: 'Portal',
-        message: e instanceof Error ? e.message : 'Could not open Stripe billing portal.',
-        variant: 'danger',
-        delay: 5000,
-      });
-    } finally {
-      setPortalLoading(false);
+  const outstandingCents = useMemo(() => {
+    if (!invoices?.length) return { total: 0, currency: 'eur', count: 0 };
+    let total = 0;
+    let count = 0;
+    let currency = 'eur';
+    for (const inv of invoices) {
+      const open = inv.status === 'open' || inv.status === 'draft' || inv.status === 'uncollectible';
+      if (!open) continue;
+      const due = inv.amount_remaining ?? inv.amount_due ?? 0;
+      if (due > 0) {
+        total += due;
+        count += 1;
+        currency = inv.currency || currency;
+      }
     }
+    return { total, currency, count };
+  }, [invoices]);
+
+  const invalidateBilling = () => {
+    void queryClient.invalidateQueries({ queryKey: ['subscription'] });
+    void queryClient.invalidateQueries({ queryKey: ['subscriptionDetails'] });
+    void queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    void queryClient.invalidateQueries({ queryKey: ['paymentMethods'] });
   };
 
-  const handleCancelClick = () => {
-    if (!window.confirm('Cancel subscription at the end of the current billing period?')) return;
-    cancelSubscription.mutate();
+  const openPaymentModal = (clientSecret: string, title: string) => {
+    setPayIntent({ clientSecret, title });
+    setChangePlanOpen(false);
+    setUpgradeConfirm(null);
+  };
+
+  const runPlanCheckout = (priceId: string, updateType?: 'upgrade' | 'downgrade') => {
+    const returnUrl = `${window.location.origin}${window.location.pathname}?tab=subscription`;
+    createCheckout.mutate(
+      { priceId, returnUrl, updateType },
+      {
+        onSuccess: (data) => {
+          if (data?.payment?.clientSecret) {
+            openPaymentModal(
+              data.payment.clientSecret,
+              updateType === 'upgrade' ? 'Complete upgrade payment' : 'Complete subscription payment'
+            );
+            return;
+          }
+          if (data?.url) {
+            window.location.href = data.url;
+          }
+        },
+      }
+    );
   };
 
   const handleSelectPlanPrice = (priceId: string | null, yearly: boolean) => {
@@ -197,15 +274,74 @@ const UserProfileSubscriptionTab = () => {
       currentPriceAmountCents: currentCents,
       newPriceAmountCents: newCents,
     });
-    const returnUrl = `${window.location.origin}${window.location.pathname}?tab=subscription`;
-    createCheckout.mutate(
-      { priceId, returnUrl, updateType },
+
+    if (hasActivePaid && newCents > currentCents && subscriptionId) {
+      previewProration.mutate(
+        { subscriptionId, newPriceId: priceId },
+        {
+          onSuccess: (preview) => {
+            setUpgradeConfirm({ preview, priceId });
+          },
+        }
+      );
+      return;
+    }
+
+    runPlanCheckout(priceId, updateType);
+  };
+
+  const handleConfirmUpgrade = () => {
+    if (!upgradeConfirm) return;
+    runPlanCheckout(upgradeConfirm.priceId, 'upgrade');
+    setUpgradeConfirm(null);
+  };
+
+  const handlePayInvoiceClick = (invoiceId: string) => {
+    preparePayInvoice.mutate(
+      { invoiceId },
       {
         onSuccess: (data) => {
-          if (data?.url) window.location.href = data.url;
+          if (data.clientSecret) {
+            openPaymentModal(data.clientSecret, 'Pay invoice');
+          }
         },
       }
     );
+  };
+
+  const handleSaveBilling = (e: FormEvent) => {
+    e.preventDefault();
+    updateBilling.mutate({
+      name: billingName,
+      email: billingEmail,
+      phone: billingPhone,
+      address: {
+        line1: billingLine1 || undefined,
+        line2: billingLine2 || undefined,
+        city: billingCity || undefined,
+        state: billingState || undefined,
+        postal_code: billingPostal || undefined,
+        country: billingCountry || undefined,
+      },
+    });
+  };
+
+  const cancelEffectiveDate =
+    subscriptionDetails?.subscription?.cancel_at ??
+    subscriptionDetails?.subscription?.current_period_end ??
+    subscription?.currentPeriodEnd ??
+    null;
+
+  const subscriptionStartDate =
+    subscriptionDetails?.subscription?.start_date ?? subscriptionDetails?.subscription?.created ?? null;
+
+  const handleCancelClick = () => {
+    const when =
+      cancelEffectiveDate != null
+        ? formatBillingDate(cancelEffectiveDate)
+        : 'the end of the current billing period';
+    if (!window.confirm(`Cancel subscription? You keep access until ${when}.`)) return;
+    cancelSubscription.mutate();
   };
 
   if (accountLoading) {
@@ -230,13 +366,37 @@ const UserProfileSubscriptionTab = () => {
     <div>
       <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Billing overview</p>
       <p className="text-muted fs-sm mb-4">
-        Plan, payment methods, and invoices are loaded from Stripe for your linked customer account.
+        Manage your plan, payment methods, invoices, and billing details here. Payments use secure Stripe
+        Elements on this site (no billing portal redirect).
       </p>
 
-      {!hasStripeCustomer ? (
+      {!hasStripeCustomer && accountDoc ? (
         <Alert variant="light" className="border mb-4">
-          No Stripe customer is linked to this account yet. Subscribe from the marketing site or contact
-          support to enable billing.
+          <p className="mb-2 fs-sm">
+            Link a Stripe customer to your account to subscribe and manage cards and invoices.
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={ensureCustomer.isPending}
+            onClick={() => ensureCustomer.mutate()}
+          >
+            {ensureCustomer.isPending ? 'Setting up…' : 'Set up billing'}
+          </Button>
+        </Alert>
+      ) : null}
+
+      {!accountDoc ? (
+        <Alert variant="warning" className="mb-4">
+          No account record found for your user. You may need to complete onboarding first.
+        </Alert>
+      ) : null}
+
+      {hasStripeCustomer && outstandingCents.count > 0 ? (
+        <Alert variant="warning" className="py-2 mb-4 fs-sm">
+          <strong>Outstanding:</strong> {outstandingCents.count} open invoice
+          {outstandingCents.count === 1 ? '' : 's'} totaling{' '}
+          {formatMoney(outstandingCents.total, outstandingCents.currency)}. Pay below or add a default card.
         </Alert>
       ) : null}
 
@@ -261,7 +421,7 @@ const UserProfileSubscriptionTab = () => {
                     <p className="text-muted fs-sm mb-0">
                       Status: {subscription.status ?? '—'}
                       {subscription.currentPeriodEnd
-                        ? ` · Period ends ${formatBillingDate(subscription.currentPeriodEnd)}`
+                        ? ` · Current period ends ${formatBillingDate(subscription.currentPeriodEnd)}`
                         : null}
                     </p>
                   </>
@@ -291,15 +451,56 @@ const UserProfileSubscriptionTab = () => {
               </div>
             </div>
 
-            {subscription?.cancelAtPeriodEnd ? (
+            {subscription?.cancelAtPeriodEnd && cancelEffectiveDate ? (
+              <Alert variant="warning" className="py-2 mb-3 fs-sm">
+                Subscription ends on <strong>{formatBillingDate(cancelEffectiveDate)}</strong>. You retain access
+                until that date.
+              </Alert>
+            ) : null}
+
+            {subscription?.cancelAtPeriodEnd && !cancelEffectiveDate ? (
               <Alert variant="warning" className="py-2 mb-3 fs-sm">
                 This subscription will end at the end of the current billing period.
               </Alert>
             ) : null}
 
+            {subscriptionDetails?.pending_update ? (
+              <Alert variant="info" className="py-2 mb-3 fs-sm">
+                <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                  <div>
+                    <strong>Scheduled plan change:</strong> on{' '}
+                    <strong>{formatBillingDate(subscriptionDetails.pending_update.date)}</strong> your plan
+                    becomes <strong>{subscriptionDetails.pending_update.plan_name}</strong> (
+                    {formatMoney(
+                      subscriptionDetails.pending_update.price_amount,
+                      subscriptionDetails.pending_update.currency
+                    )}
+                    {subscriptionDetails.pending_update.interval
+                      ? ` / ${subscriptionDetails.pending_update.interval}`
+                      : ''}
+                    ).
+                  </div>
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    className="text-nowrap"
+                    disabled={cancelSchedule.isPending}
+                    onClick={() =>
+                      cancelSchedule.mutate({
+                        scheduleId: subscriptionDetails.pending_update?.schedule_id,
+                        subscriptionId: subscriptionId ?? undefined,
+                      })
+                    }
+                  >
+                    Undo downgrade
+                  </Button>
+                </div>
+              </Alert>
+            ) : null}
+
             {!subscriptionLoading && !subscription ? (
               <Alert variant="info" className="mb-3 py-2 fs-sm">
-                Payment methods and invoices below still apply to your Stripe customer. Start a subscription via
+                Payment methods and invoices below apply to your Stripe customer. Start a subscription via
                 Change plan.
               </Alert>
             ) : null}
@@ -313,7 +514,7 @@ const UserProfileSubscriptionTab = () => {
 
             {subscription && subscriptionDetails ? (
               <div className="p-3 rounded bg-light">
-                <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Current plan</p>
+                <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Plan details</p>
                 {subscriptionDetails.plan?.product_name ? (
                   <p className="fs-sm mb-1">
                     <span className="text-muted">Product:</span> {subscriptionDetails.plan.product_name}
@@ -328,10 +529,33 @@ const UserProfileSubscriptionTab = () => {
                       : null}
                   </p>
                 ) : null}
+                {subscriptionDetails.plan?.limits ? (
+                  <p className="fs-sm mb-1">
+                    <span className="text-muted">Limits:</span>{' '}
+                    {[
+                      subscriptionDetails.plan.limits.sites_limit != null
+                        ? `${subscriptionDetails.plan.limits.sites_limit} sites`
+                        : null,
+                      subscriptionDetails.plan.limits.library_limit != null
+                        ? `${subscriptionDetails.plan.limits.library_limit} library`
+                        : null,
+                      subscriptionDetails.plan.limits.storage_limit != null
+                        ? `${subscriptionDetails.plan.limits.storage_limit} storage`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || '—'}
+                  </p>
+                ) : null}
 
+                <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-3">Subscription dates</p>
+                {subscriptionStartDate ? (
+                  <p className="fs-sm mb-1">
+                    <span className="text-muted">Started:</span> {formatBillingDate(subscriptionStartDate)}
+                  </p>
+                ) : null}
                 {subscriptionDetails.subscription ? (
                   <>
-                    <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-3">Billing period</p>
                     {subscriptionDetails.subscription.current_period_start ? (
                       <p className="fs-sm mb-1">
                         <span className="text-muted">Current period started:</span>{' '}
@@ -347,34 +571,11 @@ const UserProfileSubscriptionTab = () => {
                   </>
                 ) : null}
 
-                {subscriptionDetails.pending_update ? (
-                  <>
-                    <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-3">New plan</p>
-                    <p className="fs-sm mb-1">
-                      <span className="text-muted">Plan:</span> {subscriptionDetails.pending_update.plan_name}
-                    </p>
-                    <p className="fs-sm mb-1">
-                      <span className="text-muted">Price:</span>{' '}
-                      {formatMoney(
-                        subscriptionDetails.pending_update.price_amount,
-                        subscriptionDetails.pending_update.currency
-                      )}
-                      {subscriptionDetails.pending_update.interval
-                        ? ` / ${subscriptionDetails.pending_update.interval}`
-                        : null}
-                    </p>
-                    <p className="fs-sm mb-0 text-primary fw-medium">
-                      <span className="text-muted fw-normal">Starts:</span>{' '}
-                      {formatBillingDate(subscriptionDetails.pending_update.date)}
-                    </p>
-                  </>
-                ) : null}
-
                 {nextInvoice &&
                 (subscriptionDetails.upcoming_invoice ||
                   subscriptionDetails.subscription?.current_period_end) ? (
                   <>
-                    <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-3">Next invoice</p>
+                    <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-3">Next payment</p>
                     {nextInvoice.dateTs ? (
                       <p className="fs-sm mb-1">
                         <span className="text-muted">
@@ -391,16 +592,110 @@ const UserProfileSubscriptionTab = () => {
                     {nextInvoice.upcoming ? (
                       <p className="fs-sm mb-1">
                         <span className="text-muted">Amount:</span>{' '}
-                        {formatMoney(
-                          nextInvoice.upcoming.amount_due,
-                          nextInvoice.upcoming.currency
-                        )}
+                        {formatMoney(nextInvoice.upcoming.amount_due, nextInvoice.upcoming.currency)}
                       </p>
                     ) : null}
                   </>
                 ) : null}
               </div>
             ) : null}
+          </Card.Body>
+        </Card>
+      ) : null}
+
+      {hasStripeCustomer ? (
+        <Card className="mb-4 border shadow-none">
+          <Card.Body>
+            <h6 className="fw-semibold mb-3">Billing details</h6>
+            <Form onSubmit={handleSaveBilling}>
+              <Row className="g-2 mb-2">
+                <Col md={6}>
+                  <Form.Label className="fs-xs text-muted">Name</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={billingName}
+                    onChange={(e) => setBillingName(e.target.value)}
+                    autoComplete="name"
+                  />
+                </Col>
+                <Col md={6}>
+                  <Form.Label className="fs-xs text-muted">Email</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    type="email"
+                    value={billingEmail}
+                    onChange={(e) => setBillingEmail(e.target.value)}
+                    autoComplete="email"
+                  />
+                </Col>
+                <Col md={6}>
+                  <Form.Label className="fs-xs text-muted">Phone</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={billingPhone}
+                    onChange={(e) => setBillingPhone(e.target.value)}
+                    autoComplete="tel"
+                  />
+                </Col>
+                <Col md={12}>
+                  <Form.Label className="fs-xs text-muted">Address line 1</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={billingLine1}
+                    onChange={(e) => setBillingLine1(e.target.value)}
+                    autoComplete="address-line1"
+                  />
+                </Col>
+                <Col md={12}>
+                  <Form.Label className="fs-xs text-muted">Address line 2</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={billingLine2}
+                    onChange={(e) => setBillingLine2(e.target.value)}
+                    autoComplete="address-line2"
+                  />
+                </Col>
+                <Col md={4}>
+                  <Form.Label className="fs-xs text-muted">City</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={billingCity}
+                    onChange={(e) => setBillingCity(e.target.value)}
+                    autoComplete="address-level2"
+                  />
+                </Col>
+                <Col md={4}>
+                  <Form.Label className="fs-xs text-muted">State / Region</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={billingState}
+                    onChange={(e) => setBillingState(e.target.value)}
+                    autoComplete="address-level1"
+                  />
+                </Col>
+                <Col md={4}>
+                  <Form.Label className="fs-xs text-muted">Postal code</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={billingPostal}
+                    onChange={(e) => setBillingPostal(e.target.value)}
+                    autoComplete="postal-code"
+                  />
+                </Col>
+                <Col md={6}>
+                  <Form.Label className="fs-xs text-muted">Country (ISO, e.g. NL)</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={billingCountry}
+                    onChange={(e) => setBillingCountry(e.target.value)}
+                    autoComplete="country"
+                  />
+                </Col>
+              </Row>
+              <Button type="submit" variant="primary" size="sm" disabled={updateBilling.isPending}>
+                {updateBilling.isPending ? 'Saving…' : 'Save billing details'}
+              </Button>
+            </Form>
           </Card.Body>
         </Card>
       ) : null}
@@ -500,7 +795,7 @@ const UserProfileSubscriptionTab = () => {
                     <th>Status</th>
                     <th>Amount</th>
                     <th className="text-end">PDF</th>
-                    <th className="text-end">Online</th>
+                    <th className="text-end">Pay</th>
                   </tr>
                 </thead>
                 <tbody className="fs-sm">
@@ -510,6 +805,8 @@ const UserProfileSubscriptionTab = () => {
                       isOpen && (invoice.amount_due ?? invoice.amount_remaining ?? 0) > 0
                         ? (invoice.amount_due ?? invoice.amount_remaining ?? 0)
                         : invoice.amount_paid;
+                    const canPayInApp =
+                      isOpen && (invoice.amount_due ?? invoice.amount_remaining ?? 0) > 0;
                     return (
                       <tr key={invoice.id}>
                         <td>{new Date(invoice.created * 1000).toLocaleDateString('nl-NL')}</td>
@@ -532,7 +829,16 @@ const UserProfileSubscriptionTab = () => {
                           )}
                         </td>
                         <td className="text-end">
-                          {invoice.hosted_invoice_url ? (
+                          {canPayInApp ? (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={preparePayInvoice.isPending}
+                              onClick={() => handlePayInvoiceClick(invoice.id)}
+                            >
+                              Pay in app
+                            </Button>
+                          ) : invoice.hosted_invoice_url ? (
                             <Button
                               as="a"
                               variant="link"
@@ -542,7 +848,7 @@ const UserProfileSubscriptionTab = () => {
                               target="_blank"
                               rel="noreferrer"
                             >
-                              {isOpen ? 'Pay now' : 'View'}
+                              View
                             </Button>
                           ) : (
                             '—'
@@ -558,7 +864,7 @@ const UserProfileSubscriptionTab = () => {
         </Card>
       ) : null}
 
-      <Table responsive className="mb-4 align-middle">
+      <Table responsive className="mb-0 align-middle">
         <tbody className="fs-sm">
           <tr>
             <th className="text-muted fw-semibold bg-light" style={{ width: '40%' }}>
@@ -585,23 +891,27 @@ const UserProfileSubscriptionTab = () => {
         </tbody>
       </Table>
 
-      {hasStripeCustomer ? (
-        <p className="text-muted fs-xs mb-0">
-          <button
-            type="button"
-            className="btn btn-link p-0 align-baseline fs-xs text-muted"
-            onClick={handleOpenPortal}
-            disabled={portalLoading}
-          >
-            {portalLoading ? 'Opening…' : 'Advanced billing on Stripe (portal)'}
-          </button>
-        </p>
-      ) : null}
-
       <StripeElementsModal
         show={addCardOpen}
         onHide={() => setAddCardOpen(false)}
         onSuccess={() => setAddCardOpen(false)}
+      />
+
+      <StripePaymentIntentModal
+        show={Boolean(payIntent?.clientSecret)}
+        clientSecret={payIntent?.clientSecret ?? null}
+        title={payIntent?.title ?? 'Complete payment'}
+        onHide={() => setPayIntent(null)}
+        onSuccess={() => {
+          invalidateBilling();
+          showNotification({
+            title: 'Payment successful',
+            message: 'Your payment was processed.',
+            variant: 'success',
+            delay: 4000,
+          });
+          setPayIntent(null);
+        }}
       />
 
       <Modal show={changePlanOpen} onHide={() => setChangePlanOpen(false)} size="lg" centered scrollable>
@@ -619,9 +929,9 @@ const UserProfileSubscriptionTab = () => {
           ) : (
             <>
               <Alert variant="light" className="border mb-3 fs-sm">
-                <strong>Upgrades:</strong> a more expensive plan opens Stripe Checkout so you can pay the prorated
-                amount; your new plan starts right after payment. <strong>Downgrades:</strong> usually take effect at
-                the end of the current billing period (see &quot;New plan&quot; below once scheduled).
+                <strong>Upgrades</strong> apply immediately; you may be charged a prorated amount in the payment
+                step. <strong>Downgrades</strong> take effect at the start of your next billing period (see
+                scheduled plan change above when set).
               </Alert>
               <div className="d-flex align-items-center justify-content-center gap-3 mb-4 pb-3 border-bottom">
                 <span className={`fs-sm ${!changePlanYearly ? 'fw-semibold text-body' : 'text-muted'}`}>
@@ -657,9 +967,9 @@ const UserProfileSubscriptionTab = () => {
                       : !hasPrice
                         ? 'Switch to this plan'
                         : rowCents > currentCents
-                          ? 'Upgrade & pay proration'
+                          ? 'Upgrade (see proration)'
                           : rowCents < currentCents
-                            ? 'Downgrade'
+                            ? 'Downgrade at period end'
                             : 'Switch to this plan';
                   return (
                     <Card
@@ -700,7 +1010,9 @@ const UserProfileSubscriptionTab = () => {
                               <Button
                                 variant="primary"
                                 size="sm"
-                                disabled={createCheckout.isPending}
+                                disabled={
+                                  createCheckout.isPending || previewProration.isPending
+                                }
                                 onClick={() => handleSelectPlanPrice(priceId, changePlanYearly)}
                               >
                                 {switchLabel}
@@ -720,6 +1032,43 @@ const UserProfileSubscriptionTab = () => {
             </>
           )}
         </Modal.Body>
+      </Modal>
+
+      <Modal show={Boolean(upgradeConfirm)} onHide={() => setUpgradeConfirm(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirm upgrade</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {upgradeConfirm ? (
+            <>
+              <p className="fs-sm mb-2">Estimated charge for this billing change:</p>
+              <p className="fs-4 fw-semibold mb-3">
+                {formatMoney(upgradeConfirm.preview.amountDue, upgradeConfirm.preview.currency)}
+              </p>
+              {upgradeConfirm.preview.lines?.length ? (
+                <ul className="fs-sm text-muted mb-0">
+                  {upgradeConfirm.preview.lines.map((line, i) => (
+                    <li key={i}>
+                      {line.description}: {formatMoney(line.amount, upgradeConfirm.preview.currency)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          ) : null}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="light" onClick={() => setUpgradeConfirm(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={createCheckout.isPending}
+            onClick={handleConfirmUpgrade}
+          >
+            {createCheckout.isPending ? 'Processing…' : 'Continue to payment'}
+          </Button>
+        </Modal.Footer>
       </Modal>
     </div>
   );

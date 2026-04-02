@@ -1,6 +1,6 @@
 /**
  * Stripe Payment Methods Function
- * Actions: list, create-setup-intent, attach, detach, set-default
+ * Actions: list, create-setup-intent, attach, detach, set-default, update-customer
  * Resolves Stripe customer from accounts collection (same as cancel/get).
  */
 const sdk = require("node-appwrite");
@@ -77,6 +77,29 @@ module.exports = async ({ req, res, log, error }) => {
       return res.json({ success: false, error: "No Stripe customer found. Create a subscription first." }, 404);
     }
 
+    if (action === "get-customer") {
+      const c = await stripe.customers.retrieve(stripeCustomerId);
+      return res.json({
+        success: true,
+        customer: {
+          id: c.id,
+          email: c.email,
+          name: c.name,
+          phone: c.phone,
+          address: c.address
+            ? {
+                line1: c.address.line1,
+                line2: c.address.line2,
+                city: c.address.city,
+                state: c.address.state,
+                postal_code: c.address.postal_code,
+                country: c.address.country,
+              }
+            : null,
+        },
+      });
+    }
+
     if (action === "list") {
       const paymentMethods = await stripe.paymentMethods.list({
         customer: stripeCustomerId,
@@ -151,8 +174,36 @@ module.exports = async ({ req, res, log, error }) => {
       return res.json({ success: true });
     }
 
+    if (action === "update-customer") {
+      const { name, email, phone, address } = payload;
+      const updateParams = {};
+      if (name !== undefined) updateParams.name = name === "" ? null : name;
+      if (email !== undefined) updateParams.email = email === "" ? null : email;
+      if (phone !== undefined) updateParams.phone = phone === "" ? null : phone;
+      if (address !== undefined && address !== null && typeof address === "object") {
+        const a = address;
+        const addr = {};
+        if (a.line1 !== undefined) addr.line1 = a.line1 || undefined;
+        if (a.line2 !== undefined) addr.line2 = a.line2 || undefined;
+        if (a.city !== undefined) addr.city = a.city || undefined;
+        if (a.state !== undefined) addr.state = a.state || undefined;
+        if (a.postal_code !== undefined) addr.postal_code = a.postal_code || undefined;
+        if (a.country !== undefined) addr.country = a.country || undefined;
+        if (Object.keys(addr).length > 0) updateParams.address = addr;
+      }
+      if (Object.keys(updateParams).length === 0) {
+        return res.json({ success: false, error: "No billing fields to update" }, 400);
+      }
+      await stripe.customers.update(stripeCustomerId, updateParams);
+      return res.json({ success: true });
+    }
+
     return res.json(
-      { success: false, error: 'Invalid action. Use: list, create-setup-intent, attach, detach, set-default' },
+      {
+        success: false,
+        error:
+          "Invalid action. Use: get-customer, list, create-setup-intent, attach, detach, set-default, update-customer",
+      },
       400
     );
   } catch (err) {

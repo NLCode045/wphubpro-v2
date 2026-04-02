@@ -16,7 +16,12 @@ async function handleListInvoices(req, res, log, error) {
   const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
   const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
   const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
-  const userId = req.variables?.APPWRITE_FUNCTION_USER_ID || req.variables?.APPWRITE_USER_ID;
+  const userId =
+    req.variables?.APPWRITE_FUNCTION_USER_ID ||
+    req.variables?.APPWRITE_USER_ID ||
+    process.env.APPWRITE_FUNCTION_USER_ID ||
+    req.headers?.["x-appwrite-user-id"] ||
+    req.headers?.["X-Appwrite-User-Id"];
 
   if (!STRIPE_SECRET_KEY) {
     return res.json({ success: false, message: "Stripe configuration missing", invoices: [] }, 500);
@@ -120,6 +125,140 @@ async function handleListPaymentIntents(req, res, log, error) {
   return res.json({ orders });
 }
 
+async function handlePreparePayInvoice(req, res, log, error) {
+  const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
+  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
+  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const userId =
+    req.variables?.APPWRITE_FUNCTION_USER_ID ||
+    process.env.APPWRITE_FUNCTION_USER_ID ||
+    req.headers?.["x-appwrite-user-id"] ||
+    req.headers?.["X-Appwrite-User-Id"];
+
+  if (!STRIPE_SECRET_KEY) {
+    return res.json({ success: false, message: "Stripe configuration missing" }, 500);
+  }
+  if (!userId) {
+    return res.json({ success: false, message: "User not authenticated" }, 401);
+  }
+  if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) {
+    return res.json({ success: false, message: "Appwrite configuration missing" }, 500);
+  }
+
+  const DATABASE_ID =
+    process.env.DATABASE_ID || process.env.APPWRITE_DATABASE_ID || "platform_db";
+  const ACCOUNTS_COLLECTION_ID =
+    process.env.ACCOUNTS_COLLECTION_ID || process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || "accounts";
+
+  const client = new sdk.Client();
+  client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
+  const databases = new sdk.Databases(client);
+
+  const accountDocs = await databases.listDocuments(DATABASE_ID, ACCOUNTS_COLLECTION_ID, [
+    sdk.Query.equal("user_id", userId),
+    sdk.Query.limit(1),
+  ]);
+  const stripeCustomerId =
+    accountDocs.documents?.length > 0 ? accountDocs.documents[0].stripe_customer_id : null;
+  if (!stripeCustomerId) {
+    return res.json({ success: false, message: "No Stripe customer for account" }, 404);
+  }
+
+  const payload = parsePayload(req);
+  const invoiceId = payload.invoiceId;
+  if (!invoiceId) {
+    return res.json({ success: false, message: "invoiceId is required" }, 400);
+  }
+
+  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
+  let invoice = await stripe.invoices.retrieve(invoiceId, { expand: ["payment_intent"] });
+  const invCustomer =
+    typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+  if (invCustomer !== stripeCustomerId) {
+    return res.json({ success: false, message: "Invoice does not belong to your account" }, 403);
+  }
+
+  if (invoice.status === "paid") {
+    return res.json({ success: true, paid: true, status: "paid", invoiceId: invoice.id });
+  }
+
+  if (invoice.status === "open" && (invoice.amount_due || 0) > 0) {
+    try {
+      const paid = await stripe.invoices.pay(invoiceId);
+      if (paid.status === "paid") {
+        return res.json({ success: true, paid: true, status: "paid", invoiceId: paid.id });
+      }
+      invoice = paid;
+    } catch (payErr) {
+      log("invoices.pay: " + (payErr.message || payErr));
+    }
+  }
+
+  if (invoice.status === "draft") {
+    invoice = await stripe.invoices.finalizeInvoice(invoiceId, { expand: ["payment_intent"] });
+  }
+
+  if (invoice.status === "paid" || (invoice.amount_due || 0) <= 0) {
+    return res.json({
+      success: true,
+      paid: true,
+      status: invoice.status,
+      invoiceId: invoice.id,
+    });
+  }
+
+  let pi = invoice.payment_intent;
+  if (!pi) {
+    invoice = await stripe.invoices.retrieve(invoice.id, { expand: ["payment_intent"] });
+    pi = invoice.payment_intent;
+  }
+  if (!pi) {
+    return res.json(
+      {
+        success: false,
+        message: "No payment intent on invoice; try again or use a saved card as default.",
+        invoiceId: invoice.id,
+      },
+      422
+    );
+  }
+
+  const piObj = typeof pi === "string" ? await stripe.paymentIntents.retrieve(pi) : pi;
+  if (piObj.status === "succeeded") {
+    return res.json({ success: true, paid: true, status: "paid", invoiceId: invoice.id });
+  }
+
+  const needsConfirm = [
+    "requires_payment_method",
+    "requires_action",
+    "requires_confirmation",
+    "requires_capture",
+  ].includes(piObj.status);
+
+  if (needsConfirm && piObj.client_secret) {
+    return res.json({
+      success: true,
+      paid: false,
+      clientSecret: piObj.client_secret,
+      invoiceId: invoice.id,
+      amountDue: invoice.amount_due,
+      currency: invoice.currency,
+      paymentIntentStatus: piObj.status,
+    });
+  }
+
+  return res.json(
+    {
+      success: false,
+      message: "Payment is not awaiting confirmation in the app.",
+      paymentIntentStatus: piObj.status,
+      invoiceId: invoice.id,
+    },
+    422
+  );
+}
+
 module.exports = async ({ req, res, log, error }) => {
   try {
     const payload = parsePayload(req);
@@ -130,6 +269,8 @@ module.exports = async ({ req, res, log, error }) => {
       "list-payment-intents": "list-payment-intents",
       "payment-intents": "list-payment-intents",
       orders: "list-payment-intents",
+      "prepare-pay-invoice": "prepare-pay-invoice",
+      "pay-invoice": "prepare-pay-invoice",
     };
     const action = actionMap[actionRaw] || actionRaw;
 
@@ -139,7 +280,14 @@ module.exports = async ({ req, res, log, error }) => {
     if (action === "list-payment-intents") {
       return await handleListPaymentIntents(req, res, log, error);
     }
-    return res.json({ success: false, message: 'Invalid action. Use "list-invoices" or "list-payment-intents".' }, 400);
+    if (action === "prepare-pay-invoice") {
+      return await handlePreparePayInvoice(req, res, log, error);
+    }
+    return res.json({
+      success: false,
+      message:
+        'Invalid action. Use "list-invoices", "list-payment-intents", or "prepare-pay-invoice".',
+    }, 400);
   } catch (err) {
     error("stripe-invoices failed: " + err.message);
     return res.json({ success: false, message: err.message, invoices: [] }, 500);

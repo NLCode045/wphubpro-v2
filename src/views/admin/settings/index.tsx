@@ -9,23 +9,11 @@ import {
   usePlatformSettingsUpsert,
   type PlatformSettingItem,
 } from '@/domains/admin/usePlatformSettings';
+import { useStripePlans } from '@/domains/billing/hooks';
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
+import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
+import type { StripePlan } from '@/types';
 import { useNavigate } from 'react-router';
-
-const KNOWN_KEYS = new Set(['s3', 'bridge_plugin', 'stripe_signup_plan']);
-
-/** Legacy keys still in DB — not shown or editable here (product no longer uses them). */
-const DEPRECATED_SETTING_KEYS = new Set([
-  'redirect_domains',
-  'branding',
-  'freePlanLimits',
-  'menu',
-]);
-
-function isOtherSettingsKey(key: string): boolean {
-  return !KNOWN_KEYS.has(key) && !DEPRECATED_SETTING_KEYS.has(key);
-}
 
 function recordFromValue(v: unknown): Record<string, string> {
   if (v && typeof v === 'object' && !Array.isArray(v)) {
@@ -40,12 +28,24 @@ function recordFromValue(v: unknown): Record<string, string> {
   return {};
 }
 
-function valueToJsonDraft(value: unknown): string {
+function formatPlanMoney(amount: number, currency: string): string {
   try {
-    return JSON.stringify(value, null, 2);
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+    }).format(amount);
   } catch {
-    return String(value);
+    return `${amount} ${currency}`;
   }
+}
+
+function catalogPriceIdSet(plans: StripePlan[]): Set<string> {
+  const s = new Set<string>();
+  for (const p of plans) {
+    if (p.monthlyPriceId) s.add(p.monthlyPriceId);
+    if (p.yearlyPriceId) s.add(p.yearlyPriceId);
+  }
+  return s;
 }
 
 const AdminPlatformSettingsPage = () => {
@@ -57,6 +57,12 @@ const AdminPlatformSettingsPage = () => {
 
   const { data: items = [], isLoading, isError, error, refetch } = usePlatformSettingsList(userId);
   const upsert = usePlatformSettingsUpsert(userId);
+  const {
+    data: stripePlans = [],
+    isLoading: plansLoading,
+    isError: plansError,
+    error: plansQueryError,
+  } = useStripePlans(undefined, { listAllProducts: true });
 
   const [s3Bucket, setS3Bucket] = useState('');
   const [s3Region, setS3Region] = useState('');
@@ -67,7 +73,6 @@ const AdminPlatformSettingsPage = () => {
   const [bridgeUploadedAt, setBridgeUploadedAt] = useState('');
 
   const [stripeDefaultPriceId, setStripeDefaultPriceId] = useState('');
-  const [otherKeyDrafts, setOtherKeyDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isAdmin) {
@@ -94,15 +99,12 @@ const AdminPlatformSettingsPage = () => {
     setStripeDefaultPriceId(stripe.defaultSignupPlanPriceId ?? '');
   }, [items]);
 
-  const otherSettings = useMemo(() => items.filter((i) => isOtherSettingsKey(i.key)), [items]);
-
-  useEffect(() => {
-    const next: Record<string, string> = {};
-    for (const row of items.filter((i) => isOtherSettingsKey(i.key))) {
-      next[row.key] = valueToJsonDraft(row.value);
-    }
-    setOtherKeyDrafts(next);
-  }, [items]);
+  const catalogPriceIds = useMemo(() => catalogPriceIdSet(stripePlans), [stripePlans]);
+  const orphanSignupPriceId = useMemo(() => {
+    const id = stripeDefaultPriceId.trim();
+    if (!id || catalogPriceIds.has(id)) return '';
+    return id;
+  }, [stripeDefaultPriceId, catalogPriceIds]);
 
   const notifyError = (err: unknown) => {
     showNotification({
@@ -170,42 +172,6 @@ const AdminPlatformSettingsPage = () => {
     }
   };
 
-  const saveOtherKey = async (key: string) => {
-    const text = (otherKeyDrafts[key] ?? '').trim();
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text.length > 0 ? text : '{}');
-    } catch {
-      showNotification({
-        title: 'Invalid JSON',
-        message: 'Fix the JSON syntax before saving.',
-        variant: 'danger',
-      });
-      return;
-    }
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      showNotification({
-        title: 'Invalid shape',
-        message: 'Root value must be a JSON object (use { }, not arrays or bare strings).',
-        variant: 'danger',
-      });
-      return;
-    }
-    try {
-      await upsert.mutateAsync({
-        category: key,
-        settings: parsed as Record<string, unknown>,
-      });
-      showNotification({
-        title: 'Saved',
-        message: `Settings for "${key}" were updated.`,
-        variant: 'success',
-      });
-    } catch (err) {
-      notifyError(err);
-    }
-  };
-
   if (!isAdmin) {
     return null;
   }
@@ -216,7 +182,7 @@ const AdminPlatformSettingsPage = () => {
       <Container fluid>
         <PageBreadcrumb
           title="Platform settings"
-          subtitle="Admin · keys stored in platform_settings (used by functions and bridge)"
+          subtitle="Admin · S3, bridge release metadata, and Stripe signup plan (platform_settings)"
         />
 
         {isLoading && (
@@ -339,65 +305,68 @@ const AdminPlatformSettingsPage = () => {
                 <Card.Body>
                   <Card.Title as="h5">Stripe signup plan</Card.Title>
                   <Card.Text className="text-muted small">
-                    Default price ID for new customers when <code>STRIPE_FREE_TIER_PRICE_ID</code> is
-                    not set (<code>stripe_signup_plan</code>).
+                    New accounts get this Stripe price as their initial subscription when the server
+                    has no <code>STRIPE_FREE_TIER_PRICE_ID</code>. Stored as{' '}
+                    <code>stripe_signup_plan.defaultSignupPlanPriceId</code>.
                   </Card.Text>
+                  {plansError && (
+                    <Alert variant="warning" className="small py-2 mb-3">
+                      Could not load Stripe plans:{' '}
+                      {plansQueryError instanceof Error ? plansQueryError.message : 'Unknown error'}
+                    </Alert>
+                  )}
                   <Form.Group className="mb-3">
-                    <Form.Label>defaultSignupPlanPriceId</Form.Label>
-                    <Form.Control
-                      value={stripeDefaultPriceId}
-                      onChange={(e) => setStripeDefaultPriceId(e.target.value)}
-                      placeholder="price_…"
-                      autoComplete="off"
-                    />
+                    <Form.Label>Default plan for new signups</Form.Label>
+                    {plansLoading ? (
+                      <div className="d-flex align-items-center gap-2 text-muted small py-2">
+                        <Spinner animation="border" size="sm" />
+                        Loading plans…
+                      </div>
+                    ) : (
+                      <Form.Select
+                        value={stripeDefaultPriceId}
+                        onChange={(e) => setStripeDefaultPriceId(e.target.value)}
+                        aria-label="Default Stripe price for new signups">
+                        <option value="">
+                          None — only STRIPE_FREE_TIER_PRICE_ID on the server (if set)
+                        </option>
+                        {orphanSignupPriceId ? (
+                          <option value={orphanSignupPriceId}>
+                            Current (not in catalog): {orphanSignupPriceId}
+                          </option>
+                        ) : null}
+                        {stripePlans.map((plan) => {
+                          const hasMonth = Boolean(plan.monthlyPriceId);
+                          const hasYear = Boolean(plan.yearlyPriceId);
+                          if (!hasMonth && !hasYear) return null;
+                          return (
+                            <optgroup key={plan.id} label={plan.name}>
+                              {hasMonth && plan.monthlyPriceId ? (
+                                <option value={plan.monthlyPriceId}>
+                                  Monthly · {formatPlanMoney(plan.monthlyPrice, plan.currency)}
+                                </option>
+                              ) : null}
+                              {hasYear && plan.yearlyPriceId ? (
+                                <option value={plan.yearlyPriceId}>
+                                  Yearly · {formatPlanMoney(plan.yearlyPrice, plan.currency)}
+                                </option>
+                              ) : null}
+                            </optgroup>
+                          );
+                        })}
+                      </Form.Select>
+                    )}
                   </Form.Group>
                   <Button
                     variant="primary"
                     type="button"
-                    disabled={upsert.isPending}
+                    disabled={upsert.isPending || plansLoading}
                     onClick={() => void saveStripe()}>
-                    {upsert.isPending ? 'Saving…' : 'Save Stripe'}
+                    {upsert.isPending ? 'Saving…' : 'Save signup plan'}
                   </Button>
                 </Card.Body>
               </Card>
             </Col>
-
-            {otherSettings.map((row) => (
-              <Col lg={12} key={row.key}>
-                <Card className="border">
-                  <Card.Body>
-                    <Card.Title as="h5">
-                      <code className="text-body">{row.key}</code>
-                    </Card.Title>
-                    <Card.Text className="text-muted small mb-3">
-                      JSON object stored under this key in <code>platform_settings</code>. Invalid JSON or
-                      non-object roots are rejected.
-                    </Card.Text>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="small text-muted">Value (JSON)</Form.Label>
-                      <Form.Control
-                        as="textarea"
-                        rows={12}
-                        className="font-monospace small"
-                        spellCheck={false}
-                        value={otherKeyDrafts[row.key] ?? valueToJsonDraft(row.value)}
-                        onChange={(e) =>
-                          setOtherKeyDrafts((prev) => ({ ...prev, [row.key]: e.target.value }))
-                        }
-                        aria-label={`JSON value for ${row.key}`}
-                      />
-                    </Form.Group>
-                    <Button
-                      variant="primary"
-                      type="button"
-                      disabled={upsert.isPending}
-                      onClick={() => void saveOtherKey(row.key)}>
-                      {upsert.isPending ? 'Saving…' : `Save ${row.key}`}
-                    </Button>
-                  </Card.Body>
-                </Card>
-              </Col>
-            ))}
           </Row>
         )}
       </Container>

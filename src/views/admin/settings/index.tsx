@@ -15,6 +15,18 @@ import { useNavigate } from 'react-router';
 
 const KNOWN_KEYS = new Set(['s3', 'bridge_plugin', 'stripe_signup_plan']);
 
+/** Legacy keys still in DB — not shown or editable here (product no longer uses them). */
+const DEPRECATED_SETTING_KEYS = new Set([
+  'redirect_domains',
+  'branding',
+  'freePlanLimits',
+  'menu',
+]);
+
+function isOtherSettingsKey(key: string): boolean {
+  return !KNOWN_KEYS.has(key) && !DEPRECATED_SETTING_KEYS.has(key);
+}
+
 function recordFromValue(v: unknown): Record<string, string> {
   if (v && typeof v === 'object' && !Array.isArray(v)) {
     const o = v as Record<string, unknown>;
@@ -82,14 +94,11 @@ const AdminPlatformSettingsPage = () => {
     setStripeDefaultPriceId(stripe.defaultSignupPlanPriceId ?? '');
   }, [items]);
 
-  const otherSettings = useMemo(
-    () => items.filter((i) => !KNOWN_KEYS.has(i.key)),
-    [items],
-  );
+  const otherSettings = useMemo(() => items.filter((i) => isOtherSettingsKey(i.key)), [items]);
 
   useEffect(() => {
     const next: Record<string, string> = {};
-    for (const row of items.filter((i) => !KNOWN_KEYS.has(i.key))) {
+    for (const row of items.filter((i) => isOtherSettingsKey(i.key))) {
       next[row.key] = valueToJsonDraft(row.value);
     }
     setOtherKeyDrafts(next);

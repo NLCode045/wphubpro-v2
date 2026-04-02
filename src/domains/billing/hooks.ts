@@ -10,14 +10,14 @@ import type {
 } from '@/types';
 import { useAuth } from '@/domains/auth';
 import { executeFunction } from '@/integrations/appwrite/executeFunction';
-import { COLLECTIONS, DATABASE_ID, databases } from '@/services/appwrite';
+import { APPWRITE_FUNCTION_IDS, COLLECTIONS, DATABASE_ID, databases } from '@/services/appwrite';
 
-const STRIPE_LIST_PRODUCTS_FUNCTION_ID = 'stripe-products';
-const STRIPE_CREATE_CHECKOUT_SESSION_FUNCTION_ID = 'stripe-order-payments';
-const STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID = 'stripe-subscriptions';
-const LIST_INVOICES_FUNCTION_ID = 'stripe-invoices';
-const GET_SUBSCRIPTION_FUNCTION_ID = 'stripe-subscriptions';
-const STRIPE_PAYMENT_METHODS_FUNCTION_ID = 'stripe-payment-methods';
+const STRIPE_LIST_PRODUCTS_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_PRODUCTS;
+const STRIPE_CREATE_CHECKOUT_SESSION_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_ORDER_PAYMENTS;
+const STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS;
+const LIST_INVOICES_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_INVOICES;
+const GET_SUBSCRIPTION_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS;
+const STRIPE_PAYMENT_METHODS_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_PAYMENT_METHODS;
 
 /** Pass from profile after `useMyAccountDoc` resolves to avoid duplicate account reads and unnecessary Stripe calls. */
 export type BillingAccountContext = {

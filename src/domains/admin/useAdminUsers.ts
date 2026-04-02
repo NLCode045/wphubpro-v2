@@ -1,5 +1,5 @@
 import { executeFunction } from '@/integrations/appwrite/executeFunction';
-import { COLLECTIONS, DATABASE_ID, databases } from '@/services/appwrite';
+import { APPWRITE_FUNCTION_IDS, COLLECTIONS, DATABASE_ID, databases } from '@/services/appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Query } from 'appwrite';
 
@@ -96,7 +96,7 @@ async function fetchFormattedAdminUsers(params: ListUsersParams): Promise<{
     total: number;
     limit?: number;
     offset?: number;
-  }>('admin-manage-users', { action: 'list', limit, offset, search, status, role, plan });
+  }>(APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS, { action: 'list', limit, offset, search, status, role, plan });
 
   const rawUsers = res?.users ?? [];
   const total = res?.total ?? rawUsers.length;
@@ -168,7 +168,7 @@ export function useAdminUsersUpdate() {
       if (updates.stripe_customer_id !== undefined)
         userUpdates.stripe_customer_id = updates.stripe_customer_id;
 
-      await executeFunction('admin-manage-users', {
+      await executeFunction(APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS, {
         action: 'update',
         userId,
         updates: userUpdates,
@@ -183,7 +183,7 @@ export function useAdminUsersUpdate() {
 export function useAdminLoginAs() {
   return useMutation({
     mutationFn: async (userId: string) => {
-      const res = await executeFunction<{ token?: string }>('admin-manage-users', {
+      const res = await executeFunction<{ token?: string }>(APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS, {
         action: 'login-as',
         userId,
       });

@@ -1,4 +1,5 @@
 import { executeFunction } from '@/integrations/appwrite/executeFunction';
+import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export interface PlatformSettingItem {
@@ -6,11 +7,9 @@ export interface PlatformSettingItem {
   value: unknown;
 }
 
-const MANAGE_SETTINGS_FN = 'manage-settings';
-
 async function fetchPlatformSettings(userId: string): Promise<PlatformSettingItem[]> {
   const res = await executeFunction<{ success?: boolean; items?: PlatformSettingItem[] }>(
-    MANAGE_SETTINGS_FN,
+    APPWRITE_FUNCTION_IDS.MANAGE_SETTINGS,
     { action: 'list', userId },
   );
   return Array.isArray(res?.items) ? res.items : [];
@@ -38,7 +37,7 @@ export function usePlatformSettingsUpsert(userId: string | undefined) {
       if (!userId) {
         throw new Error('You must be signed in to save platform settings.');
       }
-      await executeFunction(MANAGE_SETTINGS_FN, { category, settings, userId });
+      await executeFunction(APPWRITE_FUNCTION_IDS.MANAGE_SETTINGS, { category, settings, userId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'platform-settings'] });

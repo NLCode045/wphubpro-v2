@@ -1,9 +1,5 @@
-/**
- * Appwrite team id for the admin team (must match your project’s team `$id`).
- * Override with `APPWRITE_ADMIN_TEAM_ID` if it is not `admin`.
- */
-export const ADMIN_TEAM_ID: string =
-  (import.meta.env.APPWRITE_ADMIN_TEAM_ID as string | undefined)?.trim() || 'admin';
+/** Re-export: admin team `$id` (default `admin`). Defined in `@/services/appwrite`. */
+export { ADMIN_TEAM_ID } from '@/services/appwrite';
 
 const CONTACT_PREFIX = 'contact:';
 

@@ -18,9 +18,10 @@ import {
   newContactThreadKeyForUser,
 } from '../../config/contactMessages';
 import { executeFunction } from '../../integrations/appwrite/executeFunction';
+import { APPWRITE_FUNCTION_IDS } from '../../services/appwrite';
 import { useAuth } from '../auth';
 
-const CONVERSATIONS_FN = 'conversations';
+const CONVERSATIONS_FN = APPWRITE_FUNCTION_IDS.CONVERSATIONS;
 
 function mapRowToMessage(
   row: ConversationThreadRow,

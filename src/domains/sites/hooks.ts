@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Query } from 'appwrite';
-import { account, COLLECTIONS, databases, DATABASE_ID } from '../../services/appwrite';
+import {
+  account,
+  APPWRITE_FUNCTION_IDS,
+  COLLECTIONS,
+  databases,
+  DATABASE_ID,
+} from '../../services/appwrite';
 import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
 import type {
   HealthAiDryRunAnalyzeResponse,
@@ -37,10 +43,9 @@ const STATUS_POLL_INTERVAL_MS = 60_000;
 
 const SITE_HEARTBEAT_POKE_FUNCTION_ID = 'site-heartbeat-poke';
 
-const HEALTH_AI_AGENT_FUNCTION_ID =
-  import.meta.env.APPWRITE_FUNCTION_HEALTH_AI_AGENT ?? 'health-ai-agent';
+const HEALTH_AI_AGENT_FUNCTION_ID = APPWRITE_FUNCTION_IDS.HEALTH_AI_AGENT;
 
-const WP_PROXY_FUNCTION_ID = import.meta.env.APPWRITE_FUNCTION_WP_PROXY ?? 'wp-proxy';
+const WP_PROXY_FUNCTION_ID = APPWRITE_FUNCTION_IDS.WP_PROXY;
 
 function jwtFromCreateResponse(jwtRes: unknown): string {
   if (typeof jwtRes === 'string') return jwtRes;

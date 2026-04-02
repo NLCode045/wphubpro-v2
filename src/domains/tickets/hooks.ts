@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../auth';
 import { executeFunction } from '../../integrations/appwrite/executeFunction';
+import { APPWRITE_FUNCTION_IDS } from '../../services/appwrite';
 import type { Ticket, TicketMessage } from '../../types';
+
+const TICKETS_FN = APPWRITE_FUNCTION_IDS.TICKETS;
 
 interface TicketDoc {
   $id: string;
@@ -54,7 +57,7 @@ export const useTickets = () => {
   return useQuery({
     queryKey: ['tickets', user?.$id],
     queryFn: async () => {
-      const res = await executeFunction<{ tickets: TicketDoc[]; total: number }>('tickets', {
+      const res = await executeFunction<{ tickets: TicketDoc[]; total: number }>(TICKETS_FN, {
         action: 'list',
       });
       return {
@@ -71,7 +74,7 @@ export const useAdminTickets = () => {
   return useQuery({
     queryKey: ['adminTickets'],
     queryFn: async () => {
-      const res = await executeFunction<{ tickets: TicketDoc[]; total: number }>('tickets', {
+      const res = await executeFunction<{ tickets: TicketDoc[]; total: number }>(TICKETS_FN, {
         action: 'adminList',
       });
       return {
@@ -89,7 +92,7 @@ export const useTicket = (ticketId: string | undefined) => {
     queryKey: ['ticket', ticketId, user?.$id],
     queryFn: async () => {
       const res = await executeFunction<{ ticket: TicketDoc; messages: TicketMessageDoc[] }>(
-        'tickets',
+        TICKETS_FN,
         { action: 'get', ticketId }
       );
       return {
@@ -112,7 +115,7 @@ export const useCreateTicket = () => {
       siteId?: string;
       targetUserId?: string;
     }) =>
-      executeFunction<{ ticket: TicketDoc }>('tickets', {
+      executeFunction<{ ticket: TicketDoc }>(TICKETS_FN, {
         action: 'create',
         ...data,
       }),
@@ -126,7 +129,7 @@ export const useAddTicketMessage = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { ticketId: string; body: string }) =>
-      executeFunction('tickets', { action: 'addMessage', ...data }),
+      executeFunction(TICKETS_FN, { action: 'addMessage', ...data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
       queryClient.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
@@ -139,7 +142,7 @@ export const useUpdateTicketStatus = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { ticketId: string; status: Ticket['status'] }) =>
-      executeFunction('tickets', { action: 'updateStatus', ...data }),
+      executeFunction(TICKETS_FN, { action: 'updateStatus', ...data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['adminTickets'] });
       queryClient.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });

@@ -14,6 +14,11 @@ export default defineConfig({
   envPrefix: ['VITE_', 'APPWRITE_', 'STRIPE_'],
   server: {
     allowedHosts: [
+        '*.wearecode045s-projects.vercel.app',
+        '*.wphub.pro',
+        '*.code045.nl',
+        '*.localhost',
+        '*.code045.wphub.pro',
       'app.wphub.pro',
       'dev.wphub.pro',
       'local.code045.nl',

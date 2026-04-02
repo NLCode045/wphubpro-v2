@@ -1,13 +1,13 @@
 {
-  "name": "wphubpro-v2",
+  "name": "wphubpro",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "npm run dev",
+    "build": "tsc -b && npm run build",
     "lint": "eslint .",
-    "preview": "vite preview",
+    "preview": "npm run preview",
     "format": "prettier --write './src/**/*.{ts,tsx,js,jsx}'"
   },
   "dependencies": {

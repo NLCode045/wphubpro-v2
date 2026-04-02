@@ -401,7 +401,6 @@ const SiteOverviewSitespeedCard = ({ siteId, siteUrl, performanceMeta }: SiteOve
     urlOk && activeKey === 'mobile',
     performanceMeta,
   );
-  const activeQ = activeKey === 'desktop' ? qDesktop : qMobile;
   const anyFetching = qDesktop.isFetching || qMobile.isFetching;
 
   const refreshPagespeedSession = () => {

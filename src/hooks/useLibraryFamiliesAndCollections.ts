@@ -8,7 +8,7 @@ import {
   serializeLibraryCollectionItems,
 } from '@/domains/library';
 import { useNotificationContext } from '@/context/useNotificationContext';
-import type { LibraryCollectionMember } from '@/types';
+import type { LibraryCollection, LibraryCollectionMember, LibraryFamily } from '@/types';
 
 const famCol = COLLECTIONS.LIBRARY_FAMILIES;
 const collCol = COLLECTIONS.LIBRARY_COLLECTIONS;

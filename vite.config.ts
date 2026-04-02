@@ -11,10 +11,6 @@ export default defineConfig({
         port: 5173,
         strictPort: false,
         open: true,
-        https: false,
-        warmup: {
-            clientFiles: ['./index.html', './src/main.tsx', './src/App.tsx'],
-        },
         proxy: {
             '/api': {
                 target: 'https://api.wphub.pro',

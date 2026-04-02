@@ -57,6 +57,7 @@ export const CONVERSATION_MESSAGE_PLACEMENTS_COLLECTION_ID = envString('APPWRITE
 export const FORUM_CATEGORIES_COLLECTION_ID = envString('APPWRITE_FORUM_CATEGORIES_COLLECTION_ID', 'forum_categories');
 export const FORUM_THREADS_COLLECTION_ID = envString('APPWRITE_FORUM_THREADS_COLLECTION_ID', 'forum_threads');
 export const FORUM_POSTS_COLLECTION_ID = envString('APPWRITE_FORUM_POSTS_COLLECTION_ID', 'forum_posts');
+export const STRIPE_FREE_TIER_PRICE_ID = envString('STRIPE_FREE_TIER_PRICE_ID', 'platform_settings.stripe_signup_plan');
 
 /**
  * Collectie IDs — waar mogelijk uit `.env`; overige vaste schema-namen.

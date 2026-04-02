@@ -17,8 +17,8 @@ import {
 } from '@/domains/library';
 
 const LIBRARY_COLLECTION = COLLECTIONS.LIBRARY;
-const ZIP_PARSER_FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_ZIP_PARSER ?? 'zip-parser';
-const LIBRARY_DELETE_FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_LIBRARY_DELETE ?? 'library-delete-version';
+const ZIP_PARSER_FUNCTION_ID = import.meta.env.APPWRITE_FUNCTION_ZIP_PARSER ?? 'zip-parser';
+const LIBRARY_DELETE_FUNCTION_ID = import.meta.env.APPWRITE_FUNCTION_LIBRARY_DELETE ?? 'library-delete-version';
 
 function docToFirstItem(doc: Record<string, unknown>): LibraryItem {
   return mapLibraryDocumentToItem(doc);

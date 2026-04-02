@@ -2,7 +2,7 @@ import { executeFunctionWithMeta } from '@/integrations/appwrite/executeFunction
 import type { WpPluginInfo, WpThemeInfo } from '@/services/wordpress';
 import type { LibraryItem } from '@/types';
 
-const WP_PROXY_FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_WP_PROXY ?? 'wp-proxy';
+const WP_PROXY_FUNCTION_ID = import.meta.env.APPWRITE_FUNCTION_WP_PROXY ?? 'wp-proxy';
 
 export type LibraryBridgeInstallPlan =
   | { kind: 'plugin-install-version'; slug: string; version: string }

@@ -38,9 +38,9 @@ const STATUS_POLL_INTERVAL_MS = 60_000;
 const SITE_HEARTBEAT_POKE_FUNCTION_ID = 'site-heartbeat-poke';
 
 const HEALTH_AI_AGENT_FUNCTION_ID =
-  import.meta.env.VITE_APPWRITE_FUNCTION_HEALTH_AI_AGENT ?? 'health-ai-agent';
+  import.meta.env.APPWRITE_FUNCTION_HEALTH_AI_AGENT ?? 'health-ai-agent';
 
-const WP_PROXY_FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_WP_PROXY ?? 'wp-proxy';
+const WP_PROXY_FUNCTION_ID = import.meta.env.APPWRITE_FUNCTION_WP_PROXY ?? 'wp-proxy';
 
 function jwtFromCreateResponse(jwtRes: unknown): string {
   if (typeof jwtRes === 'string') return jwtRes;

@@ -4,7 +4,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Alert, Button, Modal, Spinner } from 'react-bootstrap';
 import { useCreateSetupIntent, useSetDefaultPaymentMethod } from '@/domains/billing';
 
-const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '';
+const publishableKey = import.meta.env.STRIPE_PUBLISHABLE_KEY ?? '';
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
 type AddCardFormProps = {
@@ -113,7 +113,7 @@ export function StripeElementsModal({ show, onHide, onSuccess }: StripeElementsM
       <Modal.Body>
         {missingKey ? (
           <Alert variant="warning" className="mb-0">
-            Missing <code>VITE_STRIPE_PUBLISHABLE_KEY</code>. Card capture is disabled until it is set in the
+            Missing <code>STRIPE_PUBLISHABLE_KEY</code>. Card capture is disabled until it is set in the
             environment.
           </Alert>
         ) : null}

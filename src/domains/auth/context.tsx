@@ -2,6 +2,7 @@ import { clearPagespeedSessionStorage } from '@/domains/sites/pagespeedSessionCa
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { AuthenticationFactor } from 'appwrite';
+import type { Models } from 'appwrite';
 import { account, teams, ID, OAuthProvider } from '../../services/appwrite';
 import type { User } from '../../types';
 
@@ -32,6 +33,10 @@ interface AuthContextType {
   forgotPassword: (email: string) => Promise<void>;
   completePasswordRecovery: (userId: string, secret: string, password: string) => Promise<PasswordRecoveryResult>;
   completeMfaChallenge: (otp: string, factor?: AuthenticationFactor) => Promise<void>;
+  /** Creates an email MFA challenge; Appwrite sends a code (self-hosted: requires SMTP configured in Appwrite). */
+  sendEmailMfaChallenge: () => Promise<string>;
+  completeMfaEmailChallenge: (challengeId: string, otp: string) => Promise<void>;
+  listMfaFactors: () => Promise<Models.MfaFactors>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   isLoading: boolean;
@@ -185,14 +190,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   async function resolveChallengeFactor(explicit?: AuthenticationFactor): Promise<AuthenticationFactor> {
+    if (explicit === AuthenticationFactor.Email) {
+      throw new Error(
+        'Email MFA uses a separate step: send the verification email first, then enter the code you receive.'
+      );
+    }
     if (explicit != null) return explicit;
+
     const factors = await account.listMfaFactors();
     if (factors.totp) return AuthenticationFactor.Totp;
-    if (factors.email) return AuthenticationFactor.Email;
     if (factors.phone) return AuthenticationFactor.Phone;
     if (factors.recoveryCode) return AuthenticationFactor.Recoverycode;
+    if (factors.email) {
+      throw new Error(
+        'This account uses email for the second factor. Choose “Email verification” and request a code first.'
+      );
+    }
     throw new Error('No MFA method is available on this account.');
   }
+
+  const listMfaFactors = () => account.listMfaFactors();
+
+  const sendEmailMfaChallenge = async (): Promise<string> => {
+    const factors = await account.listMfaFactors();
+    if (!factors.email) {
+      throw new Error('Email verification is not enabled on this account.');
+    }
+    const challenge = await account.createMfaChallenge(AuthenticationFactor.Email);
+    return challenge.$id;
+  };
+
+  const completeMfaEmailChallenge = async (challengeId: string, otp: string) => {
+    const trimmed = otp.trim();
+    if (!trimmed) {
+      throw new Error('Enter the code from your email.');
+    }
+    await account.updateMfaChallenge(challengeId, trimmed);
+    await applySessionUser();
+  };
 
   const completeMfaChallenge = async (otp: string, factor?: AuthenticationFactor) => {
     const trimmed = otp.trim();
@@ -251,6 +286,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         forgotPassword,
         completePasswordRecovery,
         completeMfaChallenge,
+        sendEmailMfaChallenge,
+        completeMfaEmailChallenge,
+        listMfaFactors,
         logout,
         refreshUser,
         isLoading,

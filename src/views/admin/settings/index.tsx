@@ -156,6 +156,8 @@ const AdminPlatformSettingsPage = () => {
 
   const [stripeDefaultPriceId, setStripeDefaultPriceId] = useState('');
 
+  const [requireEmailOtpOnly, setRequireEmailOtpOnly] = useState(false);
+
   useEffect(() => {
     if (!isAdmin) {
       navigate(ROUTE_PATHS.DASHBOARD, { replace: true });
@@ -179,6 +181,9 @@ const AdminPlatformSettingsPage = () => {
 
     const stripe = recordFromValue(map.get('stripe_signup_plan'));
     setStripeDefaultPriceId(stripe.defaultSignupPlanPriceId ?? '');
+
+    const auth = recordFromValue(map.get('auth'));
+    setRequireEmailOtpOnly(Boolean(auth.requireEmailOtpOnly));
   }, [items]);
 
   const catalogPriceIds = useMemo(() => catalogPriceIdSet(stripePlans), [stripePlans]);
@@ -284,6 +289,24 @@ const AdminPlatformSettingsPage = () => {
       showNotification({
         title: 'Saved',
         message: 'Stripe signup plan settings were updated.',
+        variant: 'success',
+      });
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  const saveAuth = async () => {
+    try {
+      await upsert.mutateAsync({
+        category: 'auth',
+        settings: {
+          requireEmailOtpOnly,
+        },
+      });
+      showNotification({
+        title: 'Saved',
+        message: 'Authentication settings were updated.',
         variant: 'success',
       });
     } catch (err) {
@@ -414,6 +437,36 @@ const AdminPlatformSettingsPage = () => {
                     disabled={upsert.isPending}
                     onClick={() => void saveBridge()}>
                     {upsert.isPending ? 'Saving…' : 'Save bridge'}
+                  </Button>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col lg={6}>
+              <Card className="border h-100">
+                <Card.Body>
+                  <Card.Title as="h5">Authentication</Card.Title>
+                  <Card.Text className="text-muted small">
+                    Email one-time code (Appwrite Email OTP) for sign-in. When enabled, the login and registration pages
+                    use email codes only—password and GitHub sign-in are hidden. Stored under platform key{' '}
+                    <code>auth</code>.
+                  </Card.Text>
+                  <Form.Group className="mb-3">
+                    <Form.Check
+                      type="switch"
+                      id="admin-require-email-otp-only"
+                      label="Require email code sign-in for all users"
+                      checked={requireEmailOtpOnly}
+                      onChange={(e) => setRequireEmailOtpOnly(e.target.checked)}
+                      disabled={upsert.isPending}
+                    />
+                  </Form.Group>
+                  <Button
+                    variant="primary"
+                    type="button"
+                    disabled={upsert.isPending}
+                    onClick={() => void saveAuth()}>
+                    {upsert.isPending ? 'Saving…' : 'Save authentication'}
                   </Button>
                 </Card.Body>
               </Card>

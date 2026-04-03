@@ -6,6 +6,8 @@ export type ProfilePrefs = {
   language?: string;
   notifyEmail?: boolean;
   notifyPlatform?: boolean;
+  /** When true, this user must sign in with Appwrite email OTP (no password / OAuth on login UI). */
+  loginWithEmailOtpOnly?: boolean;
 };
 
 /** Appwrite user prefs object (arbitrary JSON). */
@@ -23,6 +25,8 @@ export function parseProfilePrefs(prefs: PrefsRecord | undefined | null): Profil
     language: typeof p.language === 'string' ? p.language : undefined,
     notifyEmail: p.notifyEmail === undefined ? undefined : bool(p.notifyEmail, true),
     notifyPlatform: p.notifyPlatform === undefined ? undefined : bool(p.notifyPlatform, true),
+    loginWithEmailOtpOnly:
+      p.loginWithEmailOtpOnly === undefined ? undefined : bool(p.loginWithEmailOtpOnly, false),
   };
 }
 

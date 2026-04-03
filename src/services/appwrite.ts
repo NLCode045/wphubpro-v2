@@ -100,6 +100,7 @@ export const APPWRITE_FUNCTION_IDS = {
   ZIP_PARSER: envString('APPWRITE_FUNCTION_ZIP_PARSER', 'zip-parser'),
   LIBRARY_DELETE_VERSION: envString('APPWRITE_FUNCTION_LIBRARY_DELETE', 'library-delete-version'),
   MANAGE_SETTINGS: envString('APPWRITE_FUNCTION_MANAGE_SETTINGS', 'manage-settings'),
+  PUBLIC_AUTH_CONFIG: envString('APPWRITE_FUNCTION_PUBLIC_AUTH_CONFIG', 'public-auth-config'),
   ADMIN_MANAGE_USERS: envString('APPWRITE_FUNCTION_ADMIN_MANAGE_USERS', 'admin-manage-users'),
   HEALTH_AI_AGENT: envString('APPWRITE_FUNCTION_HEALTH_AI_AGENT', 'health-ai-agent'),
   WPHUB_SITES: envString('APPWRITE_FUNCTION_WPHUB_SITES', 'wphub-sites'),

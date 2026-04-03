@@ -1,30 +1,105 @@
 import AppLogo from '@/components/AppLogo'
 import { ROUTE_PATHS } from '@/config/routePaths'
-import { useAuth } from '@/domains/auth'
+import { fetchLoginMethods, useAuth, usePublicAuthConfig } from '@/domains/auth'
 import { currentYear } from '@/helpers'
-import { useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { FaGithub } from 'react-icons/fa6'
 import { Link } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
+type SignInMode = 'password' | 'otp'
+
 const SignInPage = () => {
-  const { login, loginWithGitHub } = useAuth()
+  const { login, loginWithGitHub, sendLoginEmailOtp, verifyLoginEmailOtp } = useAuth()
+  const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: FormEvent) => {
+  const [mode, setMode] = useState<SignInMode>('password')
+  const [otpUserId, setOtpUserId] = useState<string | null>(null)
+  const [otpCode, setOtpCode] = useState('')
+
+  const globalOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly) && !publicAuthError
+
+  useEffect(() => {
+    if (publicAuthLoading || publicAuthError) return
+    if (globalOtpOnly) {
+      setMode('otp')
+    }
+  }, [globalOtpOnly, publicAuthLoading, publicAuthError])
+
+  const beginOtpSignIn = useCallback(
+    async (emailAddr: string) => {
+      const trimmed = emailAddr.trim()
+      if (!trimmed) {
+        throw new Error('Enter your email address.')
+      }
+      const { userId } = await sendLoginEmailOtp(trimmed)
+      setOtpUserId(userId)
+    },
+    [sendLoginEmailOtp],
+  )
+
+  const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
+      const methods = await fetchLoginMethods(email)
+      if (methods.otpOnly) {
+        setMode('otp')
+        await beginOtpSignIn(email)
+        setLoading(false)
+        return
+      }
       await login(email, password)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.')
       setLoading(false)
     }
   }
+
+  const handleSendOtp = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    try {
+      await beginOtpSignIn(email)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not send verification code.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!otpUserId) {
+      setError('Send a verification code first.')
+      return
+    }
+    setError(null)
+    setLoading(true)
+    try {
+      await verifyLoginEmailOtp(otpUserId, otpCode)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid or expired code.')
+      setLoading(false)
+    }
+  }
+
+  const switchToPasswordMode = () => {
+    setMode('password')
+    setOtpUserId(null)
+    setOtpCode('')
+    setError(null)
+  }
+
+  const showPasswordPath = !globalOtpOnly && mode === 'password'
+  const showOtpPath = globalOtpOnly || mode === 'otp'
 
   return (
     <div className="auth-box overflow-hidden align-items-center d-flex" style={{ minHeight: '100vh' }}>
@@ -39,75 +114,198 @@ const SignInPage = () => {
               <div className="auth-brand text-center mb-4">
                 <AppLogo />
                 <p className="text-muted w-lg-75 mt-3 mx-auto">
-                  Let&apos;s get you signed in. Enter your email and password to continue.
+                  {globalOtpOnly
+                    ? 'Sign in with a one-time code sent to your email.'
+                    : "Let's get you signed in. Enter your email and password to continue."}
                 </p>
               </div>
 
-              <Form onSubmit={handleSubmit}>
-                {error && (
-                  <Alert variant="danger" className="mb-3 py-2">
-                    {error}
-                  </Alert>
-                )}
-
-                <div className="mb-3 form-group">
-                  <FormLabel>
-                    Email address <span className="text-danger">*</span>
-                  </FormLabel>
-                  <FormControl
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
+              {publicAuthLoading ? (
+                <div className="d-flex align-items-center justify-content-center gap-2 text-muted py-4">
+                  <Spinner animation="border" size="sm" />
+                  Loading…
                 </div>
+              ) : null}
 
-                <div className="mb-3 form-group">
-                  <div className="d-flex justify-content-between align-items-center mb-1">
-                    <FormLabel className="mb-0">
-                      Password <span className="text-danger">*</span>
+              {!publicAuthLoading && publicAuthError ? (
+                <Alert variant="warning" className="py-2 fs-sm mb-3">
+                  Could not load sign-in options. You can still try email and password.
+                </Alert>
+              ) : null}
+
+              {!publicAuthLoading && showPasswordPath ? (
+                <Form onSubmit={handlePasswordSubmit}>
+                  {error && (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  )}
+
+                  <div className="mb-3 form-group">
+                    <FormLabel>
+                      Email address <span className="text-danger">*</span>
                     </FormLabel>
-                    <Link to={ROUTE_PATHS.FORGOT_PASSWORD} className="text-decoration-underline link-offset-3 text-muted small">
-                      Forgot password?
-                    </Link>
+                    <FormControl
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
                   </div>
-                  <FormControl
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
 
-                <div className="d-grid mb-3">
-                  <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Spinner animation="border" size="sm" className="me-2" />
-                        Signing in…
-                      </>
-                    ) : (
-                      'Sign In'
-                    )}
-                  </Button>
-                </div>
+                  <div className="mb-3 form-group">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <FormLabel className="mb-0">
+                        Password <span className="text-danger">*</span>
+                      </FormLabel>
+                      <Link
+                        to={ROUTE_PATHS.FORGOT_PASSWORD}
+                        className="text-decoration-underline link-offset-3 text-muted small">
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <FormControl
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
 
-                <div className="d-grid mb-3">
-                  <Button
-                    type="button"
-                    variant="outline-secondary"
-                    className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
-                    onClick={() => loginWithGitHub()}
-                  >
-                    <FaGithub size={18} />
-                    Continue with GitHub
-                  </Button>
+                  <div className="d-grid mb-2">
+                    <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2" />
+                          Signing in…
+                        </>
+                      ) : (
+                        'Sign In'
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="text-center mb-3">
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="text-muted"
+                      onClick={() => {
+                        setMode('otp')
+                        setOtpUserId(null)
+                        setOtpCode('')
+                        setError(null)
+                      }}>
+                      Sign in with email code instead
+                    </Button>
+                  </div>
+
+                  <div className="d-grid mb-3">
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
+                      onClick={() => loginWithGitHub()}>
+                      <FaGithub size={18} />
+                      Continue with GitHub
+                    </Button>
+                  </div>
+                </Form>
+              ) : null}
+
+              {!publicAuthLoading && showOtpPath ? (
+                <div>
+                  {error && (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  )}
+
+                  {!otpUserId ? (
+                    <Form onSubmit={handleSendOtp}>
+                      <div className="mb-3 form-group">
+                        <FormLabel>
+                          Email address <span className="text-danger">*</span>
+                        </FormLabel>
+                        <FormControl
+                          type="email"
+                          autoComplete="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="d-grid mb-3">
+                        <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
+                          {loading ? (
+                            <>
+                              <Spinner animation="border" size="sm" className="me-2" />
+                              Sending…
+                            </>
+                          ) : (
+                            'Send verification code'
+                          )}
+                        </Button>
+                      </div>
+                    </Form>
+                  ) : (
+                    <Form onSubmit={handleVerifyOtp}>
+                      <p className="text-muted fs-sm mb-3">
+                        We sent a code to <strong>{email.trim()}</strong>. Enter it below to finish signing in.
+                      </p>
+                      <div className="mb-3 form-group">
+                        <FormLabel>Verification code</FormLabel>
+                        <FormControl
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          placeholder="6-digit code"
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="d-grid gap-2 mb-3">
+                        <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
+                          {loading ? (
+                            <>
+                              <Spinner animation="border" size="sm" className="me-2" />
+                              Verifying…
+                            </>
+                          ) : (
+                            'Verify and sign in'
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline-secondary"
+                          size="sm"
+                          disabled={loading}
+                          onClick={() => {
+                            setOtpUserId(null)
+                            setOtpCode('')
+                            setError(null)
+                          }}>
+                          Use a different email
+                        </Button>
+                      </div>
+                    </Form>
+                  )}
+
+                  {!globalOtpOnly ? (
+                    <div className="text-center">
+                      <Button type="button" variant="link" size="sm" className="text-muted" onClick={switchToPasswordMode}>
+                        Back to password sign-in
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-              </Form>
+              ) : null}
 
               <p className="text-muted text-center mt-4 mb-0">
                 New here?{' '}

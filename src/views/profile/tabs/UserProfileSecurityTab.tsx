@@ -1,12 +1,14 @@
-import { useAuth } from '@/domains/auth';
+import { useAuth, usePublicAuthConfig } from '@/domains/auth';
+import { mergeProfilePrefs, parseProfilePrefs, type PrefsRecord } from '@/domains/profile/profilePrefs';
 import { account } from '@/services/appwrite';
 import { AuthenticatorType } from 'appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 
 const UserProfileSecurityTab = () => {
   const { user, refreshUser } = useAuth();
+  const { data: publicAuth } = usePublicAuthConfig();
   const queryClient = useQueryClient();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -18,10 +20,38 @@ const UserProfileSecurityTab = () => {
   const [mfaOtp, setMfaOtp] = useState('');
   const [mfaMessage, setMfaMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
 
+  const [loginEmailOtpOnly, setLoginEmailOtpOnly] = useState(false);
+  const [otpPrefMessage, setOtpPrefMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
+
+  const platformRequiresOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly);
+
   const factorsQuery = useQuery({
     queryKey: ['mfa-factors'],
     queryFn: () => account.listMfaFactors(),
     enabled: Boolean(user),
+  });
+
+  useEffect(() => {
+    const p = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
+    setLoginEmailOtpOnly(p.loginWithEmailOtpOnly === true);
+  }, [user?.prefs]);
+
+  const otpPrefMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (!user) throw new Error('Not signed in.');
+      const base = mergeProfilePrefs(user.prefs as PrefsRecord | null, { loginWithEmailOtpOnly: next });
+      await account.updatePrefs(base);
+    },
+    onSuccess: async () => {
+      setOtpPrefMessage({ variant: 'success', text: 'Sign-in preference saved.' });
+      await refreshUser();
+    },
+    onError: (err: unknown) => {
+      const prefs = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
+      setLoginEmailOtpOnly(prefs.loginWithEmailOtpOnly === true);
+      const msg = err instanceof Error ? err.message : 'Could not save preference.';
+      setOtpPrefMessage({ variant: 'danger', text: msg });
+    },
   });
 
   const passwordMutation = useMutation({
@@ -165,6 +195,42 @@ const UserProfileSecurityTab = () => {
             </Button>
           </div>
         </Form>
+      </section>
+
+      <hr className="my-0 border-light" />
+
+      <section>
+        <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Email code sign-in</p>
+        <p className="text-muted fs-sm mb-3">
+          When enabled, you sign in with a one-time code sent to your email instead of using your password or GitHub on
+          the login page.
+        </p>
+        {otpPrefMessage ? (
+          <Alert variant={otpPrefMessage.variant} className="py-2 fs-sm mb-3">
+            {otpPrefMessage.text}
+          </Alert>
+        ) : null}
+        {platformRequiresOtpOnly ? (
+          <Alert variant="info" className="py-2 fs-sm mb-0">
+            The platform is already set to email code sign-in only for all accounts. Password and social sign-in are
+            disabled on the login page.
+          </Alert>
+        ) : (
+          <Form.Check
+            type="switch"
+            id="profile-login-email-otp-only"
+            className="mb-0"
+            label="Require email code for my account (disable password & GitHub sign-in for me)"
+            checked={loginEmailOtpOnly}
+            disabled={otpPrefMutation.isPending}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setLoginEmailOtpOnly(v);
+              setOtpPrefMessage(null);
+              otpPrefMutation.mutate(v);
+            }}
+          />
+        )}
       </section>
 
       <hr className="my-0 border-light" />

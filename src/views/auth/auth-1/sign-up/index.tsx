@@ -1,14 +1,17 @@
 import AppLogo from '@/components/AppLogo'
 import PasswordInputWithStrength from '@/components/PasswordInputWithStrength'
 import { ROUTE_PATHS } from '@/config/routePaths'
-import { useAuth } from '@/domains/auth'
+import { useAuth, usePublicAuthConfig } from '@/domains/auth'
 import { currentYear } from '@/helpers'
+import { account } from '@/services/appwrite'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
 const SignUpPage = () => {
-  const { register } = useAuth()
+  const { register, sendLoginEmailOtp, verifyLoginEmailOtp, refreshUser } = useAuth()
+  const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig()
+
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,7 +19,12 @@ const SignUpPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: FormEvent) => {
+  const [otpUserId, setOtpUserId] = useState<string | null>(null)
+  const [otpCode, setOtpCode] = useState('')
+
+  const globalOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly) && !publicAuthError
+
+  const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (password.length < 8) {
       setError('Password must be at least 8 characters long.')
@@ -36,6 +44,49 @@ const SignUpPage = () => {
     }
   }
 
+  const handleOtpSend = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!agreement) {
+      setError('Please agree to the terms to continue.')
+      return
+    }
+    if (!name.trim()) {
+      setError('Please enter your name.')
+      return
+    }
+    setError(null)
+    setLoading(true)
+    try {
+      const { userId } = await sendLoginEmailOtp(email.trim())
+      setOtpUserId(userId)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not send verification code.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleOtpVerify = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!otpUserId) {
+      setError('Send a verification code first.')
+      return
+    }
+    setError(null)
+    setLoading(true)
+    try {
+      await verifyLoginEmailOtp(otpUserId, otpCode)
+      const nm = name.trim()
+      if (nm) {
+        await account.updateName(nm)
+        await refreshUser()
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid or expired code.')
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="auth-box overflow-hidden align-items-center d-flex" style={{ minHeight: '100vh' }}>
       <Container>
@@ -47,83 +98,209 @@ const SignUpPage = () => {
               </div>
               <div className="auth-brand text-center mb-4">
                 <AppLogo />
-                <p className="text-muted w-lg-75 mt-3 mx-auto">Create your account by entering your details below.</p>
+                <p className="text-muted w-lg-75 mt-3 mx-auto">
+                  {globalOtpOnly
+                    ? 'Create your account with a one-time code sent to your email.'
+                    : 'Create your account by entering your details below.'}
+                </p>
               </div>
 
-              <Form onSubmit={handleSubmit}>
-                {error && (
-                  <Alert variant="danger" className="mb-3 py-2">
-                    {error}
-                  </Alert>
-                )}
-
-                <div className="mb-3 form-group">
-                  <FormLabel>
-                    Name <span className="text-danger">*</span>
-                  </FormLabel>
-                  <FormControl
-                    type="text"
-                    autoComplete="name"
-                    placeholder="Your name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
+              {publicAuthLoading ? (
+                <div className="d-flex align-items-center justify-content-center gap-2 text-muted py-4">
+                  <Spinner animation="border" size="sm" />
+                  Loading…
                 </div>
+              ) : null}
 
-                <div className="mb-3 form-group">
-                  <FormLabel>
-                    Email address <span className="text-danger">*</span>
-                  </FormLabel>
-                  <FormControl
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
+              {!publicAuthLoading && publicAuthError ? (
+                <Alert variant="warning" className="py-2 fs-sm mb-3">
+                  Could not load registration options. You can still register with email and password.
+                </Alert>
+              ) : null}
+
+              {!publicAuthLoading && globalOtpOnly ? (
+                <div>
+                  {error && (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  )}
+                  {!otpUserId ? (
+                    <Form onSubmit={handleOtpSend}>
+                      <div className="mb-3 form-group">
+                        <FormLabel>
+                          Name <span className="text-danger">*</span>
+                        </FormLabel>
+                        <FormControl
+                          type="text"
+                          autoComplete="name"
+                          placeholder="Your name"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="mb-3 form-group">
+                        <FormLabel>
+                          Email address <span className="text-danger">*</span>
+                        </FormLabel>
+                        <FormControl
+                          type="email"
+                          autoComplete="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <div className="form-check">
+                          <input
+                            className="form-check-input form-check-input-light fs-14"
+                            type="checkbox"
+                            id="termAndPolicyOtp"
+                            checked={agreement}
+                            onChange={() => setAgreement((v) => !v)}
+                          />
+                          <label className="form-check-label" htmlFor="termAndPolicyOtp">
+                            I agree to the terms and policy
+                          </label>
+                        </div>
+                      </div>
+                      <div className="d-grid">
+                        <Button type="submit" className="btn btn-primary fw-semibold py-2" disabled={loading}>
+                          {loading ? (
+                            <>
+                              <Spinner animation="border" size="sm" className="me-2" />
+                              Sending code…
+                            </>
+                          ) : (
+                            'Send verification code'
+                          )}
+                        </Button>
+                      </div>
+                    </Form>
+                  ) : (
+                    <Form onSubmit={handleOtpVerify}>
+                      <p className="text-muted fs-sm mb-3">
+                        We sent a code to <strong>{email.trim()}</strong>. Enter it below to finish creating your account.
+                      </p>
+                      <div className="mb-3 form-group">
+                        <FormLabel>Verification code</FormLabel>
+                        <FormControl
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          placeholder="6-digit code"
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="d-grid gap-2">
+                        <Button type="submit" className="btn btn-primary fw-semibold py-2" disabled={loading}>
+                          {loading ? (
+                            <>
+                              <Spinner animation="border" size="sm" className="me-2" />
+                              Verifying…
+                            </>
+                          ) : (
+                            'Verify and continue'
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline-secondary"
+                          size="sm"
+                          disabled={loading}
+                          onClick={() => {
+                            setOtpUserId(null)
+                            setOtpCode('')
+                            setError(null)
+                          }}>
+                          Use a different email
+                        </Button>
+                      </div>
+                    </Form>
+                  )}
                 </div>
+              ) : null}
 
-                <div className="mb-3">
-                  <PasswordInputWithStrength
-                    id="password"
-                    label="Password"
-                    name="password"
-                    password={password}
-                    setPassword={setPassword}
-                    placeholder="••••••••"
-                  />
-                </div>
+              {!publicAuthLoading && !globalOtpOnly ? (
+                <Form onSubmit={handlePasswordSubmit}>
+                  {error && (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  )}
 
-                <div className="mb-3">
-                  <div className="form-check">
-                    <input
-                      className="form-check-input form-check-input-light fs-14"
-                      type="checkbox"
-                      id="termAndPolicy"
-                      checked={agreement}
-                      onChange={() => setAgreement((v) => !v)}
+                  <div className="mb-3 form-group">
+                    <FormLabel>
+                      Name <span className="text-danger">*</span>
+                    </FormLabel>
+                    <FormControl
+                      type="text"
+                      autoComplete="name"
+                      placeholder="Your name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
                     />
-                    <label className="form-check-label" htmlFor="termAndPolicy">
-                      I agree to the terms and policy
-                    </label>
                   </div>
-                </div>
 
-                <div className="d-grid">
-                  <Button type="submit" className="btn btn-primary fw-semibold py-2" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Spinner animation="border" size="sm" className="me-2" />
-                        Creating account…
-                      </>
-                    ) : (
-                      'Create Account'
-                    )}
-                  </Button>
-                </div>
-              </Form>
+                  <div className="mb-3 form-group">
+                    <FormLabel>
+                      Email address <span className="text-danger">*</span>
+                    </FormLabel>
+                    <FormControl
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <PasswordInputWithStrength
+                      id="password"
+                      label="Password"
+                      name="password"
+                      password={password}
+                      setPassword={setPassword}
+                      placeholder="••••••••"
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="form-check">
+                      <input
+                        className="form-check-input form-check-input-light fs-14"
+                        type="checkbox"
+                        id="termAndPolicy"
+                        checked={agreement}
+                        onChange={() => setAgreement((v) => !v)}
+                      />
+                      <label className="form-check-label" htmlFor="termAndPolicy">
+                        I agree to the terms and policy
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="d-grid">
+                    <Button type="submit" className="btn btn-primary fw-semibold py-2" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2" />
+                          Creating account…
+                        </>
+                      ) : (
+                        'Create Account'
+                      )}
+                    </Button>
+                  </div>
+                </Form>
+              ) : null}
 
               <p className="text-muted text-center mt-4 mb-0">
                 Already have an account?{' '}

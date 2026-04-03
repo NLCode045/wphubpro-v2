@@ -17,6 +17,10 @@ interface AuthContextType {
   isAdmin: boolean;
   login: (email: string, pass: string) => Promise<void>;
   loginWithGitHub: () => void;
+  /** Appwrite Email OTP step 1 — sends code to the address; returns target user id for {@link verifyLoginEmailOtp}. */
+  sendLoginEmailOtp: (email: string) => Promise<{ userId: string }>;
+  /** Appwrite Email OTP step 2 — completes session after user enters code from email. */
+  verifyLoginEmailOtp: (userId: string, secret: string) => Promise<void>;
   register: (name: string, email: string, pass: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   completePasswordRecovery: (userId: string, secret: string, password: string) => Promise<void>;
@@ -38,26 +42,34 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
+async function resolveAdminStatus(currentUser: User): Promise<boolean> {
+  let adminStatus = (currentUser.labels as string[] | undefined)?.includes('admin') || false;
+  if (!adminStatus) {
+    try {
+      const userTeams = await teams.list();
+      adminStatus = userTeams.teams.some(t => t.$id === 'admin' || t.name.toLowerCase() === 'admin');
+    } catch {
+      adminStatus = false;
+    }
+  }
+  return adminStatus;
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const commitSessionUser = async () => {
+    const currentUser = await account.get();
+    const adminStatus = await resolveAdminStatus(currentUser);
+    setUser({ ...currentUser, isAdmin: adminStatus });
+    setIsAdmin(adminStatus);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  };
+
   useEffect(() => {
     let mounted = true;
-
-    const resolveAdminStatus = async (currentUser: User): Promise<boolean> => {
-      let adminStatus = (currentUser.labels as string[] | undefined)?.includes('admin') || false;
-      if (!adminStatus) {
-        try {
-          const userTeams = await withTimeout(teams.list(), AUTH_TIMEOUT_MS);
-          adminStatus = userTeams.teams.some(t => t.$id === 'admin' || t.name.toLowerCase() === 'admin');
-        } catch {
-          adminStatus = false;
-        }
-      }
-      return adminStatus;
-    };
 
     const hydrateUser = async () => {
       const currentUser = await withTimeout(account.get(), AUTH_TIMEOUT_MS);
@@ -98,23 +110,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     account.createOAuth2Session(OAuthProvider.Github, success, failure, ['user:email']);
   };
 
+  const sendLoginEmailOtp = async (email: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      throw new Error('Email is required.');
+    }
+    const token = await account.createEmailToken(ID.unique(), trimmed);
+    const uid = token.userId;
+    if (!uid) {
+      throw new Error('Could not start email sign-in.');
+    }
+    return { userId: uid };
+  };
+
+  const verifyLoginEmailOtp = async (userId: string, secret: string) => {
+    const code = secret.trim();
+    if (!code) {
+      throw new Error('Enter the code from your email.');
+    }
+    await account.createSession(userId, code);
+    await commitSessionUser();
+  };
+
   const login = async (email: string, pass: string) => {
     try {
       await account.createEmailPasswordSession(email, pass);
-      const currentUser = await account.get();
-      let adminStatus = (currentUser.labels as string[] | undefined)?.includes('admin') || false;
-      if (!adminStatus) {
-        try {
-          const userTeams = await teams.list();
-          adminStatus = userTeams.teams.some(t => t.$id === 'admin' || t.name.toLowerCase() === 'admin');
-        } catch {
-          adminStatus = false;
-        }
-      }
-      setUser({ ...currentUser, isAdmin: adminStatus });
-      setIsAdmin(adminStatus);
-
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await commitSessionUser();
     } catch (error) {
       console.error('❌ Login failed:', error);
       throw error;
@@ -127,8 +148,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await account.createEmailPasswordSession(email, pass);
 
     const currentUser = await account.get();
-
-    // New users are not admins by default
     const adminStatus = (currentUser.labels as string[] | undefined)?.includes('admin') || false;
 
     setUser({ ...currentUser, isAdmin: adminStatus });
@@ -143,18 +162,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const completePasswordRecovery = async (userId: string, secret: string, password: string) => {
     await account.updateRecovery(userId, secret, password);
-    const currentUser = await account.get();
-    let adminStatus = (currentUser.labels as string[] | undefined)?.includes('admin') || false;
-    if (!adminStatus) {
-      try {
-        const userTeams = await teams.list();
-        adminStatus = userTeams.teams.some(t => t.$id === 'admin' || t.name.toLowerCase() === 'admin');
-      } catch {
-        adminStatus = false;
-      }
-    }
-    setUser({ ...currentUser, isAdmin: adminStatus });
-    setIsAdmin(adminStatus);
+    await commitSessionUser();
   };
 
   const logout = async () => {
@@ -166,15 +174,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshUser = async () => {
     const currentUser = await account.get();
-    let adminStatus = currentUser.labels?.includes('admin') || false;
-    if (!adminStatus) {
-      try {
-        const userTeams = await teams.list();
-        adminStatus = userTeams.teams.some(t => t.$id === 'admin' || t.name.toLowerCase() === 'admin');
-      } catch {
-        adminStatus = false;
-      }
-    }
+    const adminStatus = await resolveAdminStatus(currentUser);
     setUser({ ...currentUser, isAdmin: adminStatus });
     setIsAdmin(adminStatus);
   };
@@ -186,6 +186,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isAdmin,
         login,
         loginWithGitHub,
+        sendLoginEmailOtp,
+        verifyLoginEmailOtp,
         register,
         forgotPassword,
         completePasswordRecovery,

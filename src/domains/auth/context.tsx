@@ -25,13 +25,16 @@ interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
   /**
-   * Email/password session; if the account has MFA, returns `mfa_required` and the session stays challenge-pending
-   * until {@link completeTotpMfaLogin} or {@link cancelMfaLogin}.
+   * Validates email/password and opens a server session. Does not hydrate the app user until the second factor completes.
+   * `mfaPending` is true when Appwrite requires MFA before account.get succeeds.
    */
-  login: (email: string, pass: string) => Promise<'success' | 'mfa_required'>;
-  /** Start TOTP challenge after {@link login} returned `mfa_required`. Returns challenge id for {@link completeTotpMfaLogin}. */
+  login: (email: string, pass: string) => Promise<{ mfaPending: boolean }>;
+  /** TOTP challenge (after password, or while MFA session is pending). */
   beginTotpMfaChallenge: () => Promise<string>;
-  completeTotpMfaLogin: (challengeId: string, otp: string) => Promise<void>;
+  /** Email MFA challenge when the session is already in MFA-pending state. */
+  beginEmailMfaChallenge: () => Promise<string>;
+  /** Complete any MFA challenge (TOTP or email code from Appwrite MFA). */
+  completeMfaChallengeLogin: (challengeId: string, otp: string) => Promise<void>;
   /** Abandon MFA sign-in and clear the partial session. */
   cancelMfaLogin: () => Promise<void>;
   loginWithGitHub: () => void;
@@ -204,7 +207,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return sendEmailOtpAndClearSession(trimmed);
   };
 
-  const login = async (email: string, pass: string): Promise<'success' | 'mfa_required'> => {
+  const login = async (email: string, pass: string): Promise<{ mfaPending: boolean }> => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !pass) {
       throw new Error('Email and password are required.');
@@ -212,15 +215,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await account.createEmailPasswordSession(trimmedEmail, pass);
     try {
       await account.get();
+      return { mfaPending: false };
     } catch (err: unknown) {
       if (isMfaFactorsRequiredError(err)) {
-        return 'mfa_required';
+        return { mfaPending: true };
       }
       console.error('❌ Login failed:', err);
       throw err;
     }
-    await commitSessionUser();
-    return 'success';
   };
 
   const beginTotpMfaChallenge = async (): Promise<string> => {
@@ -231,10 +233,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return challenge.$id;
   };
 
-  const completeTotpMfaLogin = async (challengeId: string, otp: string) => {
+  const beginEmailMfaChallenge = async (): Promise<string> => {
+    const challenge = await account.createMfaChallenge(AuthenticationFactor.Email);
+    if (!challenge.$id) {
+      throw new Error('Could not start email verification.');
+    }
+    return challenge.$id;
+  };
+
+  const completeMfaChallengeLogin = async (challengeId: string, otp: string) => {
     const code = otp.trim();
     if (!code) {
-      throw new Error('Enter the code from your authenticator app.');
+      throw new Error('Enter the verification code.');
     }
     await account.updateMfaChallenge(challengeId, code);
     await commitSessionUser();
@@ -295,7 +305,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isAdmin,
         login,
         beginTotpMfaChallenge,
-        completeTotpMfaLogin,
+        beginEmailMfaChallenge,
+        completeMfaChallengeLogin,
         cancelMfaLogin,
         loginWithGitHub,
         sendLoginEmailOtp,

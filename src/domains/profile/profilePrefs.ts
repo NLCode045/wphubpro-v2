@@ -6,10 +6,10 @@ export type ProfilePrefs = {
   language?: string;
   notifyEmail?: boolean;
   notifyPlatform?: boolean;
-  /** When true, this user must sign in with Appwrite email OTP (no password / OAuth on login UI). */
-  loginWithEmailOtpOnly?: boolean;
-  /** When true, this user must sign in with password first, then email OTP. */
-  loginWithPasswordAndEmailOtp?: boolean;
+  /** When false, do not offer email MFA at sign-in (prefs only; Appwrite must expose email factor). */
+  mfaFactorEmailEnabled?: boolean;
+  /** When false, do not offer authenticator MFA at sign-in (prefs only; TOTP must be configured). */
+  mfaFactorAuthenticatorEnabled?: boolean;
 };
 
 /** Appwrite user prefs object (arbitrary JSON). */
@@ -27,10 +27,10 @@ export function parseProfilePrefs(prefs: PrefsRecord | undefined | null): Profil
     language: typeof p.language === 'string' ? p.language : undefined,
     notifyEmail: p.notifyEmail === undefined ? undefined : bool(p.notifyEmail, true),
     notifyPlatform: p.notifyPlatform === undefined ? undefined : bool(p.notifyPlatform, true),
-    loginWithEmailOtpOnly:
-      p.loginWithEmailOtpOnly === undefined ? undefined : bool(p.loginWithEmailOtpOnly, false),
-    loginWithPasswordAndEmailOtp:
-      p.loginWithPasswordAndEmailOtp === undefined ? undefined : bool(p.loginWithPasswordAndEmailOtp, false),
+    mfaFactorEmailEnabled:
+      p.mfaFactorEmailEnabled === undefined ? undefined : bool(p.mfaFactorEmailEnabled, true),
+    mfaFactorAuthenticatorEnabled:
+      p.mfaFactorAuthenticatorEnabled === undefined ? undefined : bool(p.mfaFactorAuthenticatorEnabled, true),
   };
 }
 

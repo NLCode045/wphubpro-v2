@@ -21,15 +21,12 @@ const UserProfileSecurityTab = () => {
   const [mfaOtp, setMfaOtp] = useState('');
   const [mfaMessage, setMfaMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
 
-  const [loginEmailOtpOnly, setLoginEmailOtpOnly] = useState(false);
-  const [loginPwdEmailOtp, setLoginPwdEmailOtp] = useState(false);
-  const [otpPrefMessage, setOtpPrefMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
-  const [pwdOtpPrefMessage, setPwdOtpPrefMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(
-    null,
-  );
+  const forceMfa = Boolean(publicAuth?.forceMfaForAllUsers);
+  const platformMail = publicAuth?.mfaOtpMailEnabled !== false;
+  const platformTotp = publicAuth?.mfaAuthenticatorEnabled !== false;
 
-  const platformRequiresOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly);
-  const platformRequiresPwdAndOtp = Boolean(publicAuth?.requirePasswordAndEmailOtp);
+  const [prefEmailMfa, setPrefEmailMfa] = useState(true);
+  const [prefAuthenticatorMfa, setPrefAuthenticatorMfa] = useState(true);
 
   const factorsQuery = useQuery({
     queryKey: ['mfa-factors'],
@@ -39,43 +36,22 @@ const UserProfileSecurityTab = () => {
 
   useEffect(() => {
     const p = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
-    setLoginEmailOtpOnly(p.loginWithEmailOtpOnly === true);
-    setLoginPwdEmailOtp(p.loginWithPasswordAndEmailOtp === true);
+    setPrefEmailMfa(p.mfaFactorEmailEnabled !== false);
+    setPrefAuthenticatorMfa(p.mfaFactorAuthenticatorEnabled !== false);
   }, [user?.prefs]);
 
-  const otpPrefMutation = useMutation({
-    mutationFn: async (next: boolean) => {
+  const factorPrefMutation = useMutation({
+    mutationFn: async (patch: { mfaFactorEmailEnabled?: boolean; mfaFactorAuthenticatorEnabled?: boolean }) => {
       if (!user) throw new Error('Not signed in.');
-      const base = mergeProfilePrefs(user.prefs as PrefsRecord | null, { loginWithEmailOtpOnly: next });
+      const base = mergeProfilePrefs(user.prefs as PrefsRecord | null, patch);
       await account.updatePrefs(base);
     },
     onSuccess: async () => {
-      setOtpPrefMessage({ variant: 'success', text: 'Sign-in preference saved.' });
       await refreshUser();
     },
     onError: (err: unknown) => {
-      const prefs = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
-      setLoginEmailOtpOnly(prefs.loginWithEmailOtpOnly === true);
       const msg = err instanceof Error ? err.message : 'Could not save preference.';
-      setOtpPrefMessage({ variant: 'danger', text: msg });
-    },
-  });
-
-  const pwdOtpPrefMutation = useMutation({
-    mutationFn: async (next: boolean) => {
-      if (!user) throw new Error('Not signed in.');
-      const base = mergeProfilePrefs(user.prefs as PrefsRecord | null, { loginWithPasswordAndEmailOtp: next });
-      await account.updatePrefs(base);
-    },
-    onSuccess: async () => {
-      setPwdOtpPrefMessage({ variant: 'success', text: 'Sign-in preference saved.' });
-      await refreshUser();
-    },
-    onError: (err: unknown) => {
-      const prefs = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
-      setLoginPwdEmailOtp(prefs.loginWithPasswordAndEmailOtp === true);
-      const msg = err instanceof Error ? err.message : 'Could not save preference.';
-      setPwdOtpPrefMessage({ variant: 'danger', text: msg });
+      setMfaMessage({ variant: 'danger', text: msg });
     },
   });
 
@@ -95,6 +71,22 @@ const UserProfileSecurityTab = () => {
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Could not update password.';
       setPwMessage({ variant: 'danger', text: msg });
+    },
+  });
+
+  const tryEnableMfaMutation = useMutation({
+    mutationFn: () => account.updateMFA(true),
+    onSuccess: async () => {
+      setMfaMessage({ variant: 'success', text: 'MFA is enabled.' });
+      await refreshUser();
+      await queryClient.invalidateQueries({ queryKey: ['mfa-factors'] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Could not enable MFA. Try setting up an authenticator app below first.';
+      setMfaMessage({ variant: 'danger', text: msg });
     },
   });
 
@@ -130,6 +122,19 @@ const UserProfileSecurityTab = () => {
     },
   });
 
+  const removeTotpMutation = useMutation({
+    mutationFn: () => account.deleteMfaAuthenticator(AuthenticatorType.Totp),
+    onSuccess: async () => {
+      setMfaMessage({ variant: 'success', text: 'Authenticator app removed from this account.' });
+      await refreshUser();
+      await queryClient.invalidateQueries({ queryKey: ['mfa-factors'] });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Could not remove authenticator.';
+      setMfaMessage({ variant: 'danger', text: msg });
+    },
+  });
+
   const disableMfaMutation = useMutation({
     mutationFn: async () => {
       try {
@@ -155,6 +160,9 @@ const UserProfileSecurityTab = () => {
 
   const mfaEnabled = Boolean(user && typeof user.mfa === 'boolean' && user.mfa);
   const totpReady = factorsQuery.data?.totp === true;
+  const emailReady = factorsQuery.data?.email === true;
+
+  const canTurnOffMfa = mfaEnabled && !forceMfa;
 
   return (
     <div className="d-flex flex-column gap-4">
@@ -225,88 +233,20 @@ const UserProfileSecurityTab = () => {
       <hr className="my-0 border-light" />
 
       <section>
-        <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Email code sign-in</p>
-        <p className="text-muted fs-sm mb-3">
-          When enabled, you sign in with a one-time code sent to your email instead of using your password or GitHub on
-          the login page.
-        </p>
-        {otpPrefMessage ? (
-          <Alert variant={otpPrefMessage.variant} className="py-2 fs-sm mb-3">
-            {otpPrefMessage.text}
-          </Alert>
-        ) : null}
-        {platformRequiresPwdAndOtp ? (
-          <Alert variant="info" className="py-2 fs-sm mb-0">
-            The platform already requires password and email code for everyone. You do not need a personal setting.
-          </Alert>
-        ) : platformRequiresOtpOnly ? (
-          <Alert variant="info" className="py-2 fs-sm mb-0">
-            The platform is already set to email code sign-in only for all accounts. Password and social sign-in are
-            disabled on the login page.
-          </Alert>
-        ) : (
-          <Form.Check
-            type="switch"
-            id="profile-login-email-otp-only"
-            className="mb-0"
-            label="Require email code for my account (disable password & GitHub sign-in for me)"
-            checked={loginEmailOtpOnly}
-            disabled={otpPrefMutation.isPending || pwdOtpPrefMutation.isPending}
-            onChange={(e) => {
-              const v = e.target.checked;
-              setLoginEmailOtpOnly(v);
-              setOtpPrefMessage(null);
-              otpPrefMutation.mutate(v);
-            }}
-          />
-        )}
-      </section>
-
-      <hr className="my-0 border-light" />
-
-      <section>
-        <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Password + email code</p>
-        <p className="text-muted fs-sm mb-3">
-          When enabled, you must enter your password and then the one-time code sent to your email every time you sign in.
-          GitHub sign-in is not available for your account on the login page when this applies.
-        </p>
-        {pwdOtpPrefMessage ? (
-          <Alert variant={pwdOtpPrefMessage.variant} className="py-2 fs-sm mb-3">
-            {pwdOtpPrefMessage.text}
-          </Alert>
-        ) : null}
-        {platformRequiresPwdAndOtp ? (
-          <Alert variant="info" className="py-2 fs-sm mb-0">
-            The platform already requires password and email code for all accounts.
-          </Alert>
-        ) : (
-          <Form.Check
-            type="switch"
-            id="profile-login-pwd-email-otp"
-            className="mb-0"
-            label="Require password and email code for my account"
-            checked={loginPwdEmailOtp}
-            disabled={pwdOtpPrefMutation.isPending || otpPrefMutation.isPending}
-            onChange={(e) => {
-              const v = e.target.checked;
-              setLoginPwdEmailOtp(v);
-              setPwdOtpPrefMessage(null);
-              pwdOtpPrefMutation.mutate(v);
-            }}
-          />
-        )}
-      </section>
-
-      <hr className="my-0 border-light" />
-
-      <section>
         <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Multi-factor authentication (MFA)</p>
         <p className="text-muted fs-sm mb-3">
-          Add a time-based one-time password (TOTP) app such as Google Authenticator or 1Password for an extra sign-in step.
+          Add an extra step at sign-in. Your administrator can require MFA for everyone and choose which methods are
+          available.
         </p>
 
+        {forceMfa ? (
+          <Alert variant="info" className="py-2 fs-sm mb-3">
+            Your organization requires multi-factor authentication. You cannot turn MFA off while this policy is active.
+          </Alert>
+        ) : null}
+
         {factorsQuery.isLoading ? (
-          <Spinner animation="border" size="sm" />
+          <Spinner animation="border" size="sm" className="mb-3" />
         ) : null}
 
         {mfaMessage ? (
@@ -319,36 +259,57 @@ const UserProfileSecurityTab = () => {
           <span className={`badge ${mfaEnabled ? 'badge-soft-success' : 'badge-soft-secondary'} fs-xs`}>
             {mfaEnabled ? 'MFA on' : 'MFA off'}
           </span>
-          {totpReady ? (
-            <span className="badge badge-soft-info fs-xs">TOTP configured</span>
-          ) : (
-            <span className="text-muted fs-xs">TOTP not configured</span>
-          )}
+          {emailReady ? <span className="badge badge-soft-info fs-xs">Email OTP available</span> : null}
+          {totpReady ? <span className="badge badge-soft-info fs-xs">Authenticator configured</span> : null}
         </div>
 
-        {!mfaEnabled && !mfaUri ? (
-          <Button
-            variant="outline-primary"
-            size="sm"
-            disabled={startTotpMutation.isPending}
-            onClick={() => {
-              setMfaMessage(null);
-              startTotpMutation.mutate();
-            }}
-          >
-            {startTotpMutation.isPending ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Preparing…
-              </>
+        {!mfaEnabled ? (
+          <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={tryEnableMfaMutation.isPending}
+              onClick={() => {
+                setMfaMessage(null);
+                tryEnableMfaMutation.mutate();
+              }}>
+              {tryEnableMfaMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Try enable MFA'}
+            </Button>
+            {!forceMfa ? (
+              <span className="text-muted fs-xs">
+                If this fails, set up an authenticator app below — MFA turns on when you verify the first code.
+              </span>
             ) : (
-              'Set up authenticator app'
+              <span className="text-muted fs-xs">Complete at least one method below. MFA is required.</span>
             )}
-          </Button>
+          </div>
+        ) : null}
+
+        {platformTotp && !mfaUri && (!totpReady || !mfaEnabled) ? (
+          <div className="mb-3">
+            <Button
+              variant="outline-primary"
+              size="sm"
+              disabled={startTotpMutation.isPending}
+              onClick={() => {
+                setMfaMessage(null);
+                startTotpMutation.mutate();
+              }}
+            >
+              {startTotpMutation.isPending ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Preparing…
+                </>
+              ) : (
+                'Set up authenticator app'
+              )}
+            </Button>
+          </div>
         ) : null}
 
         {mfaUri ? (
-          <div className="border rounded p-3 bg-light">
+          <div className="border rounded p-3 bg-light mb-3">
             <p className="fs-sm fw-semibold mb-2">Scan this QR code</p>
             <p className="fs-xs text-muted mb-3">
               Open Google Authenticator, 1Password, Authy, or another TOTP app and scan the code below. Then enter the
@@ -418,7 +379,79 @@ const UserProfileSecurityTab = () => {
         ) : null}
 
         {mfaEnabled ? (
-          <div className="mt-3">
+          <>
+            <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Active MFA options at sign-in</p>
+            <p className="text-muted fs-sm mb-3">
+              Turn methods on or off for your account. Disabled methods will not be offered after you enter your password.
+              At least one method must stay available if your administrator requires MFA.
+            </p>
+            {platformMail ? (
+              <Form.Group className="mb-2">
+                <Form.Check
+                  type="switch"
+                  id="profile-mfa-pref-email"
+                  label="OTP mail — sign-in codes sent to your email"
+                  checked={prefEmailMfa}
+                  disabled={factorPrefMutation.isPending || !emailReady}
+                  onChange={(e) => {
+                    const v = e.target.checked;
+                    setPrefEmailMfa(v);
+                    setMfaMessage(null);
+                    factorPrefMutation.mutate({ mfaFactorEmailEnabled: v });
+                  }}
+                />
+                {!emailReady ? (
+                  <Form.Text className="d-block">Confirm your email with the platform to use this method.</Form.Text>
+                ) : null}
+              </Form.Group>
+            ) : null}
+            {platformTotp ? (
+              <Form.Group className="mb-3">
+                <Form.Check
+                  type="switch"
+                  id="profile-mfa-pref-totp"
+                  label="Authenticator app (TOTP)"
+                  checked={prefAuthenticatorMfa}
+                  disabled={factorPrefMutation.isPending || !totpReady}
+                  onChange={(e) => {
+                    const v = e.target.checked;
+                    setPrefAuthenticatorMfa(v);
+                    setMfaMessage(null);
+                    factorPrefMutation.mutate({ mfaFactorAuthenticatorEnabled: v });
+                  }}
+                />
+                {!totpReady ? (
+                  <Form.Text className="d-block">Set up an authenticator above to use this at sign-in.</Form.Text>
+                ) : null}
+              </Form.Group>
+            ) : null}
+          </>
+        ) : null}
+
+        {totpReady && mfaEnabled ? (
+          <div className="mb-3">
+            <Button
+              variant="outline-danger"
+              size="sm"
+              disabled={removeTotpMutation.isPending || (forceMfa && !emailReady)}
+              onClick={() => {
+                if (!window.confirm('Remove the authenticator app from this account?')) return;
+                setMfaMessage(null);
+                removeTotpMutation.mutate();
+              }}
+            >
+              {removeTotpMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Remove authenticator app'}
+            </Button>
+            {forceMfa && !emailReady ? (
+              <p className="text-muted fs-xs mt-2 mb-0">
+                Add email OTP as a backup before removing your only MFA method.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {canTurnOffMfa ? (
+          <div className="mt-2">
             <Button
               variant="outline-danger"
               size="sm"
@@ -429,7 +462,7 @@ const UserProfileSecurityTab = () => {
                 disableMfaMutation.mutate();
               }}
             >
-              {disableMfaMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Disable MFA'}
+              {disableMfaMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Turn off MFA'}
             </Button>
           </div>
         ) : null}

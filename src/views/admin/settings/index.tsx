@@ -130,6 +130,15 @@ function findStripePriceSelectValue(
   return null;
 }
 
+function boolFromAuthRecord(v: Record<string, string>, key: string, defaultVal: boolean): boolean {
+  const s = v[key];
+  if (s === undefined || s === '') return defaultVal;
+  const t = s.toLowerCase();
+  if (t === 'true' || t === '1') return true;
+  if (t === 'false' || t === '0') return false;
+  return defaultVal;
+}
+
 const AdminPlatformSettingsPage = () => {
   const { isAdmin, user } = useAuth();
   const { setMode } = useDashboardNav();
@@ -156,8 +165,9 @@ const AdminPlatformSettingsPage = () => {
 
   const [stripeDefaultPriceId, setStripeDefaultPriceId] = useState('');
 
-  const [requireEmailOtpOnly, setRequireEmailOtpOnly] = useState(false);
-  const [requirePasswordAndEmailOtp, setRequirePasswordAndEmailOtp] = useState(false);
+  const [forceMfaForAllUsers, setForceMfaForAllUsers] = useState(false);
+  const [mfaOtpMailEnabled, setMfaOtpMailEnabled] = useState(true);
+  const [mfaAuthenticatorEnabled, setMfaAuthenticatorEnabled] = useState(true);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -184,9 +194,9 @@ const AdminPlatformSettingsPage = () => {
     setStripeDefaultPriceId(stripe.defaultSignupPlanPriceId ?? '');
 
     const auth = recordFromValue(map.get('auth'));
-    const pwdOtp = Boolean(auth.requirePasswordAndEmailOtp);
-    setRequirePasswordAndEmailOtp(pwdOtp);
-    setRequireEmailOtpOnly(Boolean(auth.requireEmailOtpOnly));
+    setForceMfaForAllUsers(boolFromAuthRecord(auth, 'forceMfaForAllUsers', false));
+    setMfaOtpMailEnabled(boolFromAuthRecord(auth, 'mfaOtpMailEnabled', true));
+    setMfaAuthenticatorEnabled(boolFromAuthRecord(auth, 'mfaAuthenticatorEnabled', true));
   }, [items]);
 
   const catalogPriceIds = useMemo(() => catalogPriceIdSet(stripePlans), [stripePlans]);
@@ -304,13 +314,14 @@ const AdminPlatformSettingsPage = () => {
       await upsert.mutateAsync({
         category: 'auth',
         settings: {
-          requireEmailOtpOnly,
-          requirePasswordAndEmailOtp,
+          forceMfaForAllUsers,
+          mfaOtpMailEnabled,
+          mfaAuthenticatorEnabled,
         },
       });
       showNotification({
         title: 'Saved',
-        message: 'Authentication settings were updated.',
+        message: 'Security settings were updated.',
         variant: 'success',
       });
     } catch (err) {
@@ -493,28 +504,45 @@ const AdminPlatformSettingsPage = () => {
                   <Col lg={8} xl={6}>
                     <Card className="border h-100">
                       <Card.Body>
-                        <Card.Title as="h5">Authentication</Card.Title>
+                        <Card.Title as="h5">Security · MFA</Card.Title>
                         <Card.Text className="text-muted small">
-                          Controls Appwrite email OTP on the login page. Stored under platform key <code>auth</code>.
-                          If both switches are on, password + email code wins (email-only mode is ignored).
+                          Multi-factor authentication policy. Stored under platform key <code>auth</code>.
                         </Card.Text>
+                        <Form.Group className="mb-3">
+                          <Form.Check
+                            type="switch"
+                            id="admin-force-mfa-all"
+                            label="Force MFA for all users"
+                            checked={forceMfaForAllUsers}
+                            onChange={(e) => setForceMfaForAllUsers(e.target.checked)}
+                            disabled={upsert.isPending}
+                          />
+                          <Form.Text className="d-block">
+                            When on, users cannot turn MFA off in their profile; they must complete MFA setup.
+                          </Form.Text>
+                        </Form.Group>
+                        <p className="text-muted small fw-semibold mb-2">Available MFA methods</p>
+                        <p className="text-muted small mb-2">
+                          Enable or disable each method for the whole platform. Disabled methods are hidden at sign-in and
+                          in profile.
+                        </p>
                         <Form.Group className="mb-2">
                           <Form.Check
                             type="switch"
-                            id="admin-require-password-email-otp"
-                            label="Require password and email code for all users"
-                            checked={requirePasswordAndEmailOtp}
-                            onChange={(e) => setRequirePasswordAndEmailOtp(e.target.checked)}
+                            id="admin-mfa-otp-mail"
+                            label="OTP mail"
+                            checked={mfaOtpMailEnabled}
+                            onChange={(e) => setMfaOtpMailEnabled(e.target.checked)}
                             disabled={upsert.isPending}
                           />
                         </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Check
                             type="switch"
-                            id="admin-require-email-otp-only"
-                            label="Require email code only (hide password & GitHub on login)"
-                            checked={requireEmailOtpOnly}
-                            onChange={(e) => setRequireEmailOtpOnly(e.target.checked)}
+                            id="admin-mfa-authenticator"
+                            label="Authenticator (TOTP)"
+                            checked={mfaAuthenticatorEnabled}
+                            onChange={(e) => setMfaAuthenticatorEnabled(e.target.checked)}
                             disabled={upsert.isPending}
                           />
                         </Form.Group>

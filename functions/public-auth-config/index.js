@@ -66,13 +66,14 @@ module.exports = async ({ req, res, log, error }) => {
   try {
     if (actionRaw === "public_auth_config") {
       const auth = await readAuthSettings();
-      const requirePasswordAndEmailOtp = Boolean(auth.requirePasswordAndEmailOtp);
-      const requireEmailOtpOnly =
-        Boolean(auth.requireEmailOtpOnly) && !requirePasswordAndEmailOtp;
+      const forceMfaForAllUsers = Boolean(auth.forceMfaForAllUsers);
+      const mfaOtpMailEnabled = auth.mfaOtpMailEnabled !== false;
+      const mfaAuthenticatorEnabled = auth.mfaAuthenticatorEnabled !== false;
       return ok(res, {
         success: true,
-        requireEmailOtpOnly,
-        requirePasswordAndEmailOtp,
+        forceMfaForAllUsers,
+        mfaOtpMailEnabled,
+        mfaAuthenticatorEnabled,
       });
     }
 
@@ -82,11 +83,8 @@ module.exports = async ({ req, res, log, error }) => {
         return fail(res, "Missing email", 400);
       }
 
-      const auth = await readAuthSettings();
-      const globalPwdOtp = Boolean(auth.requirePasswordAndEmailOtp);
-      const globalOtp = Boolean(auth.requireEmailOtpOnly);
-      let userOtp = false;
-      let userPwdOtp = false;
+      let mfaFactorEmailEnabled = true;
+      let mfaFactorAuthenticatorEnabled = true;
 
       try {
         const listRes = await users.list({
@@ -95,24 +93,27 @@ module.exports = async ({ req, res, log, error }) => {
         const batch = listRes.users || listRes.documents || [];
         if (batch.length > 0) {
           const prefs = batch[0].prefs || {};
-          userOtp = prefs.loginWithEmailOtpOnly === true || prefs.loginWithEmailOtpOnly === "true";
-          userPwdOtp =
-            prefs.loginWithPasswordAndEmailOtp === true || prefs.loginWithPasswordAndEmailOtp === "true";
+          if (prefs.mfaFactorEmailEnabled === false || prefs.mfaFactorEmailEnabled === "false") {
+            mfaFactorEmailEnabled = false;
+          }
+          if (prefs.mfaFactorAuthenticatorEnabled === false || prefs.mfaFactorAuthenticatorEnabled === "false") {
+            mfaFactorAuthenticatorEnabled = false;
+          }
         }
       } catch (lookupErr) {
         log("users.list by email failed: " + lookupErr.message);
       }
 
-      const passwordAndOtp = globalPwdOtp || userPwdOtp;
-      const otpOnly = !passwordAndOtp && (globalOtp || userOtp);
       return ok(res, {
         success: true,
-        otpOnly,
-        globalOtp,
-        userOtp,
-        passwordAndOtp,
-        globalPwdOtp,
-        userPwdOtp,
+        otpOnly: false,
+        globalOtp: false,
+        userOtp: false,
+        passwordAndOtp: false,
+        globalPwdOtp: false,
+        userPwdOtp: false,
+        mfaFactorEmailEnabled,
+        mfaFactorAuthenticatorEnabled,
       });
     }
 

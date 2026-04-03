@@ -1,179 +1,215 @@
 import AppLogo from '@/components/AppLogo'
 import { ROUTE_PATHS } from '@/config/routePaths'
-import { fetchLoginMethods, useAuth, usePublicAuthConfig } from '@/domains/auth'
+import { useAuth, usePublicAuthConfig } from '@/domains/auth'
+import { fetchLoginMethods, type LoginMethodsResult } from '@/domains/auth/publicAuthConfig'
 import { currentYear } from '@/helpers'
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { account } from '@/services/appwrite'
+import { useEffect, useState, type FormEvent } from 'react'
 import { FaGithub } from 'react-icons/fa6'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
-type SignInMode = 'password' | 'otp'
+/** Sign-in with email + password; second step only when Appwrite requires MFA (user has MFA enabled). */
+type PasswordSignInFlow =
+  | { step: 'password' }
+  | { step: 'pick_second'; mfaPending: boolean }
+  | { step: 'email_verification'; mode: 'token'; userId: string }
+  | { step: 'email_verification'; mode: 'mfa'; challengeId: string }
+  | { step: 'totp'; challengeId: string }
 
 const SignInPage = () => {
   const {
     login,
+    refreshUser,
     beginTotpMfaChallenge,
-    completeTotpMfaLogin,
+    beginEmailMfaChallenge,
+    completeMfaChallengeLogin,
     cancelMfaLogin,
     loginWithGitHub,
-    sendLoginEmailOtp,
     verifyLoginEmailOtp,
-    beginDoubleAuthAfterPassword,
   } = useAuth()
+  const navigate = useNavigate()
   const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [pwdFlow, setPwdFlow] = useState<PasswordSignInFlow>({ step: 'password' })
 
-  const [mode, setMode] = useState<SignInMode>('password')
-  const [otpUserId, setOtpUserId] = useState<string | null>(null)
-  const [otpCode, setOtpCode] = useState('')
-  /** True when OTP step follows a successful password check (password + email code). */
-  const [otpAfterPassword, setOtpAfterPassword] = useState(false)
-
-  const [mfaPending, setMfaPending] = useState(false)
-  const [mfaChallengeId, setMfaChallengeId] = useState<string | null>(null)
-  const [mfaTotpCode, setMfaTotpCode] = useState('')
-  const [showAuthenticatorHint, setShowAuthenticatorHint] = useState(false)
-
-  const globalPwdOtp = Boolean(publicAuth?.requirePasswordAndEmailOtp) && !publicAuthError
-  const globalOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly) && !publicAuthError
+  const [pickSecondFactors, setPickSecondFactors] = useState<{ totp: boolean; email: boolean } | null>(null)
+  const [pickSecondPrefs, setPickSecondPrefs] = useState<LoginMethodsResult | null>(null)
+  const [pickSecondLoading, setPickSecondLoading] = useState(false)
 
   useEffect(() => {
-    if (publicAuthLoading || publicAuthError) return
-    if (globalOtpOnly) {
-      setMode('otp')
-      setOtpAfterPassword(false)
-    } else {
-      setMode('password')
+    if (pwdFlow.step !== 'pick_second') {
+      setPickSecondFactors(null)
+      setPickSecondPrefs(null)
+      setPickSecondLoading(false)
+      return
     }
-  }, [globalOtpOnly, publicAuthLoading, publicAuthError])
-
-  const beginOtpSignIn = useCallback(
-    async (emailAddr: string) => {
-      const trimmed = emailAddr.trim()
-      if (!trimmed) {
-        throw new Error('Enter your email address.')
+    const em = email.trim()
+    if (!em) {
+      setPickSecondFactors(null)
+      setPickSecondPrefs(null)
+      return
+    }
+    let cancelled = false
+    setPickSecondLoading(true)
+    ;(async () => {
+      try {
+        const [factors, lm] = await Promise.all([account.listMfaFactors(), fetchLoginMethods(em)])
+        if (!cancelled) {
+          setPickSecondFactors({ totp: factors.totp, email: factors.email })
+          setPickSecondPrefs(lm)
+        }
+      } catch {
+        if (!cancelled) {
+          setPickSecondFactors(null)
+          setPickSecondPrefs(null)
+        }
+      } finally {
+        if (!cancelled) setPickSecondLoading(false)
       }
-      const { userId } = await sendLoginEmailOtp(trimmed)
-      setOtpUserId(userId)
-    },
-    [sendLoginEmailOtp],
-  )
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [pwdFlow.step, email])
 
   const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
-      const methods = await fetchLoginMethods(email.trim())
-      if (methods.passwordAndOtp) {
-        const { userId } = await beginDoubleAuthAfterPassword(email, password)
-        setOtpUserId(userId)
-        setOtpAfterPassword(true)
-        setMode('otp')
-        setLoading(false)
+      const { mfaPending } = await login(email, password)
+      setVerificationCode('')
+      if (!mfaPending) {
+        await refreshUser()
+        navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
         return
       }
-      if (methods.otpOnly) {
-        setOtpAfterPassword(false)
-        setMode('otp')
-        await beginOtpSignIn(email)
-        setLoading(false)
-        return
-      }
-      const loginResult = await login(email, password)
-      if (loginResult === 'mfa_required') {
-        try {
-          const challengeId = await beginTotpMfaChallenge()
-          setMfaChallengeId(challengeId)
-          setMfaTotpCode('')
-          setMfaPending(true)
-          setError(null)
-        } catch (challengeErr: unknown) {
-          await cancelMfaLogin()
-          setError(
-            challengeErr instanceof Error ? challengeErr.message : 'Could not start authenticator sign-in.',
-          )
-        }
-        setLoading(false)
-        return
-      }
+      setPwdFlow({ step: 'pick_second', mfaPending })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.')
-      setLoading(false)
-    }
-  }
-
-  const handleSendOtp = async (e: FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
-    try {
-      setOtpAfterPassword(false)
-      await beginOtpSignIn(email)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not send verification code.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleVerifyOtp = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!otpUserId) {
-      setError('Send a verification code first.')
-      return
-    }
+  const handlePickEmail = async () => {
+    if (pwdFlow.step !== 'pick_second') return
     setError(null)
     setLoading(true)
+    setVerificationCode('')
     try {
-      await verifyLoginEmailOtp(otpUserId, otpCode)
+      const challengeId = await beginEmailMfaChallenge()
+      setPwdFlow({ step: 'email_verification', mode: 'mfa', challengeId })
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Invalid or expired code.')
+      setError(err instanceof Error ? err.message : 'Could not send verification email.')
+    } finally {
       setLoading(false)
     }
   }
 
-  const switchToPasswordMode = () => {
-    setMode('password')
-    setOtpUserId(null)
-    setOtpCode('')
-    setOtpAfterPassword(false)
+  const handlePickAuthenticator = async () => {
     setError(null)
+    setLoading(true)
+    setVerificationCode('')
+    try {
+      const challengeId = await beginTotpMfaChallenge()
+      setPwdFlow({ step: 'totp', challengeId })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not start authenticator verification.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const resetMfaSignIn = async () => {
+  const handleVerifySecondFactor = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    try {
+      if (pwdFlow.step === 'email_verification') {
+        if (pwdFlow.mode === 'token') {
+          await verifyLoginEmailOtp(pwdFlow.userId, verificationCode)
+        } else {
+          await completeMfaChallengeLogin(pwdFlow.challengeId, verificationCode)
+        }
+      } else if (pwdFlow.step === 'totp') {
+        await completeMfaChallengeLogin(pwdFlow.challengeId, verificationCode)
+      }
+      await refreshUser()
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid or expired code.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const leavePickSecond = async () => {
     await cancelMfaLogin()
-    setMfaPending(false)
-    setMfaChallengeId(null)
-    setMfaTotpCode('')
+    setPwdFlow({ step: 'password' })
+    setVerificationCode('')
     setError(null)
   }
 
-  const handleVerifyMfaTotp = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!mfaChallengeId) {
-      setError('Authenticator step is not ready. Try signing in again.')
+  const cancelCodeStep = async () => {
+    if (pwdFlow.step === 'email_verification' && pwdFlow.mode === 'token') {
+      setPwdFlow({ step: 'password' })
+      setVerificationCode('')
+      setError(null)
       return
     }
+    await cancelMfaLogin()
+    setPwdFlow({ step: 'password' })
+    setVerificationCode('')
     setError(null)
-    setLoading(true)
-    try {
-      await completeTotpMfaLogin(mfaChallengeId, mfaTotpCode)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Invalid or expired code.')
-      setLoading(false)
-    }
   }
 
-  const showMfaTotpPath = mfaPending
-  const showPasswordPath = !globalOtpOnly && mode === 'password' && !showMfaTotpPath
-  const showOtpPath = (globalOtpOnly || mode === 'otp') && !showMfaTotpPath
-  const showGithubOnPasswordPath = !globalOtpOnly && !globalPwdOtp
-  const showEmailCodeInsteadLink = !globalOtpOnly && !globalPwdOtp
+  const platformMail = publicAuth?.mfaOtpMailEnabled !== false && !publicAuthError
+  const platformTotp = publicAuth?.mfaAuthenticatorEnabled !== false && !publicAuthError
+  const pickSecondMfaPending = pwdFlow.step === 'pick_second' ? pwdFlow.mfaPending : false
+  const showEmailMfaChoice =
+    platformMail &&
+    pickSecondFactors?.email === true &&
+    pickSecondPrefs?.mfaFactorEmailEnabled !== false
+  const showTotpMfaChoice =
+    platformTotp &&
+    pickSecondFactors?.totp === true &&
+    pickSecondPrefs?.mfaFactorAuthenticatorEnabled !== false
+  /** Second step only after password when MFA is required (pick_second). */
+  const showEmailSecondStep = !pickSecondLoading && showEmailMfaChoice
+  const showTotpSecondStep = !pickSecondLoading && showTotpMfaChoice
+  const pickSecondMisconfigured =
+    pwdFlow.step === 'pick_second' &&
+    pickSecondMfaPending &&
+    !pickSecondLoading &&
+    pickSecondFactors != null &&
+    pickSecondPrefs != null &&
+    !showEmailMfaChoice &&
+    !showTotpMfaChoice
+
+  const showPasswordStep = pwdFlow.step === 'password'
+  const showPickSecond = pwdFlow.step === 'pick_second'
+  const showEmailCodeStep = pwdFlow.step === 'email_verification'
+  const showTotpStep = pwdFlow.step === 'totp'
+
+  const brandLine = (() => {
+    if (pwdFlow.step === 'pick_second') {
+      return 'Choose how you want to verify: email or authenticator app.'
+    }
+    if (pwdFlow.step === 'email_verification') {
+      return `Enter the code we sent to ${email.trim() || 'your email'}.`
+    }
+    if (pwdFlow.step === 'totp') {
+      return 'Enter the 6-digit code from your authenticator app.'
+    }
+    return "Let's get you signed in. Enter your email and password to continue."
+  })()
 
   return (
     <div className="auth-box overflow-hidden align-items-center d-flex" style={{ minHeight: '100vh' }}>
@@ -187,15 +223,7 @@ const SignInPage = () => {
 
               <div className="auth-brand text-center mb-4">
                 <AppLogo />
-                <p className="text-muted w-lg-75 mt-3 mx-auto">
-                  {showMfaTotpPath
-                    ? 'Enter the 6-digit code from your authenticator app to finish signing in.'
-                    : globalOtpOnly
-                      ? 'Sign in with a one-time code sent to your email.'
-                      : globalPwdOtp
-                        ? 'Enter your email and password, then confirm with a code sent to your email.'
-                        : "Let's get you signed in. Enter your email and password to continue."}
-                </p>
+                <p className="text-muted w-lg-75 mt-3 mx-auto">{brandLine}</p>
               </div>
 
               {publicAuthLoading ? (
@@ -211,65 +239,11 @@ const SignInPage = () => {
                 </Alert>
               ) : null}
 
-              {!publicAuthLoading && showMfaTotpPath ? (
-                <Form onSubmit={handleVerifyMfaTotp}>
-                  {error && (
-                    <Alert variant="danger" className="mb-3 py-2">
-                      {error}
-                    </Alert>
-                  )}
-                  <p className="text-muted fs-sm mb-3">
-                    Open your authenticator app and enter the code for <strong>{email.trim() || 'your account'}</strong>.
-                  </p>
-                  <div className="mb-3 form-group">
-                    <FormLabel>Authenticator code</FormLabel>
-                    <FormControl
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="6-digit code"
-                      value={mfaTotpCode}
-                      onChange={(e) => setMfaTotpCode(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  <div className="d-grid gap-2 mb-3">
-                    <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
-                      {loading ? (
-                        <>
-                          <Spinner animation="border" size="sm" className="me-2" />
-                          Verifying…
-                        </>
-                      ) : (
-                        'Verify and sign in'
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline-secondary"
-                      size="sm"
-                      disabled={loading}
-                      onClick={() => {
-                        void resetMfaSignIn()
-                      }}>
-                      Cancel
-                    </Button>
-                  </div>
-                </Form>
-              ) : null}
-
-              {!publicAuthLoading && showPasswordPath ? (
+              {!publicAuthLoading && showPasswordStep && (
                 <Form onSubmit={handlePasswordSubmit}>
-                  {error && (
+                  {error ? (
                     <Alert variant="danger" className="mb-3 py-2">
                       {error}
-                    </Alert>
-                  )}
-
-                  {showAuthenticatorHint ? (
-                    <Alert variant="info" className="py-2 fs-sm mb-3">
-                      Use your email and password first. If your account uses two-step verification with an authenticator
-                      app, you will enter a 6-digit code on the next step.
                     </Alert>
                   ) : null}
 
@@ -313,176 +287,143 @@ const SignInPage = () => {
                       {loading ? (
                         <>
                           <Spinner animation="border" size="sm" className="me-2" />
-                          Signing in…
+                          Verifying…
                         </>
                       ) : (
-                        'Sign In'
+                        'Continue'
                       )}
                     </Button>
                   </div>
 
-                  {showEmailCodeInsteadLink ? (
-                    <div className="text-center mb-3 d-flex flex-column gap-1">
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        className="text-muted py-0"
-                        onClick={() => {
-                          setShowAuthenticatorHint(true)
-                          setError(null)
-                        }}>
-                        Sign in with authenticator app
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        className="text-muted py-0"
-                        onClick={() => {
-                          setMode('otp')
-                          setOtpUserId(null)
-                          setOtpCode('')
-                          setOtpAfterPassword(false)
-                          setError(null)
-                        }}>
-                        Sign in with email code instead
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  {showGithubOnPasswordPath ? (
-                    <div className="d-grid mb-3">
-                      <Button
-                        type="button"
-                        variant="outline-secondary"
-                        className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
-                        onClick={() => loginWithGitHub()}>
-                        <FaGithub size={18} />
-                        Continue with GitHub
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  {globalPwdOtp ? (
-                    <div className="text-center mb-0">
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        className="text-muted py-0"
-                        onClick={() => {
-                          setShowAuthenticatorHint(true)
-                          setError(null)
-                        }}>
-                        Sign in with authenticator app
-                      </Button>
-                    </div>
-                  ) : null}
+                  <div className="d-grid mb-3">
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
+                      onClick={() => loginWithGitHub()}>
+                      <FaGithub size={18} />
+                      Continue with GitHub
+                    </Button>
+                  </div>
                 </Form>
-              ) : null}
+              )}
 
-              {!publicAuthLoading && showOtpPath ? (
+              {!publicAuthLoading && showPickSecond && (
                 <div>
-                  {error && (
+                  {error ? (
                     <Alert variant="danger" className="mb-3 py-2">
                       {error}
                     </Alert>
-                  )}
-
-                  {!otpUserId ? (
-                    <Form onSubmit={handleSendOtp}>
-                      <div className="mb-3 form-group">
-                        <FormLabel>
-                          Email address <span className="text-danger">*</span>
-                        </FormLabel>
-                        <FormControl
-                          type="email"
-                          autoComplete="email"
-                          placeholder="you@example.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="d-grid mb-3">
-                        <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
-                          {loading ? (
-                            <>
-                              <Spinner animation="border" size="sm" className="me-2" />
-                              Sending…
-                            </>
-                          ) : (
-                            'Send verification code'
-                          )}
-                        </Button>
-                      </div>
-                    </Form>
-                  ) : (
-                    <Form onSubmit={handleVerifyOtp}>
-                      <p className="text-muted fs-sm mb-3">
-                        {otpAfterPassword ? (
-                          <>
-                            Your password was accepted. We emailed a code to <strong>{email.trim()}</strong>. Enter it
-                            below to finish signing in.
-                          </>
-                        ) : (
-                          <>
-                            We sent a code to <strong>{email.trim()}</strong>. Enter it below to finish signing in.
-                          </>
-                        )}
-                      </p>
-                      <div className="mb-3 form-group">
-                        <FormLabel>Verification code</FormLabel>
-                        <FormControl
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                          placeholder="6-digit code"
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="d-grid gap-2 mb-3">
-                        <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
-                          {loading ? (
-                            <>
-                              <Spinner animation="border" size="sm" className="me-2" />
-                              Verifying…
-                            </>
-                          ) : (
-                            'Verify and sign in'
-                          )}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline-secondary"
-                          size="sm"
-                          disabled={loading}
-                          onClick={() => {
-                            if (otpAfterPassword) {
-                              switchToPasswordMode()
-                            } else {
-                              setOtpUserId(null)
-                              setOtpCode('')
-                              setError(null)
-                            }
-                          }}>
-                          {otpAfterPassword ? 'Start over' : 'Use a different email'}
-                        </Button>
-                      </div>
-                    </Form>
-                  )}
-
-                  {!globalOtpOnly ? (
-                    <div className="text-center">
-                      <Button type="button" variant="link" size="sm" className="text-muted" onClick={switchToPasswordMode}>
-                        Back to password sign-in
-                      </Button>
+                  ) : null}
+                  <p className="text-muted fs-sm mb-3">
+                    Your password was accepted. Pick one way to verify—it is the same account either way.
+                  </p>
+                  {pickSecondLoading ? (
+                    <div className="d-flex align-items-center gap-2 text-muted fs-sm mb-3">
+                      <Spinner animation="border" size="sm" />
+                      Loading sign-in options…
                     </div>
                   ) : null}
+                  {pickSecondMisconfigured ? (
+                    <Alert variant="danger" className="py-2 fs-sm mb-3">
+                      No MFA method is available for your account. Contact support or update your security settings in
+                      your profile.
+                    </Alert>
+                  ) : null}
+                  <div className="d-grid gap-2 mb-3">
+                    {showEmailSecondStep ? (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        className="fw-semibold py-2"
+                        disabled={loading || pickSecondLoading}
+                        onClick={() => void handlePickEmail()}>
+                        {loading ? (
+                          <>
+                            <Spinner animation="border" size="sm" className="me-2" />
+                            Preparing…
+                          </>
+                        ) : (
+                          'Email me a code'
+                        )}
+                      </Button>
+                    ) : null}
+                    {showTotpSecondStep ? (
+                      <Button
+                        type="button"
+                        variant="outline-primary"
+                        className="fw-semibold py-2"
+                        disabled={loading || pickSecondLoading}
+                        onClick={() => void handlePickAuthenticator()}>
+                        Use authenticator app
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="text-muted"
+                      disabled={loading}
+                      onClick={() => void leavePickSecond()}>
+                      Back to email and password
+                    </Button>
+                  </div>
                 </div>
-              ) : null}
+              )}
+
+              {!publicAuthLoading && (showEmailCodeStep || showTotpStep) && (
+                <Form onSubmit={handleVerifySecondFactor}>
+                  {error ? (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  ) : null}
+                  {showTotpStep ? (
+                    <p className="text-muted fs-sm mb-3">
+                      Open your authenticator app and enter the code for{' '}
+                      <strong>{email.trim() || 'your account'}</strong>.
+                    </p>
+                  ) : (
+                    <p className="text-muted fs-sm mb-3">
+                      Check your inbox (and spam) for a message from us with your verification code.
+                    </p>
+                  )}
+                  <div className="mb-3 form-group">
+                    <FormLabel>{showTotpStep ? 'Authenticator code' : 'Verification code'}</FormLabel>
+                    <FormControl
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="6-digit code"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="d-grid gap-2 mb-3">
+                    <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2" />
+                          Verifying…
+                        </>
+                      ) : (
+                        'Verify and sign in'
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      size="sm"
+                      disabled={loading}
+                      onClick={() => void cancelCodeStep()}>
+                      Cancel
+                    </Button>
+                  </div>
+                </Form>
+              )}
 
               <p className="text-muted text-center mt-4 mb-0">
                 New here?{' '}

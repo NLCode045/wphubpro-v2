@@ -3,20 +3,25 @@ import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite';
 import { useQuery } from '@tanstack/react-query';
 
 export type PublicAuthConfig = {
-  requireEmailOtpOnly: boolean;
-  requirePasswordAndEmailOtp: boolean;
+  forceMfaForAllUsers: boolean;
+  /** Platform allows email OTP as an MFA method at sign-in (when Appwrite exposes it). */
+  mfaOtpMailEnabled: boolean;
+  /** Platform allows authenticator (TOTP) as an MFA method. */
+  mfaAuthenticatorEnabled: boolean;
 };
 
 export async function fetchPublicAuthConfig(): Promise<PublicAuthConfig> {
   const res = await executeFunction<{
-    requireEmailOtpOnly?: boolean;
-    requirePasswordAndEmailOtp?: boolean;
+    forceMfaForAllUsers?: boolean;
+    mfaOtpMailEnabled?: boolean;
+    mfaAuthenticatorEnabled?: boolean;
   }>(APPWRITE_FUNCTION_IDS.PUBLIC_AUTH_CONFIG, {
     action: 'public_auth_config',
   });
   return {
-    requireEmailOtpOnly: Boolean(res?.requireEmailOtpOnly),
-    requirePasswordAndEmailOtp: Boolean(res?.requirePasswordAndEmailOtp),
+    forceMfaForAllUsers: Boolean(res?.forceMfaForAllUsers),
+    mfaOtpMailEnabled: res?.mfaOtpMailEnabled !== false,
+    mfaAuthenticatorEnabled: res?.mfaAuthenticatorEnabled !== false,
   };
 }
 
@@ -29,32 +34,20 @@ export function usePublicAuthConfig() {
 }
 
 export type LoginMethodsResult = {
-  otpOnly: boolean;
-  globalOtp: boolean;
-  userOtp: boolean;
-  passwordAndOtp: boolean;
-  globalPwdOtp: boolean;
-  userPwdOtp: boolean;
+  mfaFactorEmailEnabled: boolean;
+  mfaFactorAuthenticatorEnabled: boolean;
 };
 
 export async function fetchLoginMethods(email: string): Promise<LoginMethodsResult> {
   const res = await executeFunction<{
-    otpOnly?: boolean;
-    globalOtp?: boolean;
-    userOtp?: boolean;
-    passwordAndOtp?: boolean;
-    globalPwdOtp?: boolean;
-    userPwdOtp?: boolean;
+    mfaFactorEmailEnabled?: boolean;
+    mfaFactorAuthenticatorEnabled?: boolean;
   }>(APPWRITE_FUNCTION_IDS.PUBLIC_AUTH_CONFIG, {
     action: 'login_methods',
     email: email.trim().toLowerCase(),
   });
   return {
-    otpOnly: Boolean(res?.otpOnly),
-    globalOtp: Boolean(res?.globalOtp),
-    userOtp: Boolean(res?.userOtp),
-    passwordAndOtp: Boolean(res?.passwordAndOtp),
-    globalPwdOtp: Boolean(res?.globalPwdOtp),
-    userPwdOtp: Boolean(res?.userPwdOtp),
+    mfaFactorEmailEnabled: res?.mfaFactorEmailEnabled !== false,
+    mfaFactorAuthenticatorEnabled: res?.mfaFactorAuthenticatorEnabled !== false,
   };
 }

@@ -4,6 +4,7 @@ import { account } from '@/services/appwrite';
 import { AuthenticatorType } from 'appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 
 const UserProfileSecurityTab = () => {
@@ -346,20 +347,37 @@ const UserProfileSecurityTab = () => {
           </Button>
         ) : null}
 
-        {mfaUri && mfaSecret ? (
+        {mfaUri ? (
           <div className="border rounded p-3 bg-light">
-            <p className="fs-sm fw-semibold mb-2">Scan or enter the secret</p>
-            <p className="fs-xs text-muted mb-2">
-              In your authenticator app, add an account and scan the QR code if your app supports it, or enter the secret manually.
+            <p className="fs-sm fw-semibold mb-2">Scan this QR code</p>
+            <p className="fs-xs text-muted mb-3">
+              Open Google Authenticator, 1Password, Authy, or another TOTP app and scan the code below. Then enter the
+              6-digit code to confirm.
             </p>
-            <p className="fs-xxs text-break mb-2">
-              <span className="text-muted">otpauth URI · </span>
-              <code>{mfaUri}</code>
-            </p>
-            <p className="fs-xxs text-break mb-3">
-              <span className="text-muted">Secret · </span>
-              <code>{mfaSecret}</code>
-            </p>
+            <div
+              className="d-inline-flex p-3 rounded-3 bg-white border mb-3"
+              role="img"
+              aria-label="QR code to add this account to your authenticator app"
+            >
+              <QRCodeSVG
+                value={mfaUri}
+                size={200}
+                level="M"
+                includeMargin
+                marginSize={2}
+                bgColor="#ffffff"
+                fgColor="#000000"
+              />
+            </div>
+            {mfaSecret ? (
+              <details className="mb-3 fs-xs">
+                <summary className="text-muted cursor-pointer user-select-none" style={{ cursor: 'pointer' }}>
+                  Can&apos;t scan? Enter the secret manually
+                </summary>
+                <p className="text-muted mt-2 mb-1">Copy this key into your app (spaces optional):</p>
+                <code className="d-block text-break p-2 bg-white border rounded small">{mfaSecret}</code>
+              </details>
+            ) : null}
             <Form
               className="d-flex flex-wrap align-items-end gap-2"
               onSubmit={(e) => {

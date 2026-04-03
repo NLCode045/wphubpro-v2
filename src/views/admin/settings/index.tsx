@@ -11,7 +11,7 @@ import {
 } from '@/domains/admin/usePlatformSettings';
 import { useStripePlans } from '@/domains/billing/hooks';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
+import { Alert, Button, Card, Col, Container, Form, Nav, Row, Spinner, Tab } from 'react-bootstrap';
 import Select, {
   type CSSObjectWithLabel,
   type GroupBase,
@@ -328,7 +328,7 @@ const AdminPlatformSettingsPage = () => {
       <Container fluid>
         <PageBreadcrumb
           title="Platform settings"
-          subtitle="Admin · S3, bridge release metadata, and Stripe signup plan (platform_settings)"
+          subtitle="Admin · platform_settings and integrations"
         />
 
         {isLoading && (
@@ -355,189 +355,252 @@ const AdminPlatformSettingsPage = () => {
         )}
 
         {!isLoading && !isError && (
-          <Row className="g-3">
-            <Col lg={6}>
-              <Card className="border h-100">
-                <Card.Body>
-                  <Card.Title as="h5">S3 (library / zip-parser)</Card.Title>
-                  <Card.Text className="text-muted small">
-                    Fallback credentials when S3 env vars are not set on the function. Stored as JSON
-                    under key <code>s3</code>.
-                  </Card.Text>
-                  <Form.Group className="mb-2">
-                    <Form.Label>Bucket</Form.Label>
-                    <Form.Control
-                      value={s3Bucket}
-                      onChange={(e) => setS3Bucket(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </Form.Group>
-                  <Form.Group className="mb-2">
-                    <Form.Label>Region</Form.Label>
-                    <Form.Control
-                      value={s3Region}
-                      onChange={(e) => setS3Region(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </Form.Group>
-                  <Form.Group className="mb-2">
-                    <Form.Label>Access key ID</Form.Label>
-                    <Form.Control
-                      type="password"
-                      value={s3AccessKey}
-                      onChange={(e) => setS3AccessKey(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </Form.Group>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Secret access key</Form.Label>
-                    <Form.Control
-                      type="password"
-                      value={s3SecretKey}
-                      onChange={(e) => setS3SecretKey(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </Form.Group>
-                  <Button
-                    variant="primary"
-                    type="button"
-                    disabled={upsert.isPending}
-                    onClick={() => void saveS3()}>
-                    {upsert.isPending ? 'Saving…' : 'Save S3'}
-                  </Button>
-                </Card.Body>
-              </Card>
-            </Col>
+          <Tab.Container defaultActiveKey="general">
+            <Nav variant="tabs" className="mb-3 flex-wrap">
+              <Nav.Item>
+                <Nav.Link eventKey="general">General</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="bridge">Bridge</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="storage">Storage</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="security">Security</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="financial">Financial</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="communication">Communication</Nav.Link>
+              </Nav.Item>
+            </Nav>
+            <Tab.Content>
+              <Tab.Pane eventKey="general">
+                <Row>
+                  <Col lg={8} xl={6}>
+                    <Card className="border">
+                      <Card.Body>
+                        <Card.Title as="h5">General</Card.Title>
+                        <p className="text-muted mb-0">Coming soon.</p>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </Tab.Pane>
 
-            <Col lg={6}>
-              <Card className="border h-100">
-                <Card.Body>
-                  <Card.Title as="h5">Bridge plugin</Card.Title>
-                  <Card.Text className="text-muted small">
-                    Latest bridge version sent to sites via <code>wp-proxy</code> (
-                    <code>bridge_plugin</code>). Releases normally update this automatically.
-                  </Card.Text>
-                  <Form.Group className="mb-2">
-                    <Form.Label>Version (semver)</Form.Label>
-                    <Form.Control
-                      value={bridgeVersion}
-                      onChange={(e) => setBridgeVersion(e.target.value)}
-                      placeholder="1.0.0"
-                      autoComplete="off"
-                    />
-                  </Form.Group>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Uploaded at</Form.Label>
-                    <Form.Control
-                      value={bridgeUploadedAt}
-                      onChange={(e) => setBridgeUploadedAt(e.target.value)}
-                      placeholder="YYYY-MM-DD HH:mm:ss"
-                      autoComplete="off"
-                    />
-                  </Form.Group>
-                  <Button
-                    variant="primary"
-                    type="button"
-                    disabled={upsert.isPending}
-                    onClick={() => void saveBridge()}>
-                    {upsert.isPending ? 'Saving…' : 'Save bridge'}
-                  </Button>
-                </Card.Body>
-              </Card>
-            </Col>
+              <Tab.Pane eventKey="bridge">
+                <Row>
+                  <Col lg={8} xl={6}>
+                    <Card className="border h-100">
+                      <Card.Body>
+                        <Card.Title as="h5">Bridge plugin</Card.Title>
+                        <Card.Text className="text-muted small">
+                          Latest bridge version sent to sites via <code>wp-proxy</code> (
+                          <code>bridge_plugin</code>). Releases normally update this automatically.
+                        </Card.Text>
+                        <Form.Group className="mb-2">
+                          <Form.Label>Version (semver)</Form.Label>
+                          <Form.Control
+                            value={bridgeVersion}
+                            onChange={(e) => setBridgeVersion(e.target.value)}
+                            placeholder="1.0.0"
+                            autoComplete="off"
+                          />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Uploaded at</Form.Label>
+                          <Form.Control
+                            value={bridgeUploadedAt}
+                            onChange={(e) => setBridgeUploadedAt(e.target.value)}
+                            placeholder="YYYY-MM-DD HH:mm:ss"
+                            autoComplete="off"
+                          />
+                        </Form.Group>
+                        <Button
+                          variant="primary"
+                          type="button"
+                          disabled={upsert.isPending}
+                          onClick={() => void saveBridge()}>
+                          {upsert.isPending ? 'Saving…' : 'Save bridge'}
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </Tab.Pane>
 
-            <Col lg={6}>
-              <Card className="border h-100">
-                <Card.Body>
-                  <Card.Title as="h5">Authentication</Card.Title>
-                  <Card.Text className="text-muted small">
-                    Controls Appwrite email OTP on the login page. Stored under platform key <code>auth</code>. If both
-                    switches are on, password + email code wins (email-only mode is ignored).
-                  </Card.Text>
-                  <Form.Group className="mb-2">
-                    <Form.Check
-                      type="switch"
-                      id="admin-require-password-email-otp"
-                      label="Require password and email code for all users"
-                      checked={requirePasswordAndEmailOtp}
-                      onChange={(e) => setRequirePasswordAndEmailOtp(e.target.checked)}
-                      disabled={upsert.isPending}
-                    />
-                  </Form.Group>
-                  <Form.Group className="mb-3">
-                    <Form.Check
-                      type="switch"
-                      id="admin-require-email-otp-only"
-                      label="Require email code only (hide password & GitHub on login)"
-                      checked={requireEmailOtpOnly}
-                      onChange={(e) => setRequireEmailOtpOnly(e.target.checked)}
-                      disabled={upsert.isPending}
-                    />
-                  </Form.Group>
-                  <Button
-                    variant="primary"
-                    type="button"
-                    disabled={upsert.isPending}
-                    onClick={() => void saveAuth()}>
-                    {upsert.isPending ? 'Saving…' : 'Save authentication'}
-                  </Button>
-                </Card.Body>
-              </Card>
-            </Col>
+              <Tab.Pane eventKey="storage">
+                <Row>
+                  <Col lg={8} xl={6}>
+                    <Card className="border h-100">
+                      <Card.Body>
+                        <Card.Title as="h5">S3 storage</Card.Title>
+                        <Card.Text className="text-muted small">
+                          Fallback credentials when S3 env vars are not set on the function. Stored as JSON under key{' '}
+                          <code>s3</code>.
+                        </Card.Text>
+                        <Form.Group className="mb-2">
+                          <Form.Label>Bucket</Form.Label>
+                          <Form.Control
+                            value={s3Bucket}
+                            onChange={(e) => setS3Bucket(e.target.value)}
+                            autoComplete="off"
+                          />
+                        </Form.Group>
+                        <Form.Group className="mb-2">
+                          <Form.Label>Region</Form.Label>
+                          <Form.Control
+                            value={s3Region}
+                            onChange={(e) => setS3Region(e.target.value)}
+                            autoComplete="off"
+                          />
+                        </Form.Group>
+                        <Form.Group className="mb-2">
+                          <Form.Label>Access key ID</Form.Label>
+                          <Form.Control
+                            type="password"
+                            value={s3AccessKey}
+                            onChange={(e) => setS3AccessKey(e.target.value)}
+                            autoComplete="off"
+                          />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Secret access key</Form.Label>
+                          <Form.Control
+                            type="password"
+                            value={s3SecretKey}
+                            onChange={(e) => setS3SecretKey(e.target.value)}
+                            autoComplete="off"
+                          />
+                        </Form.Group>
+                        <Button
+                          variant="primary"
+                          type="button"
+                          disabled={upsert.isPending}
+                          onClick={() => void saveS3()}>
+                          {upsert.isPending ? 'Saving…' : 'Save storage'}
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </Tab.Pane>
 
-            <Col lg={6}>
-              <Card className="border h-100">
-                <Card.Body>
-                  <Card.Title as="h5">Stripe signup plan</Card.Title>
-                  <Card.Text className="text-muted small">
-                    New accounts get this Stripe price as their initial subscription when set here.
-                    Stored as <code>stripe_signup_plan.defaultSignupPlanPriceId</code> in platform
-                    settings.
-                  </Card.Text>
-                  {plansError && (
-                    <Alert variant="warning" className="small py-2 mb-3">
-                      Could not load Stripe plans:{' '}
-                      {plansQueryError instanceof Error ? plansQueryError.message : 'Unknown error'}
-                    </Alert>
-                  )}
-                  <Form.Group className="mb-3">
-                    <Form.Label htmlFor="admin-stripe-signup-price-select">Default plan for new signups</Form.Label>
-                    {plansLoading ? (
-                      <div className="d-flex align-items-center gap-2 text-muted small py-2">
-                        <Spinner animation="border" size="sm" />
-                        Loading plans…
-                      </div>
-                    ) : (
-                      <Select<StripePriceSelectOption, false, GroupBase<StripePriceSelectOption>>
-                        inputId="admin-stripe-signup-price-select"
-                        className="react-select"
-                        classNamePrefix="react-select"
-                        aria-label="Default Stripe price for new signups"
-                        placeholder="Select a plan…"
-                        options={stripeSignupGroupedOptions}
-                        value={stripeSignupSelectValue}
-                        onChange={(opt: SingleValue<StripePriceSelectOption>) => {
-                          setStripeDefaultPriceId(opt?.value ?? '');
-                        }}
-                        isDisabled={upsert.isPending}
-                        isSearchable
-                        isClearable={false}
-                        menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-                        styles={signupPlanMenuPortalStyles}
-                      />
-                    )}
-                  </Form.Group>
-                  <Button
-                    variant="primary"
-                    type="button"
-                    disabled={upsert.isPending || plansLoading}
-                    onClick={() => void saveStripe()}>
-                    {upsert.isPending ? 'Saving…' : 'Save signup plan'}
-                  </Button>
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
+              <Tab.Pane eventKey="security">
+                <Row>
+                  <Col lg={8} xl={6}>
+                    <Card className="border h-100">
+                      <Card.Body>
+                        <Card.Title as="h5">Authentication</Card.Title>
+                        <Card.Text className="text-muted small">
+                          Controls Appwrite email OTP on the login page. Stored under platform key <code>auth</code>.
+                          If both switches are on, password + email code wins (email-only mode is ignored).
+                        </Card.Text>
+                        <Form.Group className="mb-2">
+                          <Form.Check
+                            type="switch"
+                            id="admin-require-password-email-otp"
+                            label="Require password and email code for all users"
+                            checked={requirePasswordAndEmailOtp}
+                            onChange={(e) => setRequirePasswordAndEmailOtp(e.target.checked)}
+                            disabled={upsert.isPending}
+                          />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                          <Form.Check
+                            type="switch"
+                            id="admin-require-email-otp-only"
+                            label="Require email code only (hide password & GitHub on login)"
+                            checked={requireEmailOtpOnly}
+                            onChange={(e) => setRequireEmailOtpOnly(e.target.checked)}
+                            disabled={upsert.isPending}
+                          />
+                        </Form.Group>
+                        <Button
+                          variant="primary"
+                          type="button"
+                          disabled={upsert.isPending}
+                          onClick={() => void saveAuth()}>
+                          {upsert.isPending ? 'Saving…' : 'Save security'}
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </Tab.Pane>
+
+              <Tab.Pane eventKey="financial">
+                <Row>
+                  <Col lg={8} xl={6}>
+                    <Card className="border h-100">
+                      <Card.Body>
+                        <Card.Title as="h5">Stripe signup plan</Card.Title>
+                        <Card.Text className="text-muted small">
+                          New accounts get this Stripe price as their initial subscription when set here. Stored as{' '}
+                          <code>stripe_signup_plan.defaultSignupPlanPriceId</code> in platform settings.
+                        </Card.Text>
+                        {plansError && (
+                          <Alert variant="warning" className="small py-2 mb-3">
+                            Could not load Stripe plans:{' '}
+                            {plansQueryError instanceof Error ? plansQueryError.message : 'Unknown error'}
+                          </Alert>
+                        )}
+                        <Form.Group className="mb-3">
+                          <Form.Label htmlFor="admin-stripe-signup-price-select">Default plan for new signups</Form.Label>
+                          {plansLoading ? (
+                            <div className="d-flex align-items-center gap-2 text-muted small py-2">
+                              <Spinner animation="border" size="sm" />
+                              Loading plans…
+                            </div>
+                          ) : (
+                            <Select<StripePriceSelectOption, false, GroupBase<StripePriceSelectOption>>
+                              inputId="admin-stripe-signup-price-select"
+                              className="react-select"
+                              classNamePrefix="react-select"
+                              aria-label="Default Stripe price for new signups"
+                              placeholder="Select a plan…"
+                              options={stripeSignupGroupedOptions}
+                              value={stripeSignupSelectValue}
+                              onChange={(opt: SingleValue<StripePriceSelectOption>) => {
+                                setStripeDefaultPriceId(opt?.value ?? '');
+                              }}
+                              isDisabled={upsert.isPending}
+                              isSearchable
+                              isClearable={false}
+                              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+                              styles={signupPlanMenuPortalStyles}
+                            />
+                          )}
+                        </Form.Group>
+                        <Button
+                          variant="primary"
+                          type="button"
+                          disabled={upsert.isPending || plansLoading}
+                          onClick={() => void saveStripe()}>
+                          {upsert.isPending ? 'Saving…' : 'Save signup plan'}
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </Tab.Pane>
+
+              <Tab.Pane eventKey="communication">
+                <Row>
+                  <Col lg={8} xl={6}>
+                    <Card className="border">
+                      <Card.Body>
+                        <Card.Title as="h5">Communication</Card.Title>
+                        <p className="text-muted mb-0">Coming soon.</p>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </Tab.Pane>
+            </Tab.Content>
+          </Tab.Container>
         )}
       </Container>
     </>

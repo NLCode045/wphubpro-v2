@@ -60,21 +60,19 @@ async function ensureStripeCustomerForUser(user, databases, stripe, env, options
   }
 
   if (!skipDefaultSubscription) {
-    let defaultPriceId = env.STRIPE_FREE_TIER_PRICE_ID;
-    if (!defaultPriceId) {
-      try {
-        const settingsDocs = await databases.listDocuments(
-          DATABASE_ID,
-          env.SETTINGS_COLLECTION_ID || "platform_settings",
-          [sdk.Query.equal("key", "stripe_signup_plan"), sdk.Query.limit(1)]
-        );
-        if (settingsDocs.documents?.length > 0 && settingsDocs.documents[0].value) {
-          const stripeSettings = JSON.parse(settingsDocs.documents[0].value);
-          defaultPriceId = stripeSettings.defaultSignupPlanPriceId || null;
-        }
-      } catch {
-        // optional settings
+    let defaultPriceId = null;
+    try {
+      const settingsDocs = await databases.listDocuments(
+        DATABASE_ID,
+        env.SETTINGS_COLLECTION_ID || "platform_settings",
+        [sdk.Query.equal("key", "stripe_signup_plan"), sdk.Query.limit(1)]
+      );
+      if (settingsDocs.documents?.length > 0 && settingsDocs.documents[0].value) {
+        const stripeSettings = JSON.parse(settingsDocs.documents[0].value);
+        defaultPriceId = (stripeSettings.defaultSignupPlanPriceId || "").trim() || null;
       }
+    } catch {
+      // optional settings
     }
     if (defaultPriceId) {
       try {

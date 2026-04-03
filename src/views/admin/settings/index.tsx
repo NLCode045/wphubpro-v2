@@ -12,7 +12,12 @@ import {
 import { useStripePlans } from '@/domains/billing/hooks';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
-import type { StripePlan } from '@/types';
+import Select, {
+  type CSSObjectWithLabel,
+  type GroupBase,
+  type SingleValue,
+} from 'react-select';
+import type { StripePlan, StripePlanAllPrice } from '@/types';
 import { useNavigate } from 'react-router';
 
 function recordFromValue(v: unknown): Record<string, string> {
@@ -39,13 +44,90 @@ function formatPlanMoney(amount: number, currency: string): string {
   }
 }
 
+function isRecurringStripePrice(p: Pick<StripePlanAllPrice, 'interval'>): boolean {
+  return p.interval !== 'one_time';
+}
+
 function catalogPriceIdSet(plans: StripePlan[]): Set<string> {
   const s = new Set<string>();
   for (const p of plans) {
+    for (const ap of p.allPrices ?? []) {
+      if (isRecurringStripePrice(ap)) s.add(ap.id);
+    }
     if (p.monthlyPriceId) s.add(p.monthlyPriceId);
     if (p.yearlyPriceId) s.add(p.yearlyPriceId);
   }
   return s;
+}
+
+function monthYearFallbackPrices(plan: StripePlan): StripePlanAllPrice[] {
+  const out: StripePlanAllPrice[] = [];
+  if (plan.monthlyPriceId) {
+    out.push({
+      id: plan.monthlyPriceId,
+      amount: plan.monthlyPrice,
+      currency: plan.currency,
+      interval: 'month',
+      interval_count: 1,
+    });
+  }
+  if (plan.yearlyPriceId) {
+    out.push({
+      id: plan.yearlyPriceId,
+      amount: plan.yearlyPrice,
+      currency: plan.currency,
+      interval: 'year',
+      interval_count: 1,
+    });
+  }
+  return out;
+}
+
+/** Recurring prices for the dropdown: prefer `allPrices` from Stripe; else monthly/yearly. */
+function recurringPricesForSelect(plan: StripePlan): StripePlanAllPrice[] {
+  const fromAll = (plan.allPrices ?? []).filter(isRecurringStripePrice);
+  const list = fromAll.length > 0 ? fromAll : monthYearFallbackPrices(plan);
+  const byId = new Map<string, StripePlanAllPrice>();
+  for (const row of list) {
+    byId.set(row.id, row);
+  }
+  return [...byId.values()];
+}
+
+function formatRecurringIntervalLabel(interval: string, intervalCount: number): string {
+  if (interval === 'one_time') return 'One-time';
+  const n = intervalCount > 1 ? intervalCount : 1;
+  if (interval === 'month') {
+    return n === 1 ? 'Monthly' : `Every ${n} months`;
+  }
+  if (interval === 'year') {
+    return n === 1 ? 'Yearly' : `Every ${n} years`;
+  }
+  if (interval === 'week') {
+    return n === 1 ? 'Weekly' : `Every ${n} weeks`;
+  }
+  if (interval === 'day') {
+    return n === 1 ? 'Daily' : `Every ${n} days`;
+  }
+  return n === 1 ? interval : `Every ${n} ${interval}`;
+}
+
+type StripePriceSelectOption = { value: string; label: string };
+
+const signupPlanMenuPortalStyles = {
+  menuPortal: (base: CSSObjectWithLabel) => ({ ...base, zIndex: 2000 }),
+};
+
+function findStripePriceSelectValue(
+  groups: GroupBase<StripePriceSelectOption>[],
+  priceId: string,
+): StripePriceSelectOption | null {
+  for (const g of groups) {
+    for (const o of g.options) {
+      if (o.value === priceId) return o;
+    }
+  }
+  return null;
 }
 
 const AdminPlatformSettingsPage = () => {
@@ -105,6 +187,43 @@ const AdminPlatformSettingsPage = () => {
     if (!id || catalogPriceIds.has(id)) return '';
     return id;
   }, [stripeDefaultPriceId, catalogPriceIds]);
+
+  const stripeSignupGroupedOptions = useMemo((): GroupBase<StripePriceSelectOption>[] => {
+    const generalOptions: StripePriceSelectOption[] = [
+      {
+        value: '',
+        label: 'None — no automatic subscription for new signups',
+      },
+    ];
+    if (orphanSignupPriceId) {
+      generalOptions.push({
+        value: orphanSignupPriceId,
+        label: `Current (not in catalog): ${orphanSignupPriceId}`,
+      });
+    }
+    const planGroups: GroupBase<StripePriceSelectOption>[] = stripePlans.reduce(
+      (acc, plan) => {
+        const rows = recurringPricesForSelect(plan);
+        if (rows.length === 0) return acc;
+        acc.push({
+          label: plan.name,
+          options: rows.map((row) => ({
+            value: row.id,
+            label: `${plan.name} · ${formatRecurringIntervalLabel(row.interval, row.interval_count)} · ${formatPlanMoney(row.amount, row.currency)}`,
+          })),
+        });
+        return acc;
+      },
+      [] as GroupBase<StripePriceSelectOption>[],
+    );
+
+    return [{ label: 'Default', options: generalOptions }, ...planGroups];
+  }, [stripePlans, orphanSignupPriceId]);
+
+  const stripeSignupSelectValue = useMemo(
+    () => findStripePriceSelectValue(stripeSignupGroupedOptions, stripeDefaultPriceId),
+    [stripeSignupGroupedOptions, stripeDefaultPriceId],
+  );
 
   const notifyError = (err: unknown) => {
     showNotification({
@@ -305,9 +424,9 @@ const AdminPlatformSettingsPage = () => {
                 <Card.Body>
                   <Card.Title as="h5">Stripe signup plan</Card.Title>
                   <Card.Text className="text-muted small">
-                    New accounts get this Stripe price as their initial subscription when the server
-                    has no <code>STRIPE_FREE_TIER_PRICE_ID</code>. Stored as{' '}
-                    <code>stripe_signup_plan.defaultSignupPlanPriceId</code>.
+                    New accounts get this Stripe price as their initial subscription when set here.
+                    Stored as <code>stripe_signup_plan.defaultSignupPlanPriceId</code> in platform
+                    settings.
                   </Card.Text>
                   {plansError && (
                     <Alert variant="warning" className="small py-2 mb-3">
@@ -316,45 +435,30 @@ const AdminPlatformSettingsPage = () => {
                     </Alert>
                   )}
                   <Form.Group className="mb-3">
-                    <Form.Label>Default plan for new signups</Form.Label>
+                    <Form.Label htmlFor="admin-stripe-signup-price-select">Default plan for new signups</Form.Label>
                     {plansLoading ? (
                       <div className="d-flex align-items-center gap-2 text-muted small py-2">
                         <Spinner animation="border" size="sm" />
                         Loading plans…
                       </div>
                     ) : (
-                      <Form.Select
-                        value={stripeDefaultPriceId}
-                        onChange={(e) => setStripeDefaultPriceId(e.target.value)}
-                        aria-label="Default Stripe price for new signups">
-                        <option value="">
-                          None — only STRIPE_FREE_TIER_PRICE_ID on the server (if set)
-                        </option>
-                        {orphanSignupPriceId ? (
-                          <option value={orphanSignupPriceId}>
-                            Current (not in catalog): {orphanSignupPriceId}
-                          </option>
-                        ) : null}
-                        {stripePlans.map((plan) => {
-                          const hasMonth = Boolean(plan.monthlyPriceId);
-                          const hasYear = Boolean(plan.yearlyPriceId);
-                          if (!hasMonth && !hasYear) return null;
-                          return (
-                            <optgroup key={plan.id} label={plan.name}>
-                              {hasMonth && plan.monthlyPriceId ? (
-                                <option value={plan.monthlyPriceId}>
-                                  Monthly · {formatPlanMoney(plan.monthlyPrice, plan.currency)}
-                                </option>
-                              ) : null}
-                              {hasYear && plan.yearlyPriceId ? (
-                                <option value={plan.yearlyPriceId}>
-                                  Yearly · {formatPlanMoney(plan.yearlyPrice, plan.currency)}
-                                </option>
-                              ) : null}
-                            </optgroup>
-                          );
-                        })}
-                      </Form.Select>
+                      <Select<StripePriceSelectOption, false, GroupBase<StripePriceSelectOption>>
+                        inputId="admin-stripe-signup-price-select"
+                        className="react-select"
+                        classNamePrefix="react-select"
+                        aria-label="Default Stripe price for new signups"
+                        placeholder="Select a plan…"
+                        options={stripeSignupGroupedOptions}
+                        value={stripeSignupSelectValue}
+                        onChange={(opt: SingleValue<StripePriceSelectOption>) => {
+                          setStripeDefaultPriceId(opt?.value ?? '');
+                        }}
+                        isDisabled={upsert.isPending}
+                        isSearchable
+                        isClearable={false}
+                        menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+                        styles={signupPlanMenuPortalStyles}
+                      />
                     )}
                   </Form.Group>
                   <Button

@@ -26,6 +26,16 @@ export interface StripePlanMetadata {
   value: string;
 }
 
+/** One row from `stripe-products` `allPrices` (per product). */
+export interface StripePlanAllPrice {
+  id: string;
+  amount: number;
+  currency: string;
+  /** Stripe recurring interval or `one_time` when not recurring. */
+  interval: string;
+  interval_count: number;
+}
+
 export interface StripePlan {
   id: string;
   name: string;
@@ -38,6 +48,8 @@ export interface StripePlan {
   yearlyPriceId: string | null;
   currency: string;
   metadata: StripePlanMetadata[];
+  /** All prices for the product when returned by `stripe-products` `list`. */
+  allPrices?: StripePlanAllPrice[];
 }
 
 export interface UsageMetrics {

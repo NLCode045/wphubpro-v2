@@ -15,6 +15,7 @@ export default defineConfig({
   server: {
     allowedHosts: [
         '*.wearecode045s-projects.vercel.app',
+        'jhb.wphub.pro',
         '*.wphub.pro',
         '*.code045.nl',
         '*.localhost',

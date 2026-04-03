@@ -36,18 +36,30 @@ export function usePublicAuthConfig() {
 export type LoginMethodsResult = {
   mfaFactorEmailEnabled: boolean;
   mfaFactorAuthenticatorEnabled: boolean;
+  /**
+   * Whether Appwrite has an email MFA factor for this user (from Users API).
+   * Used during sign-in while the client session is MFA-pending — `account.listMfaFactors()` can fail then.
+   */
+  mfaFactorEmailRegistered: boolean | null;
+  mfaFactorTotpRegistered: boolean | null;
 };
 
 export async function fetchLoginMethods(email: string): Promise<LoginMethodsResult> {
   const res = await executeFunction<{
     mfaFactorEmailEnabled?: boolean;
     mfaFactorAuthenticatorEnabled?: boolean;
+    mfaFactorEmailRegistered?: boolean;
+    mfaFactorTotpRegistered?: boolean;
   }>(APPWRITE_FUNCTION_IDS.PUBLIC_AUTH_CONFIG, {
     action: 'login_methods',
     email: email.trim().toLowerCase(),
   });
+  const emailReg = res?.mfaFactorEmailRegistered;
+  const totpReg = res?.mfaFactorTotpRegistered;
   return {
     mfaFactorEmailEnabled: res?.mfaFactorEmailEnabled !== false,
     mfaFactorAuthenticatorEnabled: res?.mfaFactorAuthenticatorEnabled !== false,
+    mfaFactorEmailRegistered: typeof emailReg === 'boolean' ? emailReg : null,
+    mfaFactorTotpRegistered: typeof totpReg === 'boolean' ? totpReg : null,
   };
 }

@@ -61,9 +61,21 @@ const SignInPage = () => {
     setPickSecondLoading(true)
     ;(async () => {
       try {
-        const [factors, lm] = await Promise.all([account.listMfaFactors(), fetchLoginMethods(em)])
+        const lm = await fetchLoginMethods(em)
+        let totp = lm.mfaFactorTotpRegistered
+        let emailFactor = lm.mfaFactorEmailRegistered
+        if (totp === null || emailFactor === null) {
+          try {
+            const factors = await account.listMfaFactors()
+            if (totp === null) totp = factors.totp
+            if (emailFactor === null) emailFactor = factors.email
+          } catch {
+            if (totp === null) totp = true
+            if (emailFactor === null) emailFactor = true
+          }
+        }
         if (!cancelled) {
-          setPickSecondFactors({ totp: factors.totp, email: factors.email })
+          setPickSecondFactors({ totp: Boolean(totp), email: Boolean(emailFactor) })
           setPickSecondPrefs(lm)
         }
       } catch {

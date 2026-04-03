@@ -85,6 +85,8 @@ module.exports = async ({ req, res, log, error }) => {
 
       let mfaFactorEmailEnabled = true;
       let mfaFactorAuthenticatorEnabled = true;
+      let mfaFactorEmailRegistered = false;
+      let mfaFactorTotpRegistered = false;
 
       try {
         const listRes = await users.list({
@@ -98,6 +100,18 @@ module.exports = async ({ req, res, log, error }) => {
           }
           if (prefs.mfaFactorAuthenticatorEnabled === false || prefs.mfaFactorAuthenticatorEnabled === "false") {
             mfaFactorAuthenticatorEnabled = false;
+          }
+          const userId = batch[0].$id;
+          if (userId) {
+            try {
+              const factors = await users.listMFAFactors({ userId });
+              mfaFactorEmailRegistered = Boolean(factors.email);
+              mfaFactorTotpRegistered = Boolean(factors.totp);
+            } catch (factorErr) {
+              log("listMFAFactors failed: " + factorErr.message);
+              mfaFactorEmailRegistered = true;
+              mfaFactorTotpRegistered = true;
+            }
           }
         }
       } catch (lookupErr) {
@@ -114,6 +128,8 @@ module.exports = async ({ req, res, log, error }) => {
         userPwdOtp: false,
         mfaFactorEmailEnabled,
         mfaFactorAuthenticatorEnabled,
+        mfaFactorEmailRegistered,
+        mfaFactorTotpRegistered,
       });
     }
 

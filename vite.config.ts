@@ -19,6 +19,7 @@ export default defineConfig({
         '*.code045.nl',
         '*.localhost',
         '*.code045.wphub.pro',
+        'jhb.wphub.pro',
       'app.wphub.pro',
       'dev.wphub.pro',
       'local.code045.nl',

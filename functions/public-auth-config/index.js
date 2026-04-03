@@ -66,8 +66,14 @@ module.exports = async ({ req, res, log, error }) => {
   try {
     if (actionRaw === "public_auth_config") {
       const auth = await readAuthSettings();
-      const requireEmailOtpOnly = Boolean(auth.requireEmailOtpOnly);
-      return ok(res, { success: true, requireEmailOtpOnly });
+      const requirePasswordAndEmailOtp = Boolean(auth.requirePasswordAndEmailOtp);
+      const requireEmailOtpOnly =
+        Boolean(auth.requireEmailOtpOnly) && !requirePasswordAndEmailOtp;
+      return ok(res, {
+        success: true,
+        requireEmailOtpOnly,
+        requirePasswordAndEmailOtp,
+      });
     }
 
     if (actionRaw === "login_methods") {
@@ -77,8 +83,10 @@ module.exports = async ({ req, res, log, error }) => {
       }
 
       const auth = await readAuthSettings();
+      const globalPwdOtp = Boolean(auth.requirePasswordAndEmailOtp);
       const globalOtp = Boolean(auth.requireEmailOtpOnly);
       let userOtp = false;
+      let userPwdOtp = false;
 
       try {
         const listRes = await users.list({
@@ -88,13 +96,24 @@ module.exports = async ({ req, res, log, error }) => {
         if (batch.length > 0) {
           const prefs = batch[0].prefs || {};
           userOtp = prefs.loginWithEmailOtpOnly === true || prefs.loginWithEmailOtpOnly === "true";
+          userPwdOtp =
+            prefs.loginWithPasswordAndEmailOtp === true || prefs.loginWithPasswordAndEmailOtp === "true";
         }
       } catch (lookupErr) {
         log("users.list by email failed: " + lookupErr.message);
       }
 
-      const otpOnly = globalOtp || userOtp;
-      return ok(res, { success: true, otpOnly, globalOtp, userOtp });
+      const passwordAndOtp = globalPwdOtp || userPwdOtp;
+      const otpOnly = !passwordAndOtp && (globalOtp || userOtp);
+      return ok(res, {
+        success: true,
+        otpOnly,
+        globalOtp,
+        userOtp,
+        passwordAndOtp,
+        globalPwdOtp,
+        userPwdOtp,
+      });
     }
 
     return fail(res, "Unknown action", 400);

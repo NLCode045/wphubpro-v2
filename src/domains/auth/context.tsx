@@ -21,6 +21,14 @@ interface AuthContextType {
   sendLoginEmailOtp: (email: string) => Promise<{ userId: string }>;
   /** Appwrite Email OTP step 2 — completes session after user enters code from email. */
   verifyLoginEmailOtp: (userId: string, secret: string) => Promise<void>;
+  /**
+   * Password verified via session, then email OTP is sent, session cleared — user must enter OTP to finish sign-in.
+   */
+  beginDoubleAuthAfterPassword: (email: string, pass: string) => Promise<{ userId: string }>;
+  /**
+   * While signed in (e.g. after registration), send email OTP and clear the session — same second step as double auth sign-in.
+   */
+  beginDoubleAuthEmailStepAfterSession: (email: string) => Promise<{ userId: string }>;
   register: (name: string, email: string, pass: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   completePasswordRecovery: (userId: string, secret: string, password: string) => Promise<void>;
@@ -132,6 +140,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await commitSessionUser();
   };
 
+  const sendEmailOtpAndClearSession = async (trimmedEmail: string) => {
+    let token;
+    try {
+      token = await account.createEmailToken(ID.unique(), trimmedEmail);
+    } catch (err) {
+      try {
+        await account.deleteSession('current');
+      } catch {
+        /* ignore */
+      }
+      setUser(null);
+      setIsAdmin(false);
+      throw err;
+    }
+    clearPagespeedSessionStorage();
+    try {
+      await account.deleteSession('current');
+    } catch {
+      /* ignore */
+    }
+    setUser(null);
+    setIsAdmin(false);
+    const uid = token.userId;
+    if (!uid) {
+      throw new Error('Could not send verification code.');
+    }
+    return { userId: uid };
+  };
+
+  const beginDoubleAuthAfterPassword = async (email: string, pass: string) => {
+    const trimmed = email.trim();
+    if (!trimmed || !pass) {
+      throw new Error('Email and password are required.');
+    }
+    await account.createEmailPasswordSession(trimmed, pass);
+    return sendEmailOtpAndClearSession(trimmed);
+  };
+
+  const beginDoubleAuthEmailStepAfterSession = async (email: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      throw new Error('Email is required.');
+    }
+    return sendEmailOtpAndClearSession(trimmed);
+  };
+
   const login = async (email: string, pass: string) => {
     try {
       await account.createEmailPasswordSession(email, pass);
@@ -188,6 +242,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loginWithGitHub,
         sendLoginEmailOtp,
         verifyLoginEmailOtp,
+        beginDoubleAuthAfterPassword,
+        beginDoubleAuthEmailStepAfterSession,
         register,
         forgotPassword,
         completePasswordRecovery,

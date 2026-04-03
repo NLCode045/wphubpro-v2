@@ -4,13 +4,20 @@ import { useQuery } from '@tanstack/react-query';
 
 export type PublicAuthConfig = {
   requireEmailOtpOnly: boolean;
+  requirePasswordAndEmailOtp: boolean;
 };
 
 export async function fetchPublicAuthConfig(): Promise<PublicAuthConfig> {
-  const res = await executeFunction<{ requireEmailOtpOnly?: boolean }>(APPWRITE_FUNCTION_IDS.PUBLIC_AUTH_CONFIG, {
+  const res = await executeFunction<{
+    requireEmailOtpOnly?: boolean;
+    requirePasswordAndEmailOtp?: boolean;
+  }>(APPWRITE_FUNCTION_IDS.PUBLIC_AUTH_CONFIG, {
     action: 'public_auth_config',
   });
-  return { requireEmailOtpOnly: Boolean(res?.requireEmailOtpOnly) };
+  return {
+    requireEmailOtpOnly: Boolean(res?.requireEmailOtpOnly),
+    requirePasswordAndEmailOtp: Boolean(res?.requirePasswordAndEmailOtp),
+  };
 }
 
 export function usePublicAuthConfig() {
@@ -25,6 +32,9 @@ export type LoginMethodsResult = {
   otpOnly: boolean;
   globalOtp: boolean;
   userOtp: boolean;
+  passwordAndOtp: boolean;
+  globalPwdOtp: boolean;
+  userPwdOtp: boolean;
 };
 
 export async function fetchLoginMethods(email: string): Promise<LoginMethodsResult> {
@@ -32,6 +42,9 @@ export async function fetchLoginMethods(email: string): Promise<LoginMethodsResu
     otpOnly?: boolean;
     globalOtp?: boolean;
     userOtp?: boolean;
+    passwordAndOtp?: boolean;
+    globalPwdOtp?: boolean;
+    userPwdOtp?: boolean;
   }>(APPWRITE_FUNCTION_IDS.PUBLIC_AUTH_CONFIG, {
     action: 'login_methods',
     email: email.trim().toLowerCase(),
@@ -40,5 +53,8 @@ export async function fetchLoginMethods(email: string): Promise<LoginMethodsResu
     otpOnly: Boolean(res?.otpOnly),
     globalOtp: Boolean(res?.globalOtp),
     userOtp: Boolean(res?.userOtp),
+    passwordAndOtp: Boolean(res?.passwordAndOtp),
+    globalPwdOtp: Boolean(res?.globalPwdOtp),
+    userPwdOtp: Boolean(res?.userPwdOtp),
   };
 }

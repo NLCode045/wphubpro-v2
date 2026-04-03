@@ -10,7 +10,7 @@ import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row,
 type SignInMode = 'password' | 'otp'
 
 const SignInPage = () => {
-  const { login, loginWithGitHub, sendLoginEmailOtp, verifyLoginEmailOtp } = useAuth()
+  const { login, loginWithGitHub, sendLoginEmailOtp, verifyLoginEmailOtp, beginDoubleAuthAfterPassword } = useAuth()
   const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig()
 
   const [email, setEmail] = useState('')
@@ -21,13 +21,19 @@ const SignInPage = () => {
   const [mode, setMode] = useState<SignInMode>('password')
   const [otpUserId, setOtpUserId] = useState<string | null>(null)
   const [otpCode, setOtpCode] = useState('')
+  /** True when OTP step follows a successful password check (password + email code). */
+  const [otpAfterPassword, setOtpAfterPassword] = useState(false)
 
+  const globalPwdOtp = Boolean(publicAuth?.requirePasswordAndEmailOtp) && !publicAuthError
   const globalOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly) && !publicAuthError
 
   useEffect(() => {
     if (publicAuthLoading || publicAuthError) return
     if (globalOtpOnly) {
       setMode('otp')
+      setOtpAfterPassword(false)
+    } else {
+      setMode('password')
     }
   }, [globalOtpOnly, publicAuthLoading, publicAuthError])
 
@@ -48,8 +54,17 @@ const SignInPage = () => {
     setError(null)
     setLoading(true)
     try {
-      const methods = await fetchLoginMethods(email)
+      const methods = await fetchLoginMethods(email.trim())
+      if (methods.passwordAndOtp) {
+        const { userId } = await beginDoubleAuthAfterPassword(email, password)
+        setOtpUserId(userId)
+        setOtpAfterPassword(true)
+        setMode('otp')
+        setLoading(false)
+        return
+      }
       if (methods.otpOnly) {
+        setOtpAfterPassword(false)
         setMode('otp')
         await beginOtpSignIn(email)
         setLoading(false)
@@ -67,6 +82,7 @@ const SignInPage = () => {
     setError(null)
     setLoading(true)
     try {
+      setOtpAfterPassword(false)
       await beginOtpSignIn(email)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not send verification code.')
@@ -95,11 +111,14 @@ const SignInPage = () => {
     setMode('password')
     setOtpUserId(null)
     setOtpCode('')
+    setOtpAfterPassword(false)
     setError(null)
   }
 
   const showPasswordPath = !globalOtpOnly && mode === 'password'
   const showOtpPath = globalOtpOnly || mode === 'otp'
+  const showGithubOnPasswordPath = !globalOtpOnly && !globalPwdOtp
+  const showEmailCodeInsteadLink = !globalOtpOnly && !globalPwdOtp
 
   return (
     <div className="auth-box overflow-hidden align-items-center d-flex" style={{ minHeight: '100vh' }}>
@@ -116,7 +135,9 @@ const SignInPage = () => {
                 <p className="text-muted w-lg-75 mt-3 mx-auto">
                   {globalOtpOnly
                     ? 'Sign in with a one-time code sent to your email.'
-                    : "Let's get you signed in. Enter your email and password to continue."}
+                    : globalPwdOtp
+                      ? 'Enter your email and password, then confirm with a code sent to your email.'
+                      : "Let's get you signed in. Enter your email and password to continue."}
                 </p>
               </div>
 
@@ -189,32 +210,37 @@ const SignInPage = () => {
                     </Button>
                   </div>
 
-                  <div className="text-center mb-3">
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      className="text-muted"
-                      onClick={() => {
-                        setMode('otp')
-                        setOtpUserId(null)
-                        setOtpCode('')
-                        setError(null)
-                      }}>
-                      Sign in with email code instead
-                    </Button>
-                  </div>
+                  {showEmailCodeInsteadLink ? (
+                    <div className="text-center mb-3">
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="text-muted"
+                        onClick={() => {
+                          setMode('otp')
+                          setOtpUserId(null)
+                          setOtpCode('')
+                          setOtpAfterPassword(false)
+                          setError(null)
+                        }}>
+                        Sign in with email code instead
+                      </Button>
+                    </div>
+                  ) : null}
 
-                  <div className="d-grid mb-3">
-                    <Button
-                      type="button"
-                      variant="outline-secondary"
-                      className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
-                      onClick={() => loginWithGitHub()}>
-                      <FaGithub size={18} />
-                      Continue with GitHub
-                    </Button>
-                  </div>
+                  {showGithubOnPasswordPath ? (
+                    <div className="d-grid mb-3">
+                      <Button
+                        type="button"
+                        variant="outline-secondary"
+                        className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
+                        onClick={() => loginWithGitHub()}>
+                        <FaGithub size={18} />
+                        Continue with GitHub
+                      </Button>
+                    </div>
+                  ) : null}
                 </Form>
               ) : null}
 
@@ -257,7 +283,16 @@ const SignInPage = () => {
                   ) : (
                     <Form onSubmit={handleVerifyOtp}>
                       <p className="text-muted fs-sm mb-3">
-                        We sent a code to <strong>{email.trim()}</strong>. Enter it below to finish signing in.
+                        {otpAfterPassword ? (
+                          <>
+                            Your password was accepted. We emailed a code to <strong>{email.trim()}</strong>. Enter it
+                            below to finish signing in.
+                          </>
+                        ) : (
+                          <>
+                            We sent a code to <strong>{email.trim()}</strong>. Enter it below to finish signing in.
+                          </>
+                        )}
                       </p>
                       <div className="mb-3 form-group">
                         <FormLabel>Verification code</FormLabel>
@@ -287,11 +322,15 @@ const SignInPage = () => {
                           size="sm"
                           disabled={loading}
                           onClick={() => {
-                            setOtpUserId(null)
-                            setOtpCode('')
-                            setError(null)
+                            if (otpAfterPassword) {
+                              switchToPasswordMode()
+                            } else {
+                              setOtpUserId(null)
+                              setOtpCode('')
+                              setError(null)
+                            }
                           }}>
-                          Use a different email
+                          {otpAfterPassword ? 'Start over' : 'Use a different email'}
                         </Button>
                       </div>
                     </Form>

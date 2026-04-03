@@ -157,6 +157,7 @@ const AdminPlatformSettingsPage = () => {
   const [stripeDefaultPriceId, setStripeDefaultPriceId] = useState('');
 
   const [requireEmailOtpOnly, setRequireEmailOtpOnly] = useState(false);
+  const [requirePasswordAndEmailOtp, setRequirePasswordAndEmailOtp] = useState(false);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -183,6 +184,8 @@ const AdminPlatformSettingsPage = () => {
     setStripeDefaultPriceId(stripe.defaultSignupPlanPriceId ?? '');
 
     const auth = recordFromValue(map.get('auth'));
+    const pwdOtp = Boolean(auth.requirePasswordAndEmailOtp);
+    setRequirePasswordAndEmailOtp(pwdOtp);
     setRequireEmailOtpOnly(Boolean(auth.requireEmailOtpOnly));
   }, [items]);
 
@@ -302,6 +305,7 @@ const AdminPlatformSettingsPage = () => {
         category: 'auth',
         settings: {
           requireEmailOtpOnly,
+          requirePasswordAndEmailOtp,
         },
       });
       showNotification({
@@ -447,15 +451,24 @@ const AdminPlatformSettingsPage = () => {
                 <Card.Body>
                   <Card.Title as="h5">Authentication</Card.Title>
                   <Card.Text className="text-muted small">
-                    Email one-time code (Appwrite Email OTP) for sign-in. When enabled, the login and registration pages
-                    use email codes only—password and GitHub sign-in are hidden. Stored under platform key{' '}
-                    <code>auth</code>.
+                    Controls Appwrite email OTP on the login page. Stored under platform key <code>auth</code>. If both
+                    switches are on, password + email code wins (email-only mode is ignored).
                   </Card.Text>
+                  <Form.Group className="mb-2">
+                    <Form.Check
+                      type="switch"
+                      id="admin-require-password-email-otp"
+                      label="Require password and email code for all users"
+                      checked={requirePasswordAndEmailOtp}
+                      onChange={(e) => setRequirePasswordAndEmailOtp(e.target.checked)}
+                      disabled={upsert.isPending}
+                    />
+                  </Form.Group>
                   <Form.Group className="mb-3">
                     <Form.Check
                       type="switch"
                       id="admin-require-email-otp-only"
-                      label="Require email code sign-in for all users"
+                      label="Require email code only (hide password & GitHub on login)"
                       checked={requireEmailOtpOnly}
                       onChange={(e) => setRequireEmailOtpOnly(e.target.checked)}
                       disabled={upsert.isPending}

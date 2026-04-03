@@ -8,6 +8,8 @@ export type ProfilePrefs = {
   notifyPlatform?: boolean;
   /** When true, this user must sign in with Appwrite email OTP (no password / OAuth on login UI). */
   loginWithEmailOtpOnly?: boolean;
+  /** When true, this user must sign in with password first, then email OTP. */
+  loginWithPasswordAndEmailOtp?: boolean;
 };
 
 /** Appwrite user prefs object (arbitrary JSON). */
@@ -27,6 +29,8 @@ export function parseProfilePrefs(prefs: PrefsRecord | undefined | null): Profil
     notifyPlatform: p.notifyPlatform === undefined ? undefined : bool(p.notifyPlatform, true),
     loginWithEmailOtpOnly:
       p.loginWithEmailOtpOnly === undefined ? undefined : bool(p.loginWithEmailOtpOnly, false),
+    loginWithPasswordAndEmailOtp:
+      p.loginWithPasswordAndEmailOtp === undefined ? undefined : bool(p.loginWithPasswordAndEmailOtp, false),
   };
 }
 

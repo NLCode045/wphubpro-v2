@@ -9,7 +9,8 @@ import { Link } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
 const SignUpPage = () => {
-  const { register, sendLoginEmailOtp, verifyLoginEmailOtp, refreshUser } = useAuth()
+  const { register, sendLoginEmailOtp, verifyLoginEmailOtp, refreshUser, beginDoubleAuthEmailStepAfterSession } =
+    useAuth()
   const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig()
 
   const [name, setName] = useState('')
@@ -22,7 +23,9 @@ const SignUpPage = () => {
   const [otpUserId, setOtpUserId] = useState<string | null>(null)
   const [otpCode, setOtpCode] = useState('')
 
+  const globalPwdOtp = Boolean(publicAuth?.requirePasswordAndEmailOtp) && !publicAuthError
   const globalOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly) && !publicAuthError
+  const showPwdThenOtpSignup = globalPwdOtp && !globalOtpOnly
 
   const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -38,8 +41,13 @@ const SignUpPage = () => {
     setLoading(true)
     try {
       await register(name, email, password)
+      if (showPwdThenOtpSignup) {
+        const { userId } = await beginDoubleAuthEmailStepAfterSession(email)
+        setOtpUserId(userId)
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not create your account.')
+    } finally {
       setLoading(false)
     }
   }
@@ -101,7 +109,9 @@ const SignUpPage = () => {
                 <p className="text-muted w-lg-75 mt-3 mx-auto">
                   {globalOtpOnly
                     ? 'Create your account with a one-time code sent to your email.'
-                    : 'Create your account by entering your details below.'}
+                    : showPwdThenOtpSignup
+                      ? 'Create your account with email and password, then confirm with a code sent to your email.'
+                      : 'Create your account by entering your details below.'}
                 </p>
               </div>
 
@@ -226,80 +236,116 @@ const SignUpPage = () => {
               ) : null}
 
               {!publicAuthLoading && !globalOtpOnly ? (
-                <Form onSubmit={handlePasswordSubmit}>
+                <div>
                   {error && (
                     <Alert variant="danger" className="mb-3 py-2">
                       {error}
                     </Alert>
                   )}
 
-                  <div className="mb-3 form-group">
-                    <FormLabel>
-                      Name <span className="text-danger">*</span>
-                    </FormLabel>
-                    <FormControl
-                      type="text"
-                      autoComplete="name"
-                      placeholder="Your name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
+                  {showPwdThenOtpSignup && otpUserId ? (
+                    <Form onSubmit={handleOtpVerify}>
+                      <p className="text-muted fs-sm mb-3">
+                        Your account is ready. We emailed a code to <strong>{email.trim()}</strong>. Enter it below to
+                        finish signing in.
+                      </p>
+                      <div className="mb-3 form-group">
+                        <FormLabel>Verification code</FormLabel>
+                        <FormControl
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          placeholder="6-digit code"
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="d-grid gap-2">
+                        <Button type="submit" className="btn btn-primary fw-semibold py-2" disabled={loading}>
+                          {loading ? (
+                            <>
+                              <Spinner animation="border" size="sm" className="me-2" />
+                              Verifying…
+                            </>
+                          ) : (
+                            'Verify and continue'
+                          )}
+                        </Button>
+                      </div>
+                    </Form>
+                  ) : (
+                    <Form onSubmit={handlePasswordSubmit}>
+                      <div className="mb-3 form-group">
+                        <FormLabel>
+                          Name <span className="text-danger">*</span>
+                        </FormLabel>
+                        <FormControl
+                          type="text"
+                          autoComplete="name"
+                          placeholder="Your name"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          required
+                        />
+                      </div>
 
-                  <div className="mb-3 form-group">
-                    <FormLabel>
-                      Email address <span className="text-danger">*</span>
-                    </FormLabel>
-                    <FormControl
-                      type="email"
-                      autoComplete="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
+                      <div className="mb-3 form-group">
+                        <FormLabel>
+                          Email address <span className="text-danger">*</span>
+                        </FormLabel>
+                        <FormControl
+                          type="email"
+                          autoComplete="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                        />
+                      </div>
 
-                  <div className="mb-3">
-                    <PasswordInputWithStrength
-                      id="password"
-                      label="Password"
-                      name="password"
-                      password={password}
-                      setPassword={setPassword}
-                      placeholder="••••••••"
-                    />
-                  </div>
+                      <div className="mb-3">
+                        <PasswordInputWithStrength
+                          id="password"
+                          label="Password"
+                          name="password"
+                          password={password}
+                          setPassword={setPassword}
+                          placeholder="••••••••"
+                        />
+                      </div>
 
-                  <div className="mb-3">
-                    <div className="form-check">
-                      <input
-                        className="form-check-input form-check-input-light fs-14"
-                        type="checkbox"
-                        id="termAndPolicy"
-                        checked={agreement}
-                        onChange={() => setAgreement((v) => !v)}
-                      />
-                      <label className="form-check-label" htmlFor="termAndPolicy">
-                        I agree to the terms and policy
-                      </label>
-                    </div>
-                  </div>
+                      <div className="mb-3">
+                        <div className="form-check">
+                          <input
+                            className="form-check-input form-check-input-light fs-14"
+                            type="checkbox"
+                            id="termAndPolicy"
+                            checked={agreement}
+                            onChange={() => setAgreement((v) => !v)}
+                          />
+                          <label className="form-check-label" htmlFor="termAndPolicy">
+                            I agree to the terms and policy
+                          </label>
+                        </div>
+                      </div>
 
-                  <div className="d-grid">
-                    <Button type="submit" className="btn btn-primary fw-semibold py-2" disabled={loading}>
-                      {loading ? (
-                        <>
-                          <Spinner animation="border" size="sm" className="me-2" />
-                          Creating account…
-                        </>
-                      ) : (
-                        'Create Account'
-                      )}
-                    </Button>
-                  </div>
-                </Form>
+                      <div className="d-grid">
+                        <Button type="submit" className="btn btn-primary fw-semibold py-2" disabled={loading}>
+                          {loading ? (
+                            <>
+                              <Spinner animation="border" size="sm" className="me-2" />
+                              Creating account…
+                            </>
+                          ) : showPwdThenOtpSignup ? (
+                            'Create account and send code'
+                          ) : (
+                            'Create Account'
+                          )}
+                        </Button>
+                      </div>
+                    </Form>
+                  )}
+                </div>
               ) : null}
 
               <p className="text-muted text-center mt-4 mb-0">

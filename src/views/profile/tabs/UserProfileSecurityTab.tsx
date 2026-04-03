@@ -21,9 +21,14 @@ const UserProfileSecurityTab = () => {
   const [mfaMessage, setMfaMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
 
   const [loginEmailOtpOnly, setLoginEmailOtpOnly] = useState(false);
+  const [loginPwdEmailOtp, setLoginPwdEmailOtp] = useState(false);
   const [otpPrefMessage, setOtpPrefMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
+  const [pwdOtpPrefMessage, setPwdOtpPrefMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(
+    null,
+  );
 
   const platformRequiresOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly);
+  const platformRequiresPwdAndOtp = Boolean(publicAuth?.requirePasswordAndEmailOtp);
 
   const factorsQuery = useQuery({
     queryKey: ['mfa-factors'],
@@ -34,6 +39,7 @@ const UserProfileSecurityTab = () => {
   useEffect(() => {
     const p = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
     setLoginEmailOtpOnly(p.loginWithEmailOtpOnly === true);
+    setLoginPwdEmailOtp(p.loginWithPasswordAndEmailOtp === true);
   }, [user?.prefs]);
 
   const otpPrefMutation = useMutation({
@@ -51,6 +57,24 @@ const UserProfileSecurityTab = () => {
       setLoginEmailOtpOnly(prefs.loginWithEmailOtpOnly === true);
       const msg = err instanceof Error ? err.message : 'Could not save preference.';
       setOtpPrefMessage({ variant: 'danger', text: msg });
+    },
+  });
+
+  const pwdOtpPrefMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (!user) throw new Error('Not signed in.');
+      const base = mergeProfilePrefs(user.prefs as PrefsRecord | null, { loginWithPasswordAndEmailOtp: next });
+      await account.updatePrefs(base);
+    },
+    onSuccess: async () => {
+      setPwdOtpPrefMessage({ variant: 'success', text: 'Sign-in preference saved.' });
+      await refreshUser();
+    },
+    onError: (err: unknown) => {
+      const prefs = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
+      setLoginPwdEmailOtp(prefs.loginWithPasswordAndEmailOtp === true);
+      const msg = err instanceof Error ? err.message : 'Could not save preference.';
+      setPwdOtpPrefMessage({ variant: 'danger', text: msg });
     },
   });
 
@@ -210,7 +234,11 @@ const UserProfileSecurityTab = () => {
             {otpPrefMessage.text}
           </Alert>
         ) : null}
-        {platformRequiresOtpOnly ? (
+        {platformRequiresPwdAndOtp ? (
+          <Alert variant="info" className="py-2 fs-sm mb-0">
+            The platform already requires password and email code for everyone. You do not need a personal setting.
+          </Alert>
+        ) : platformRequiresOtpOnly ? (
           <Alert variant="info" className="py-2 fs-sm mb-0">
             The platform is already set to email code sign-in only for all accounts. Password and social sign-in are
             disabled on the login page.
@@ -222,12 +250,47 @@ const UserProfileSecurityTab = () => {
             className="mb-0"
             label="Require email code for my account (disable password & GitHub sign-in for me)"
             checked={loginEmailOtpOnly}
-            disabled={otpPrefMutation.isPending}
+            disabled={otpPrefMutation.isPending || pwdOtpPrefMutation.isPending}
             onChange={(e) => {
               const v = e.target.checked;
               setLoginEmailOtpOnly(v);
               setOtpPrefMessage(null);
               otpPrefMutation.mutate(v);
+            }}
+          />
+        )}
+      </section>
+
+      <hr className="my-0 border-light" />
+
+      <section>
+        <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Password + email code</p>
+        <p className="text-muted fs-sm mb-3">
+          When enabled, you must enter your password and then the one-time code sent to your email every time you sign in.
+          GitHub sign-in is not available for your account on the login page when this applies.
+        </p>
+        {pwdOtpPrefMessage ? (
+          <Alert variant={pwdOtpPrefMessage.variant} className="py-2 fs-sm mb-3">
+            {pwdOtpPrefMessage.text}
+          </Alert>
+        ) : null}
+        {platformRequiresPwdAndOtp ? (
+          <Alert variant="info" className="py-2 fs-sm mb-0">
+            The platform already requires password and email code for all accounts.
+          </Alert>
+        ) : (
+          <Form.Check
+            type="switch"
+            id="profile-login-pwd-email-otp"
+            className="mb-0"
+            label="Require password and email code for my account"
+            checked={loginPwdEmailOtp}
+            disabled={pwdOtpPrefMutation.isPending || otpPrefMutation.isPending}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setLoginPwdEmailOtp(v);
+              setPwdOtpPrefMessage(null);
+              pwdOtpPrefMutation.mutate(v);
             }}
           />
         )}

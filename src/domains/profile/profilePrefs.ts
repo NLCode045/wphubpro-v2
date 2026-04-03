@@ -10,6 +10,8 @@ export type ProfilePrefs = {
   mfaFactorEmailEnabled?: boolean;
   /** When false, do not offer authenticator MFA at sign-in (prefs only; TOTP must be configured). */
   mfaFactorAuthenticatorEnabled?: boolean;
+  /** Optional address for MFA email OTP (UI/prefs; Appwrite may still use the account email until backend wiring). */
+  mfaOtpDeliveryEmail?: string;
 };
 
 /** Appwrite user prefs object (arbitrary JSON). */
@@ -31,6 +33,7 @@ export function parseProfilePrefs(prefs: PrefsRecord | undefined | null): Profil
       p.mfaFactorEmailEnabled === undefined ? undefined : bool(p.mfaFactorEmailEnabled, true),
     mfaFactorAuthenticatorEnabled:
       p.mfaFactorAuthenticatorEnabled === undefined ? undefined : bool(p.mfaFactorAuthenticatorEnabled, true),
+    mfaOtpDeliveryEmail: typeof p.mfaOtpDeliveryEmail === 'string' ? p.mfaOtpDeliveryEmail : undefined,
   };
 }
 

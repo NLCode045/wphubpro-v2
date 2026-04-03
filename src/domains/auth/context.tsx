@@ -1,6 +1,7 @@
 import { clearPagespeedSessionStorage } from '@/domains/sites/pagespeedSessionCache';
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { AppwriteException, AuthenticationFactor } from 'appwrite';
 import { account, teams, ID, OAuthProvider } from '../../services/appwrite';
 import type { User } from '../../types';
 
@@ -12,10 +13,27 @@ function getOAuthRedirectUrls() {
   };
 }
 
+function isMfaFactorsRequiredError(err: unknown): boolean {
+  if (err instanceof AppwriteException) {
+    return err.type === 'user_more_factors_required';
+  }
+  const o = err as { type?: string };
+  return o.type === 'user_more_factors_required';
+}
+
 interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
-  login: (email: string, pass: string) => Promise<void>;
+  /**
+   * Email/password session; if the account has MFA, returns `mfa_required` and the session stays challenge-pending
+   * until {@link completeTotpMfaLogin} or {@link cancelMfaLogin}.
+   */
+  login: (email: string, pass: string) => Promise<'success' | 'mfa_required'>;
+  /** Start TOTP challenge after {@link login} returned `mfa_required`. Returns challenge id for {@link completeTotpMfaLogin}. */
+  beginTotpMfaChallenge: () => Promise<string>;
+  completeTotpMfaLogin: (challengeId: string, otp: string) => Promise<void>;
+  /** Abandon MFA sign-in and clear the partial session. */
+  cancelMfaLogin: () => Promise<void>;
   loginWithGitHub: () => void;
   /** Appwrite Email OTP step 1 — sends code to the address; returns target user id for {@link verifyLoginEmailOtp}. */
   sendLoginEmailOtp: (email: string) => Promise<{ userId: string }>;
@@ -186,14 +204,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return sendEmailOtpAndClearSession(trimmed);
   };
 
-  const login = async (email: string, pass: string) => {
-    try {
-      await account.createEmailPasswordSession(email, pass);
-      await commitSessionUser();
-    } catch (error) {
-      console.error('❌ Login failed:', error);
-      throw error;
+  const login = async (email: string, pass: string): Promise<'success' | 'mfa_required'> => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !pass) {
+      throw new Error('Email and password are required.');
     }
+    await account.createEmailPasswordSession(trimmedEmail, pass);
+    try {
+      await account.get();
+    } catch (err: unknown) {
+      if (isMfaFactorsRequiredError(err)) {
+        return 'mfa_required';
+      }
+      console.error('❌ Login failed:', err);
+      throw err;
+    }
+    await commitSessionUser();
+    return 'success';
+  };
+
+  const beginTotpMfaChallenge = async (): Promise<string> => {
+    const challenge = await account.createMfaChallenge(AuthenticationFactor.Totp);
+    if (!challenge.$id) {
+      throw new Error('Could not start authenticator verification.');
+    }
+    return challenge.$id;
+  };
+
+  const completeTotpMfaLogin = async (challengeId: string, otp: string) => {
+    const code = otp.trim();
+    if (!code) {
+      throw new Error('Enter the code from your authenticator app.');
+    }
+    await account.updateMfaChallenge(challengeId, code);
+    await commitSessionUser();
+  };
+
+  const cancelMfaLogin = async () => {
+    clearPagespeedSessionStorage();
+    try {
+      await account.deleteSession('current');
+    } catch {
+      /* ignore */
+    }
+    setUser(null);
+    setIsAdmin(false);
   };
 
   const register = async (name: string, email: string, pass: string) => {
@@ -239,6 +294,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         isAdmin,
         login,
+        beginTotpMfaChallenge,
+        completeTotpMfaLogin,
+        cancelMfaLogin,
         loginWithGitHub,
         sendLoginEmailOtp,
         verifyLoginEmailOtp,

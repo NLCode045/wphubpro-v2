@@ -10,7 +10,16 @@ import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row,
 type SignInMode = 'password' | 'otp'
 
 const SignInPage = () => {
-  const { login, loginWithGitHub, sendLoginEmailOtp, verifyLoginEmailOtp, beginDoubleAuthAfterPassword } = useAuth()
+  const {
+    login,
+    beginTotpMfaChallenge,
+    completeTotpMfaLogin,
+    cancelMfaLogin,
+    loginWithGitHub,
+    sendLoginEmailOtp,
+    verifyLoginEmailOtp,
+    beginDoubleAuthAfterPassword,
+  } = useAuth()
   const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig()
 
   const [email, setEmail] = useState('')
@@ -23,6 +32,11 @@ const SignInPage = () => {
   const [otpCode, setOtpCode] = useState('')
   /** True when OTP step follows a successful password check (password + email code). */
   const [otpAfterPassword, setOtpAfterPassword] = useState(false)
+
+  const [mfaPending, setMfaPending] = useState(false)
+  const [mfaChallengeId, setMfaChallengeId] = useState<string | null>(null)
+  const [mfaTotpCode, setMfaTotpCode] = useState('')
+  const [showAuthenticatorHint, setShowAuthenticatorHint] = useState(false)
 
   const globalPwdOtp = Boolean(publicAuth?.requirePasswordAndEmailOtp) && !publicAuthError
   const globalOtpOnly = Boolean(publicAuth?.requireEmailOtpOnly) && !publicAuthError
@@ -70,7 +84,23 @@ const SignInPage = () => {
         setLoading(false)
         return
       }
-      await login(email, password)
+      const loginResult = await login(email, password)
+      if (loginResult === 'mfa_required') {
+        try {
+          const challengeId = await beginTotpMfaChallenge()
+          setMfaChallengeId(challengeId)
+          setMfaTotpCode('')
+          setMfaPending(true)
+          setError(null)
+        } catch (challengeErr: unknown) {
+          await cancelMfaLogin()
+          setError(
+            challengeErr instanceof Error ? challengeErr.message : 'Could not start authenticator sign-in.',
+          )
+        }
+        setLoading(false)
+        return
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.')
       setLoading(false)
@@ -115,8 +145,33 @@ const SignInPage = () => {
     setError(null)
   }
 
-  const showPasswordPath = !globalOtpOnly && mode === 'password'
-  const showOtpPath = globalOtpOnly || mode === 'otp'
+  const resetMfaSignIn = async () => {
+    await cancelMfaLogin()
+    setMfaPending(false)
+    setMfaChallengeId(null)
+    setMfaTotpCode('')
+    setError(null)
+  }
+
+  const handleVerifyMfaTotp = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!mfaChallengeId) {
+      setError('Authenticator step is not ready. Try signing in again.')
+      return
+    }
+    setError(null)
+    setLoading(true)
+    try {
+      await completeTotpMfaLogin(mfaChallengeId, mfaTotpCode)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid or expired code.')
+      setLoading(false)
+    }
+  }
+
+  const showMfaTotpPath = mfaPending
+  const showPasswordPath = !globalOtpOnly && mode === 'password' && !showMfaTotpPath
+  const showOtpPath = (globalOtpOnly || mode === 'otp') && !showMfaTotpPath
   const showGithubOnPasswordPath = !globalOtpOnly && !globalPwdOtp
   const showEmailCodeInsteadLink = !globalOtpOnly && !globalPwdOtp
 
@@ -133,11 +188,13 @@ const SignInPage = () => {
               <div className="auth-brand text-center mb-4">
                 <AppLogo />
                 <p className="text-muted w-lg-75 mt-3 mx-auto">
-                  {globalOtpOnly
-                    ? 'Sign in with a one-time code sent to your email.'
-                    : globalPwdOtp
-                      ? 'Enter your email and password, then confirm with a code sent to your email.'
-                      : "Let's get you signed in. Enter your email and password to continue."}
+                  {showMfaTotpPath
+                    ? 'Enter the 6-digit code from your authenticator app to finish signing in.'
+                    : globalOtpOnly
+                      ? 'Sign in with a one-time code sent to your email.'
+                      : globalPwdOtp
+                        ? 'Enter your email and password, then confirm with a code sent to your email.'
+                        : "Let's get you signed in. Enter your email and password to continue."}
                 </p>
               </div>
 
@@ -154,6 +211,53 @@ const SignInPage = () => {
                 </Alert>
               ) : null}
 
+              {!publicAuthLoading && showMfaTotpPath ? (
+                <Form onSubmit={handleVerifyMfaTotp}>
+                  {error && (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  )}
+                  <p className="text-muted fs-sm mb-3">
+                    Open your authenticator app and enter the code for <strong>{email.trim() || 'your account'}</strong>.
+                  </p>
+                  <div className="mb-3 form-group">
+                    <FormLabel>Authenticator code</FormLabel>
+                    <FormControl
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="6-digit code"
+                      value={mfaTotpCode}
+                      onChange={(e) => setMfaTotpCode(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="d-grid gap-2 mb-3">
+                    <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2" />
+                          Verifying…
+                        </>
+                      ) : (
+                        'Verify and sign in'
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      size="sm"
+                      disabled={loading}
+                      onClick={() => {
+                        void resetMfaSignIn()
+                      }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </Form>
+              ) : null}
+
               {!publicAuthLoading && showPasswordPath ? (
                 <Form onSubmit={handlePasswordSubmit}>
                   {error && (
@@ -161,6 +265,13 @@ const SignInPage = () => {
                       {error}
                     </Alert>
                   )}
+
+                  {showAuthenticatorHint ? (
+                    <Alert variant="info" className="py-2 fs-sm mb-3">
+                      Use your email and password first. If your account uses two-step verification with an authenticator
+                      app, you will enter a 6-digit code on the next step.
+                    </Alert>
+                  ) : null}
 
                   <div className="mb-3 form-group">
                     <FormLabel>
@@ -211,12 +322,23 @@ const SignInPage = () => {
                   </div>
 
                   {showEmailCodeInsteadLink ? (
-                    <div className="text-center mb-3">
+                    <div className="text-center mb-3 d-flex flex-column gap-1">
                       <Button
                         type="button"
                         variant="link"
                         size="sm"
-                        className="text-muted"
+                        className="text-muted py-0"
+                        onClick={() => {
+                          setShowAuthenticatorHint(true)
+                          setError(null)
+                        }}>
+                        Sign in with authenticator app
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="text-muted py-0"
                         onClick={() => {
                           setMode('otp')
                           setOtpUserId(null)
@@ -238,6 +360,22 @@ const SignInPage = () => {
                         onClick={() => loginWithGitHub()}>
                         <FaGithub size={18} />
                         Continue with GitHub
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {globalPwdOtp ? (
+                    <div className="text-center mb-0">
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="text-muted py-0"
+                        onClick={() => {
+                          setShowAuthenticatorHint(true)
+                          setError(null)
+                        }}>
+                        Sign in with authenticator app
                       </Button>
                     </div>
                   ) : null}

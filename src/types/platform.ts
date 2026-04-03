@@ -30,7 +30,9 @@ export interface StripePlan {
   id: string;
   name: string;
   description: string;
+  /** Major currency units (euros), not cents — matches `stripe-products` (`unit_amount / 100`). */
   monthlyPrice: number;
+  /** Major currency units (euros), not cents. */
   yearlyPrice: number;
   monthlyPriceId: string | null;
   yearlyPriceId: string | null;
@@ -57,6 +59,36 @@ export interface StripeProrationPreview {
   currency: string;
   nextPaymentDate?: number | null;
   lines?: Array<{ description: string; amount: number; period: { start: number; end: number } }>;
+}
+
+/** Proration preview from `stripe-subscriptions` action `preview-proration`. */
+export interface StripeProrationPreviewResponse {
+  amountDue: number;
+  currency: string;
+  nextPaymentDate: number | null;
+  lines: Array<{ description: string; amount: number; period: { start: number; end: number } }>;
+}
+
+/** When subscription change creates an open invoice, client confirms via Payment Element. */
+export interface StripeInlinePaymentPayload {
+  clientSecret: string;
+  invoiceId: string;
+  amountDue: number;
+  currency: string;
+  status: string;
+}
+
+/** `stripe-invoices` action `prepare-pay-invoice`. */
+export interface PreparePayInvoiceResponse {
+  success: boolean;
+  paid?: boolean;
+  status?: string;
+  clientSecret?: string;
+  invoiceId?: string;
+  amountDue?: number;
+  currency?: string;
+  paymentIntentStatus?: string;
+  message?: string;
 }
 
 export interface Subscription {
@@ -149,6 +181,97 @@ export interface SiteHealthMetaSnapshot {
   summary?: SiteHealthSummary;
   modules?: SiteHealthModule[];
   checks_flat?: SiteHealthCheck[];
+}
+
+/** Allowlisted automated fixes from `health-ai-agent` (bridge + optional OpenAI). */
+export type HealthAiSuggestionKind =
+  | 'health_refresh'
+  | 'plugin_activate'
+  | 'plugin_deactivate'
+  | 'plugin_update'
+  | 'plugin_uninstall'
+  | 'theme_activate'
+  | 'theme_update'
+  | 'theme_delete'
+  | 'hub_invoke'
+  | 'advice_only';
+
+export interface HealthAiSuggestion {
+  id: string;
+  title: string;
+  description?: string;
+  kind: HealthAiSuggestionKind;
+  /** Set when the step came from a dry-run preview (informational). */
+  simulated?: boolean;
+  payload?: {
+    plugin?: string;
+    /** Active theme stylesheet slug (themes/manage/*). */
+    theme?: string;
+    healthCheckId?: string;
+    /** Bridge `hub/invoke` registry key */
+    handler?: string;
+    args?: Record<string, unknown>;
+  };
+}
+
+export interface HealthAiSuggestResponse {
+  success?: boolean;
+  suggestions?: HealthAiSuggestion[];
+  source?: 'gemini' | 'heuristic';
+  message?: string;
+}
+
+export interface HealthAiExecuteOneResponse {
+  success?: boolean;
+  message?: string;
+  skipped?: boolean;
+  httpStatus?: number;
+}
+
+/** Answers for dry-run plan building (Health assistant questionnaire). */
+export interface HealthDryRunAnswers {
+  removeInactivePlugins?: boolean;
+  maxInactivePluginsToRemove?: number;
+  removeInactiveThemes?: boolean;
+  maxInactiveThemesToRemove?: number;
+  runPluginUpdates?: boolean;
+  maxPluginUpdates?: number;
+  runThemeUpdatesForInactive?: boolean;
+  maxThemeUpdates?: number;
+  includeHealthRefresh?: boolean;
+  flushCaches?: boolean;
+  optimizeDatabase?: boolean;
+  purgeSpamComments?: boolean;
+  spamCommentLimit?: number;
+  /** Leave unchanged | allow indexing | discourage indexing */
+  searchVisibility?: 'unchanged' | 'allow' | 'discourage';
+}
+
+/** Summarized hub data for dry-run analyze phase. */
+export interface HealthDryRunAnalyzeSummary {
+  hasHealthSnapshot: boolean;
+  criticalOrWarningChecks: number;
+  inactivePlugins: { file: string; name: string }[];
+  inactiveThemes: { slug: string; name: string }[];
+  pluginsWithUpdates: { file: string; name: string }[];
+  inactiveThemesWithUpdates: { slug: string; name: string }[];
+}
+
+export interface HealthAiDryRunAnalyzeResponse {
+  success?: boolean;
+  phase?: 'analyze';
+  summary?: HealthDryRunAnalyzeSummary;
+  warnings?: string[];
+  message?: string;
+}
+
+export interface HealthAiDryRunPlanResponse {
+  success?: boolean;
+  phase?: 'plan';
+  plannedSteps?: HealthAiSuggestion[];
+  warnings?: string[];
+  answersEcho?: HealthDryRunAnswers;
+  message?: string;
 }
 
 export interface ConnectionStatus {
@@ -447,6 +570,15 @@ export interface SubscriptionDetailsUpcomingInvoice {
   next_payment_attempt: number | null;
 }
 
+export interface SubscriptionDetailsCustomerAddress {
+  line1?: string | null;
+  line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+}
+
 export interface SubscriptionDetailsResponse {
   subscription: {
     id: string;
@@ -454,14 +586,25 @@ export interface SubscriptionDetailsResponse {
     current_period_start: number;
     current_period_end: number;
     created: number;
+    start_date?: number;
     cancel_at: number | null;
     canceled_at: number | null;
+    ended_at?: number | null;
+    trial_start?: number | null;
+    trial_end?: number | null;
     metadata: Record<string, string>;
+    collection_method?: string;
+    days_until_due?: number | null;
   };
   customer: {
     id: string;
     email: string | null;
     name: string | null;
+    phone?: string | null;
+    address?: SubscriptionDetailsCustomerAddress | null;
+    created?: number | null;
+    balance?: number;
+    currency?: string | null;
   };
   plan: SubscriptionDetailsPlan;
   pending_update: SubscriptionDetailsPendingUpdate | null;

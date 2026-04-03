@@ -32,7 +32,7 @@ function getBridgeDir(env) {
 const BUCKET_ID = 'bridge';
 
 function loadEnv() {
-  const envPath = join(REPO_ROOT, '.env');
+  const envPath = join(REPO_ROOT, '.env.local');
   try {
     const content = readFileSync(envPath, 'utf8');
     const env = {};

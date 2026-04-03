@@ -211,7 +211,9 @@ module.exports = async ({ req, res, log, error }) => {
     }
     // Bridge impersonates this WP user for plugin/theme manage (matches sites.username in Appwrite).
     const isPluginOrThemeManage =
-      cleanedEndpoint.includes('plugins/manage/') || cleanedEndpoint.includes('themes/manage/');
+      cleanedEndpoint.includes('plugins/manage/') ||
+      cleanedEndpoint.includes('themes/manage/') ||
+      cleanedEndpoint.includes('hub/invoke');
     if (isPluginOrThemeManage) {
       const wpAdminLogin = (siteDocument.username || siteDocument.user_login || '').toString().trim();
       if (wpAdminLogin) {

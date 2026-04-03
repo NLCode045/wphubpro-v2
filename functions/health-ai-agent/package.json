@@ -1,0 +1,10 @@
+{
+  "name": "health-ai-agent",
+  "version": "1.0.0",
+  "description": "Suggest and execute allowlisted WordPress fixes from Site Health meta (JWT + Gemini optional)",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}

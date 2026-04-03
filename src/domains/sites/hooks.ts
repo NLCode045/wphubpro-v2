@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Query } from 'appwrite';
-import { account, databases } from '../../services/appwrite';
+import {
+  account,
+  APPWRITE_FUNCTION_IDS,
+  COLLECTIONS,
+  databases,
+  DATABASE_ID,
+} from '../../services/appwrite';
 import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
 import type {
+  HealthAiDryRunAnalyzeResponse,
+  HealthAiDryRunPlanResponse,
+  HealthAiExecuteOneResponse,
+  HealthAiSuggestion,
+  HealthDryRunAnswers,
   Site,
   SiteAppIconPreviewResult,
   SitePagespeedResult,
@@ -28,10 +39,196 @@ function isMetaEmpty(s: string | undefined | null): boolean {
   return t.length <= 2 || t === '[]' || t === '{}';
 }
 
-const DATABASE_ID = 'platform_db';
-const SITES_COLLECTION_ID = 'sites';
-
 const STATUS_POLL_INTERVAL_MS = 60_000;
+
+const SITE_HEARTBEAT_POKE_FUNCTION_ID = 'site-heartbeat-poke';
+
+const HEALTH_AI_AGENT_FUNCTION_ID = APPWRITE_FUNCTION_IDS.HEALTH_AI_AGENT;
+
+const WP_PROXY_FUNCTION_ID = APPWRITE_FUNCTION_IDS.WP_PROXY;
+
+function jwtFromCreateResponse(jwtRes: unknown): string {
+  if (typeof jwtRes === 'string') return jwtRes;
+  const o = jwtRes as { jwt?: string };
+  return typeof o?.jwt === 'string' ? o.jwt : '';
+}
+
+type HeartbeatPokeResponse = {
+  success?: boolean;
+  message?: string;
+  httpStatus?: number;
+};
+
+/**
+ * Calls `site-heartbeat-poke` with `{ siteId, jwt }` so the platform GETs the WordPress
+ * `/heartbeat/poke` endpoint (nudges the bridge to send a heartbeat).
+ */
+export const useRequestBridgeHeartbeatPoke = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<HeartbeatPokeResponse, Error, string>({
+    mutationFn: async (siteId: string) => {
+      const jwt = jwtFromCreateResponse(await account.createJWT());
+      const { data, statusCode } = await executeFunctionWithMeta<HeartbeatPokeResponse>(
+        SITE_HEARTBEAT_POKE_FUNCTION_ID,
+        { siteId, jwt },
+        { throwOnHttpError: false },
+      );
+      if (statusCode < 200 || statusCode >= 300) {
+        const msg =
+          typeof data?.message === 'string' && data.message
+            ? data.message
+            : `Request failed (${statusCode})`;
+        throw new Error(msg);
+      }
+      if (!data?.success) {
+        throw new Error(data?.message || 'Heartbeat poke did not succeed.');
+      }
+      return data;
+    },
+    onSuccess: (_, siteId) => {
+      void queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      if (user?.$id) void queryClient.invalidateQueries({ queryKey: ['sites', user.$id] });
+    },
+  });
+};
+
+/**
+ * Proxies `POST wphubpro/v1/health/push` on the site so the bridge sends fresh health data to the Hub.
+ */
+export const useRequestSiteHealthRefresh = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<{ message: string }, Error, string>({
+    mutationFn: async (siteId: string) => {
+      const { statusCode, data } = await executeFunctionWithMeta<Record<string, unknown>>(
+        WP_PROXY_FUNCTION_ID,
+        {
+          siteId,
+          endpoint: 'wphubpro/v1/health/push',
+          method: 'POST',
+          body: {},
+        },
+        { throwOnHttpError: false, longRunning: true, maxAsyncWaitMs: 120_000 },
+      );
+      if (statusCode < 200 || statusCode >= 300) {
+        const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+        const msg =
+          typeof raw.message === 'string' && raw.message.trim()
+            ? raw.message.trim()
+            : `Request failed (${statusCode})`;
+        throw new Error(msg);
+      }
+      const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+      const message =
+        typeof raw.message === 'string' && raw.message.trim()
+          ? raw.message.trim()
+          : 'Updated health data was sent from the site to the hub.';
+      return { message };
+    },
+    onSuccess: (_, siteId) => {
+      void queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      if (user?.$id) void queryClient.invalidateQueries({ queryKey: ['sites', user.$id] });
+    },
+  });
+};
+
+/**
+ * Runs one allowlisted step on WordPress via `health-ai-agent` (bridge proxy on server).
+ */
+export async function healthAiExecuteOne(
+  siteId: string,
+  step: HealthAiSuggestion,
+): Promise<HealthAiExecuteOneResponse> {
+  const jwt = jwtFromCreateResponse(await account.createJWT());
+  const { data, statusCode } = await executeFunctionWithMeta<HealthAiExecuteOneResponse>(
+    HEALTH_AI_AGENT_FUNCTION_ID,
+    { action: 'executeOne', siteId, jwt, step },
+    { throwOnHttpError: false, longRunning: false },
+  );
+  const d = (data && typeof data === 'object' ? data : {}) as HealthAiExecuteOneResponse;
+  if (statusCode < 200 || statusCode >= 300) {
+    const msg =
+      typeof d.message === 'string' && d.message.trim() ? d.message.trim() : `Request failed (${statusCode})`;
+    throw new Error(msg);
+  }
+  if (!d.success && !d.skipped) {
+    throw new Error(d.message?.trim() || 'Step failed.');
+  }
+  return d;
+}
+
+export type HealthAiDryRunContextOverrides = {
+  health_meta?: string;
+  plugins_meta?: string;
+  themes_meta?: string;
+};
+
+/**
+ * Dry-run analyze: summary counts from hub-stored health/plugins/themes meta (no WordPress mutations).
+ */
+export async function healthAiDryRunAnalyze(
+  siteId: string,
+  contextOverrides?: HealthAiDryRunContextOverrides,
+): Promise<HealthAiDryRunAnalyzeResponse> {
+  const jwt = jwtFromCreateResponse(await account.createJWT());
+  const { data, statusCode } = await executeFunctionWithMeta<HealthAiDryRunAnalyzeResponse>(
+    HEALTH_AI_AGENT_FUNCTION_ID,
+    {
+      action: 'dryRun',
+      dryRunPhase: 'analyze',
+      siteId,
+      jwt,
+      ...contextOverrides,
+    },
+    { throwOnHttpError: false, longRunning: false },
+  );
+  const d = (data && typeof data === 'object' ? data : {}) as HealthAiDryRunAnalyzeResponse;
+  if (statusCode < 200 || statusCode >= 300) {
+    const msg =
+      typeof d.message === 'string' && d.message.trim() ? d.message.trim() : `Request failed (${statusCode})`;
+    throw new Error(msg);
+  }
+  if (!d.success) {
+    throw new Error(d.message?.trim() || 'Dry run analyze failed.');
+  }
+  return d;
+}
+
+/**
+ * Dry-run plan: validated planned steps from questionnaire (still no WordPress mutations).
+ */
+export async function healthAiDryRunPlan(
+  siteId: string,
+  answers: HealthDryRunAnswers,
+  contextOverrides?: HealthAiDryRunContextOverrides,
+): Promise<HealthAiDryRunPlanResponse> {
+  const jwt = jwtFromCreateResponse(await account.createJWT());
+  const { data, statusCode } = await executeFunctionWithMeta<HealthAiDryRunPlanResponse>(
+    HEALTH_AI_AGENT_FUNCTION_ID,
+    {
+      action: 'dryRun',
+      dryRunPhase: 'plan',
+      siteId,
+      jwt,
+      answers,
+      ...contextOverrides,
+    },
+    { throwOnHttpError: false, longRunning: false },
+  );
+  const d = (data && typeof data === 'object' ? data : {}) as HealthAiDryRunPlanResponse;
+  if (statusCode < 200 || statusCode >= 300) {
+    const msg =
+      typeof d.message === 'string' && d.message.trim() ? d.message.trim() : `Request failed (${statusCode})`;
+    throw new Error(msg);
+  }
+  if (!d.success) {
+    throw new Error(d.message?.trim() || 'Dry run plan failed.');
+  }
+  return d;
+}
 
 export const useSites = () => {
   const { user } = useAuth();
@@ -40,7 +237,7 @@ export const useSites = () => {
     queryKey: ['sites', user?.$id],
     queryFn: async () => {
       if (!user?.$id) return [];
-      const response = await databases.listDocuments(DATABASE_ID, SITES_COLLECTION_ID, [
+      const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.SITES, [
         Query.equal('user_id', user.$id),
         Query.limit(100),
       ]);
@@ -58,7 +255,7 @@ export const useSite = (siteId: string | undefined) => {
     queryFn: async () => {
       if (!siteId) throw new Error('Site ID is required.');
 
-      const document = await databases.getDocument(DATABASE_ID, SITES_COLLECTION_ID, siteId);
+      const document = await databases.getDocument(DATABASE_ID, COLLECTIONS.SITES, siteId);
 
       if ((document as { user_id?: string }).user_id !== user?.$id) {
         throw new Error('No access to this site.');

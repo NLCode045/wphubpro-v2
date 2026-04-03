@@ -39,7 +39,8 @@ export interface ExecuteFunctionOptions {
   isAsync?: boolean;
   /**
    * When true, runs the function asynchronously and polls until it completes (or {@link maxAsyncWaitMs}).
-   * Required for work that can exceed Appwrite’s ~30s synchronous execution wait limit.
+   * Use only when work may exceed Appwrite’s ~30s synchronous wait: on Appwrite Cloud, async executions
+   * often omit `responseBody` on `getExecution`, so callers that need JSON in the response must stay synchronous.
    */
   longRunning?: boolean;
   /** Max time to poll when `longRunning` is true (default 60_000). */

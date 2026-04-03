@@ -1,6 +1,54 @@
 const sdk = require("node-appwrite");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
+/**
+ * After subscription create/update, return Payment Element payload when user must confirm.
+ */
+async function buildPaymentFromSubscriptionId(stripeClient, subscriptionId) {
+  let sub = await stripeClient.subscriptions.retrieve(subscriptionId, {
+    expand: ["latest_invoice.payment_intent"],
+  });
+  let inv = sub.latest_invoice;
+  if (!inv) {
+    return { payment: null };
+  }
+  if (typeof inv === "string") {
+    inv = await stripeClient.invoices.retrieve(inv, { expand: ["payment_intent"] });
+  }
+  if (inv.status === "draft") {
+    inv = await stripeClient.invoices.finalizeInvoice(inv.id, { expand: ["payment_intent"] });
+  }
+  if (inv.status === "paid" || (inv.amount_due || 0) <= 0) {
+    return { payment: null };
+  }
+  const pi = inv.payment_intent;
+  if (!pi) {
+    return { payment: null };
+  }
+  const piObj = typeof pi === "string" ? await stripeClient.paymentIntents.retrieve(pi) : pi;
+  if (piObj.status === "succeeded") {
+    return { payment: null };
+  }
+  const needsConfirm = [
+    "requires_payment_method",
+    "requires_action",
+    "requires_confirmation",
+    "requires_capture",
+  ].includes(piObj.status);
+  if (needsConfirm && piObj.client_secret) {
+    return {
+      payment: {
+        clientSecret: piObj.client_secret,
+        invoiceId: inv.id,
+        amountDue: inv.amount_due,
+        currency: inv.currency,
+        status: piObj.status,
+      },
+    };
+  }
+  return { payment: null };
+}
+
 module.exports = async ({ req, res, log, error }) => {
   const client = new sdk.Client();
   const databases = new sdk.Databases(client);
@@ -14,16 +62,15 @@ module.exports = async ({ req, res, log, error }) => {
     ACCOUNTS_COLLECTION_ID: ACCOUNTS_COLLECTION_ID_RAW,
   } = process.env;
 
-  // Defaults for this project (avoid hard failure when not explicitly set in function env)
   const DATABASE_ID = DATABASE_ID_RAW || process.env.APPWRITE_DATABASE_ID || "platform_db";
-  const ACCOUNTS_COLLECTION_ID = ACCOUNTS_COLLECTION_ID_RAW || process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || "accounts";
+  const ACCOUNTS_COLLECTION_ID =
+    ACCOUNTS_COLLECTION_ID_RAW || process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || "accounts";
 
   const missingVars = [];
   if (!APPWRITE_ENDPOINT) missingVars.push("APPWRITE_ENDPOINT");
   if (!APPWRITE_PROJECT_ID) missingVars.push("APPWRITE_PROJECT_ID");
   if (!APPWRITE_API_KEY) missingVars.push("APPWRITE_API_KEY");
   if (!STRIPE_SECRET_KEY) missingVars.push("STRIPE_SECRET_KEY");
-  // DATABASE_ID / ACCOUNTS_COLLECTION_ID have safe defaults
 
   if (missingVars.length > 0) {
     const errorMsg = `Missing environment variables: ${missingVars.join(
@@ -36,35 +83,21 @@ module.exports = async ({ req, res, log, error }) => {
   client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
 
   try {
-    // Parse payload from different possible sources (Appwrite versions handle this differently)
     let payload = {};
-
-    log("Request body type: " + typeof req.body);
-    log("Request bodyRaw type: " + typeof req.bodyRaw);
-    log("Request payload type: " + typeof req.payload);
 
     if (req.body && typeof req.body === "object") {
       payload = req.body;
-      log("Using req.body (already parsed object)");
     } else if (req.bodyRaw) {
       payload = JSON.parse(req.bodyRaw);
-      log("Using req.bodyRaw (parsed from string)");
     } else if (req.payload) {
       payload = typeof req.payload === "string" ? JSON.parse(req.payload) : req.payload;
-      log("Using req.payload");
     } else {
       error("No payload found in request");
-      log("Available req properties: " + Object.keys(req).join(", "));
     }
 
     log("Parsed payload: " + JSON.stringify(payload));
 
-    // In Appwrite functions, the user ID is available when called from authenticated context
     let userId = process.env.APPWRITE_FUNCTION_USER_ID || req.headers["x-appwrite-user-id"];
-
-    log("User ID from env: " + process.env.APPWRITE_FUNCTION_USER_ID);
-    log("User ID from headers: " + req.headers["x-appwrite-user-id"]);
-    log("Final userId: " + userId);
 
     if (!userId) {
       error("No user ID found. User must be authenticated.");
@@ -86,33 +119,28 @@ module.exports = async ({ req, res, log, error }) => {
       return res.json({ error: "priceId is required" }, 400);
     }
 
-    // Build dynamic URLs from client or use defaults (land on account subscription page)
-    const baseUrl = returnUrl || "http://localhost:3000";
-    const successUrl = baseUrl + "/#/account/subscription?success=true";
-    const cancelUrl = baseUrl + "/#/account/subscription?canceled=true";
+    if (returnUrl) {
+      log("Client returnUrl (informational): " + returnUrl);
+    }
 
-    log("Creating checkout session with returnUrl: " + baseUrl);
-
-    // 1. Get the user's account to find their Stripe Customer ID
     const accountDocs = await databases.listDocuments(DATABASE_ID, ACCOUNTS_COLLECTION_ID, [
       sdk.Query.equal("user_id", user.$id),
     ]);
 
     if (accountDocs.total === 0) {
       error("No account found for user " + user.$id);
-      return res.json({ error: "No Stripe customer found. Please contact support." }, 404);
+      return res.json({ error: "No account found. Set up billing first." }, 404);
     }
 
     const stripeCustomerId = accountDocs.documents[0].stripe_customer_id;
 
     if (!stripeCustomerId) {
       error("Account exists but no stripe_customer_id for user " + user.$id);
-      return res.json({ error: "Stripe customer ID not configured. Please contact support." }, 404);
+      return res.json({ error: "Stripe customer ID not configured. Set up billing first." }, 404);
     }
 
     log("Found Stripe customer: " + stripeCustomerId);
 
-    // 2. Check for existing subscription via Stripe API only
     const subscriptionsList = await stripe.subscriptions.list({
       customer: stripeCustomerId,
       limit: 10,
@@ -121,7 +149,6 @@ module.exports = async ({ req, res, log, error }) => {
       (s) => s.status && s.status !== "canceled" && s.status !== "incomplete_expired"
     );
 
-    // 3. Fetch price and product to get metadata label
     const price = await stripe.prices.retrieve(priceId);
     const product = await stripe.products.retrieve(price.product);
     const productLabel = product.metadata?.label || null;
@@ -133,44 +160,37 @@ module.exports = async ({ req, res, log, error }) => {
       return res.json({ error: "Product configuration error. Please contact support." }, 400);
     }
 
-    // 4. If an existing non-canceled subscription exists, update it in-place
-    //    instead of creating a new subscription. This prevents duplicate
-    //    subscriptions for the same customer when swapping plans.
     if (activeSubscription) {
-      log(
-        "User has active subscription: " + activeSubscription.id + ". Attempting in-place update..."
-      );
+      log("User has active subscription: " + activeSubscription.id + ". Attempting in-place update...");
 
       const existingItem =
         activeSubscription.items &&
         activeSubscription.items.data &&
         activeSubscription.items.data[0];
       if (!existingItem) {
-        log("No existing subscription item found, falling back to portal session");
-        const portalSession = await stripe.billingPortal.sessions.create({
-          customer: stripeCustomerId,
-          return_url: successUrl,
-        });
-        return res.json({ sessionId: portalSession.id, url: portalSession.url });
+        error("No subscription line items on active subscription");
+        return res.json(
+          { error: "Your subscription has no billable items. Contact support." },
+          400
+        );
       }
 
-      // If the selected price is already the current price, return current subscription
       if (existingItem.price && existingItem.price.id === priceId) {
         log("Selected price is same as current price, returning existing subscription info");
         return res.json({
           subscriptionId: activeSubscription.id,
           status: activeSubscription.status,
           message: "Already on selected plan",
+          url: null,
+          payment: null,
         });
       }
 
-      // Detect Upgrade vs Downgrade to enforce logic
       const getMonthlyCost = (p) => {
         if (!p || !p.unit_amount) return 0;
         let divisor = 1;
         if (p.recurring) {
           if (p.recurring.interval === "year") divisor = 12;
-          // if 'month', divisor = 1 * interval_count
           if (p.recurring.interval === "month") divisor = 1;
           divisor = divisor * (p.recurring.interval_count || 1);
         }
@@ -179,23 +199,16 @@ module.exports = async ({ req, res, log, error }) => {
 
       const currentCost = getMonthlyCost(existingItem.price);
       const newCost = getMonthlyCost(price);
-
-      // If new cost is strictly less than current, treat as downgrade
-      // Also verify currency matches to be safe
       const isDowngrade = newCost < currentCost && price.currency === existingItem.price.currency;
 
-      log(
-        `Plan Change Check: Current ${currentCost} vs New ${newCost}. Is Downgrade? ${isDowngrade}`
-      );
+      log(`Plan Change Check: Current ${currentCost} vs New ${newCost}. Is Downgrade? ${isDowngrade}`);
 
-      // Perform update based on type
       try {
         let updated;
 
         if (updateType === "downgrade" || isDowngrade) {
           log("Processing downgrade (scheduling for period end)...");
 
-          // Create schedule if none exists
           let scheduleId = activeSubscription.schedule;
           if (!scheduleId) {
             const schedule = await stripe.subscriptionSchedules.create({
@@ -205,26 +218,20 @@ module.exports = async ({ req, res, log, error }) => {
             log("Created subscription schedule: " + scheduleId);
           }
 
-          // Get schedule to find current phase details
           const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
           const currentPhase = schedule.phases[0];
 
-          // Map current items for Phase 1
           const currentItems = currentPhase.items.map((item) => ({
             price: item.price,
             quantity: item.quantity,
           }));
 
-          // Update schedule with two phases
-          // Phase 1: Now -> Period End (Current Plan)
-          // Phase 2: Period End -> Future (New Plan)
           const periodEnd = activeSubscription.current_period_end || currentPhase.end_date;
           if (!periodEnd) {
             throw new Error("Missing current_period_end for downgrade scheduling");
           }
 
           await stripe.subscriptionSchedules.update(scheduleId, {
-            // After the schedule completes, release back to a normal subscription (continue indefinitely).
             end_behavior: "release",
             phases: [
               {
@@ -242,67 +249,104 @@ module.exports = async ({ req, res, log, error }) => {
 
           log("Schedule updated with new phase");
           updated = await stripe.subscriptions.retrieve(activeSubscription.id);
-        } else {
-          // UPGRADE or DEFAULT: Immediate update
-          log("Processing upgrade (immediate with proration)...");
-          updated = await stripe.subscriptions.update(activeSubscription.id, {
-            proration_behavior: "always_invoice",
-            items: [
-              {
-                id: existingItem.id,
-                price: priceId,
-                quantity: 1,
-              },
-            ],
-            metadata: Object.assign({}, activeSubscription.metadata || {}, {
-              product_label: productLabel,
-              appwrite_user_id: user.$id,
-            }),
+          return res.json({
+            subscriptionId: updated.id,
+            status: updated.status,
+            url: null,
+            payment: null,
+            message: "Plan change scheduled for next billing period",
           });
-          log("Subscription updated in-place: " + updated.id);
         }
 
-        return res.json({ subscriptionId: updated.id, status: updated.status, url: null });
-      } catch (updateErr) {
-        // If update fails for any reason, fallback to Billing Portal so user can manage
-        error("Failed to update subscription in-place: " + (updateErr.message || updateErr));
-        const portalSession = await stripe.billingPortal.sessions.create({
-          customer: stripeCustomerId,
-          return_url: successUrl,
+        log("Processing upgrade (immediate with proration)...");
+        updated = await stripe.subscriptions.update(activeSubscription.id, {
+          proration_behavior: "always_invoice",
+          items: [
+            {
+              id: existingItem.id,
+              price: priceId,
+              quantity: 1,
+            },
+          ],
+          metadata: Object.assign({}, activeSubscription.metadata || {}, {
+            product_label: productLabel,
+            appwrite_user_id: user.$id,
+          }),
         });
+        log("Subscription updated in-place: " + updated.id);
+
+        const { payment } = await buildPaymentFromSubscriptionId(stripe, updated.id);
         return res.json({
-          sessionId: portalSession.id,
-          url: portalSession.url,
-          warning: "Fell back to billing portal",
+          subscriptionId: updated.id,
+          status: updated.status,
+          url: null,
+          payment,
+          message: payment ? "Confirm payment to complete upgrade" : undefined,
         });
+      } catch (updateErr) {
+        error("Failed to update subscription in-place: " + (updateErr.message || updateErr));
+        return res.json(
+          {
+            error: updateErr.message || "Could not update subscription",
+            code: "subscription_update_failed",
+          },
+          500
+        );
       }
     }
 
-    // 5. No existing subscription found — create a new Stripe Checkout Session for new subscribers
-    const session = await stripe.checkout.sessions.create({
-      payment_method_collection: "if_required",
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      mode: "subscription",
+    log("No active subscription — creating subscription (in-app payment flow)...");
+    const created = await stripe.subscriptions.create({
       customer: stripeCustomerId,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      subscription_data: {
-        metadata: {
-          appwrite_user_id: user.$id,
-          product_label: productLabel,
-        },
+      items: [{ price: priceId, quantity: 1 }],
+      payment_behavior: "default_incomplete",
+      payment_settings: { save_default_payment_method: "on_subscription" },
+      expand: ["latest_invoice.payment_intent"],
+      metadata: {
+        appwrite_user_id: user.$id,
+        product_label: productLabel,
       },
     });
 
-    log("Checkout session created: " + session.id);
-    return res.json({ sessionId: session.id, url: session.url });
+    const { payment } = await buildPaymentFromSubscriptionId(stripe, created.id);
+
+    if (payment) {
+      log("New subscription requires payment confirmation: " + created.id);
+      return res.json({
+        subscriptionId: created.id,
+        status: created.status,
+        url: null,
+        payment,
+        message: "Confirm payment to start your subscription",
+      });
+    }
+
+    const refreshed = await stripe.subscriptions.retrieve(created.id);
+    if (refreshed.status === "active" || refreshed.status === "trialing") {
+      return res.json({
+        subscriptionId: refreshed.id,
+        status: refreshed.status,
+        url: null,
+        payment: null,
+      });
+    }
+
+    try {
+      await stripe.subscriptions.cancel(created.id);
+    } catch (cancelErr) {
+      log("Could not cancel incomplete subscription: " + (cancelErr.message || cancelErr));
+    }
+    error("Incomplete subscription without confirmable payment intent");
+    return res.json(
+      {
+        error:
+          "Could not start in-app payment for this plan. Add a default payment method or contact support.",
+        code: "subscription_payment_intent_missing",
+      },
+      502
+    );
   } catch (err) {
-    error("Failed to create Stripe checkout session:", err);
+    error("Failed to process order payment:", err);
     return res.json(
       {
         error: err.message || "An unexpected error occurred",

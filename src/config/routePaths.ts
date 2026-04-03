@@ -21,4 +21,5 @@ export const ROUTE_PATHS = {
   /** Admin area default route (full admin UI to be implemented later). */
   ADMIN_DASHBOARD: '/admin',
   ADMIN_USERS: '/admin/users',
+  ADMIN_SETTINGS: '/admin/settings',
 } as const;

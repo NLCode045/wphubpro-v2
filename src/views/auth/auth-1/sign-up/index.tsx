@@ -4,11 +4,12 @@ import { ROUTE_PATHS } from '@/config/routePaths'
 import { useAuth } from '@/domains/auth'
 import { currentYear } from '@/helpers'
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
 const SignUpPage = () => {
   const { register } = useAuth()
+  const navigate = useNavigate()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,7 +30,11 @@ const SignUpPage = () => {
     setError(null)
     setLoading(true)
     try {
-      await register(name, email, password)
+      const { needsMfa } = await register(name, email, password)
+      if (needsMfa) {
+        navigate(ROUTE_PATHS.MFA_CHALLENGE, { replace: true })
+        return
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not create your account.')
       setLoading(false)

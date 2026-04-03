@@ -13,6 +13,7 @@ import SiteExtensionDetailPage from '@/views/sites/detail/SiteExtensionDetailPag
 import SitesPage from '@/views/sites'
 import UserProfilePage from '@/views/profile/UserProfilePage'
 import ForgotPasswordPage from '@/views/auth/auth-1/reset-password'
+import MfaChallengePage from '@/views/auth/auth-1/mfa-challenge'
 import LoginPage from '@/views/auth/auth-1/sign-in'
 import NewPasswordPage from '@/views/auth/auth-1/new-password'
 import RegisterPage from '@/views/auth/auth-1/sign-up'
@@ -22,6 +23,10 @@ export const routes: RouteObject[] = [
   { path: '/auth-1/sign-in', element: <Navigate to={ROUTE_PATHS.LOGIN} replace /> },
   { path: '/auth-1/sign-up', element: <Navigate to={ROUTE_PATHS.REGISTER} replace /> },
   { path: '/auth-1/reset-password', element: <Navigate to={ROUTE_PATHS.FORGOT_PASSWORD} replace /> },
+  {
+    path: ROUTE_PATHS.MFA_CHALLENGE,
+    element: <MfaChallengePage />,
+  },
   {
     path: ROUTE_PATHS.LOGIN,
     element: (

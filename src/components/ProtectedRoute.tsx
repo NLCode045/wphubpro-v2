@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router'
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, mfaPending } = useAuth()
   const location = useLocation()
 
   if (isLoading) {
@@ -13,6 +13,9 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
+    if (mfaPending) {
+      return <Navigate to={ROUTE_PATHS.MFA_CHALLENGE} state={{ from: location }} replace />
+    }
     return <Navigate to={ROUTE_PATHS.LOGIN} state={{ from: location }} replace />
   }
 

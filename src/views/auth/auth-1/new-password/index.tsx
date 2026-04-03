@@ -34,8 +34,8 @@ const NewPasswordPage = () => {
     setError(null)
     setLoading(true)
     try {
-      await completePasswordRecovery(userId, secret, password)
-      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+      const { needsMfa } = await completePasswordRecovery(userId, secret, password)
+      navigate(needsMfa ? ROUTE_PATHS.MFA_CHALLENGE : ROUTE_PATHS.DASHBOARD, { replace: true })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not update password.')
       setLoading(false)

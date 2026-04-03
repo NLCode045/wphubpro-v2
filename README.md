@@ -2,6 +2,10 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Authentication (Appwrite MFA)
+
+Deployers: in the [Appwrite Console](https://cloud.appwrite.io) for this project, enable the auth methods and MFA factors you expect users to use (email/password, OAuth, TOTP, recovery codes). The app completes the MFA challenge at `/verify-mfa` and on the sign-in screen when Appwrite returns `user_more_factors_required` after the first factor. If MFA is disabled or misconfigured in the console, enrollment or challenge steps may fail with API errors from Appwrite.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh

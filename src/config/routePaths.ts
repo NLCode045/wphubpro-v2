@@ -1,5 +1,7 @@
 export const ROUTE_PATHS = {
   LOGIN: '/login',
+  /** Second step after password or OAuth when Appwrite requires MFA (`user_more_factors_required`). */
+  MFA_CHALLENGE: '/verify-mfa',
   REGISTER: '/register',
   FORGOT_PASSWORD: '/forgot-password',
   RESET_PASSWORD: '/reset-password',

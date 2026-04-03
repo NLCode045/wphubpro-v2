@@ -2,24 +2,32 @@ import AppLogo from '@/components/AppLogo'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useAuth } from '@/domains/auth'
 import { currentYear } from '@/helpers'
-import { useState, type FormEvent } from 'react'
+import MfaVerifyForm from '@/views/auth/auth-1/components/MfaVerifyForm'
+import { useEffect, useState, type FormEvent } from 'react'
 import { FaGithub } from 'react-icons/fa6'
 import { Link } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
 const SignInPage = () => {
-  const { login, loginWithGitHub } = useAuth()
+  const { login, loginWithGitHub, logout, mfaPending } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [mfaStep, setMfaStep] = useState(false)
+
+  useEffect(() => {
+    if (mfaPending) setMfaStep(true)
+  }, [mfaPending])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
-      await login(email, password)
+      const { needsMfa } = await login(email, password)
+      setLoading(false)
+      if (needsMfa) setMfaStep(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.')
       setLoading(false)
@@ -39,82 +47,99 @@ const SignInPage = () => {
               <div className="auth-brand text-center mb-4">
                 <AppLogo />
                 <p className="text-muted w-lg-75 mt-3 mx-auto">
-                  Let&apos;s get you signed in. Enter your email and password to continue.
+                  {mfaStep
+                    ? 'Almost there — confirm it’s you with your second factor.'
+                    : 'Let’s get you signed in. Enter your email and password to continue.'}
                 </p>
               </div>
 
-              <Form onSubmit={handleSubmit}>
-                {error && (
-                  <Alert variant="danger" className="mb-3 py-2">
-                    {error}
-                  </Alert>
-                )}
-
-                <div className="mb-3 form-group">
-                  <FormLabel>
-                    Email address <span className="text-danger">*</span>
-                  </FormLabel>
-                  <FormControl
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="mb-3 form-group">
-                  <div className="d-flex justify-content-between align-items-center mb-1">
-                    <FormLabel className="mb-0">
-                      Password <span className="text-danger">*</span>
-                    </FormLabel>
-                    <Link to={ROUTE_PATHS.FORGOT_PASSWORD} className="text-decoration-underline link-offset-3 text-muted small">
-                      Forgot password?
-                    </Link>
-                  </div>
-                  <FormControl
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="d-grid mb-3">
-                  <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Spinner animation="border" size="sm" className="me-2" />
-                        Signing in…
-                      </>
-                    ) : (
-                      'Sign In'
+              {mfaStep ? (
+                <MfaVerifyForm
+                  onCancel={async () => {
+                    await logout()
+                    setMfaStep(false)
+                  }}
+                  cancelLabel="Back to sign in"
+                />
+              ) : (
+                <>
+                  <Form onSubmit={handleSubmit}>
+                    {error && (
+                      <Alert variant="danger" className="mb-3 py-2">
+                        {error}
+                      </Alert>
                     )}
-                  </Button>
-                </div>
 
-                <div className="d-grid mb-3">
-                  <Button
-                    type="button"
-                    variant="outline-secondary"
-                    className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
-                    onClick={() => loginWithGitHub()}
-                  >
-                    <FaGithub size={18} />
-                    Continue with GitHub
-                  </Button>
-                </div>
-              </Form>
+                    <div className="mb-3 form-group">
+                      <FormLabel>
+                        Email address <span className="text-danger">*</span>
+                      </FormLabel>
+                      <FormControl
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
 
-              <p className="text-muted text-center mt-4 mb-0">
-                New here?{' '}
-                <Link to={ROUTE_PATHS.REGISTER} className="text-decoration-underline link-offset-3 fw-semibold">
-                  Create an account
-                </Link>
-              </p>
+                    <div className="mb-3 form-group">
+                      <div className="d-flex justify-content-between align-items-center mb-1">
+                        <FormLabel className="mb-0">
+                          Password <span className="text-danger">*</span>
+                        </FormLabel>
+                        <Link
+                          to={ROUTE_PATHS.FORGOT_PASSWORD}
+                          className="text-decoration-underline link-offset-3 text-muted small"
+                        >
+                          Forgot password?
+                        </Link>
+                      </div>
+                      <FormControl
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="d-grid mb-3">
+                      <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
+                        {loading ? (
+                          <>
+                            <Spinner animation="border" size="sm" className="me-2" />
+                            Signing in…
+                          </>
+                        ) : (
+                          'Sign In'
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="d-grid mb-3">
+                      <Button
+                        type="button"
+                        variant="outline-secondary"
+                        className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
+                        onClick={() => loginWithGitHub()}
+                      >
+                        <FaGithub size={18} />
+                        Continue with GitHub
+                      </Button>
+                    </div>
+                  </Form>
+
+                  <p className="text-muted text-center mt-4 mb-0">
+                    New here?{' '}
+                    <Link to={ROUTE_PATHS.REGISTER} className="text-decoration-underline link-offset-3 fw-semibold">
+                      Create an account
+                    </Link>
+                  </p>
+                </>
+              )}
             </Card>
 
             <p className="text-center text-muted mt-4 mb-0">

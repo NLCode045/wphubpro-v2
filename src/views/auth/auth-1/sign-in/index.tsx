@@ -80,8 +80,13 @@ const SignInPage = () => {
         }
       } catch {
         if (!cancelled) {
-          setPickSecondFactors(null)
-          setPickSecondPrefs(null)
+          setPickSecondFactors({ email: true, totp: true })
+          setPickSecondPrefs({
+            mfaFactorEmailEnabled: true,
+            mfaFactorAuthenticatorEnabled: true,
+            mfaFactorEmailRegistered: null,
+            mfaFactorTotpRegistered: null,
+          })
         }
       } finally {
         if (!cancelled) setPickSecondLoading(false)
@@ -186,6 +191,8 @@ const SignInPage = () => {
 
   const platformMail = publicAuth?.mfaOtpMailEnabled !== false && !publicAuthError
   const platformTotp = publicAuth?.mfaAuthenticatorEnabled !== false && !publicAuthError
+  /** True unless admin explicitly disabled email MFA (allows fallback when config fetch failed). */
+  const platformAllowsEmailMfa = publicAuth?.mfaOtpMailEnabled !== false
   const pickSecondMfaPending = pwdFlow.step === 'pick_second' ? pwdFlow.mfaPending : false
   const showEmailMfaChoice =
     platformMail &&
@@ -195,18 +202,24 @@ const SignInPage = () => {
     platformTotp &&
     pickSecondFactors?.totp === true &&
     pickSecondPrefs?.mfaFactorAuthenticatorEnabled !== false
+  /** No card matched server/prefs; still offer email OTP when MFA is required (Appwrite almost always has email factor). */
+  const pickSecondEmailOtpFallback =
+    pickSecondMfaPending &&
+    !pickSecondLoading &&
+    !showEmailMfaChoice &&
+    !showTotpMfaChoice &&
+    platformAllowsEmailMfa
   /** Second step only after password when MFA is required (pick_second). */
-  const showEmailSecondStep = !pickSecondLoading && showEmailMfaChoice
+  const showEmailSecondStep =
+    !pickSecondLoading && (showEmailMfaChoice || pickSecondEmailOtpFallback)
   const showTotpSecondStep = !pickSecondLoading && showTotpMfaChoice
   const pickSecondCardBusy = pickSecondAction !== null
   const pickSecondMisconfigured =
     pwdFlow.step === 'pick_second' &&
     pickSecondMfaPending &&
     !pickSecondLoading &&
-    pickSecondFactors != null &&
-    pickSecondPrefs != null &&
-    !showEmailMfaChoice &&
-    !showTotpMfaChoice
+    !showEmailSecondStep &&
+    !showTotpSecondStep
 
   const showPasswordStep = pwdFlow.step === 'password'
   const showPickSecond = pwdFlow.step === 'pick_second'
@@ -379,6 +392,11 @@ const SignInPage = () => {
                             </Card.Title>
                             <Card.Text className="text-muted small mb-0">
                               Receive a one-time code in your inbox. Use the address on your account.
+                              {pickSecondEmailOtpFallback ? (
+                                <span className="d-block mt-2 fs-xs fst-italic">
+                                  Offered by default when your saved MFA methods could not be confirmed.
+                                </span>
+                              ) : null}
                             </Card.Text>
                             {pickSecondAction === 'email' ? (
                               <div className="d-flex align-items-center gap-2 text-primary fs-sm mt-1">

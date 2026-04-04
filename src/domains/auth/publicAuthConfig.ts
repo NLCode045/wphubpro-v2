@@ -1,6 +1,6 @@
 import { executeFunction } from '@/integrations/appwrite/executeFunction';
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 export type PublicAuthConfig = {
   forceMfaForAllUsers: boolean;
@@ -17,7 +17,7 @@ export async function fetchPublicAuthConfig(): Promise<PublicAuthConfig> {
     mfaAuthenticatorEnabled?: boolean;
   }>(APPWRITE_FUNCTION_IDS.PUBLIC_AUTH_CONFIG, {
     action: 'public_auth_config',
-  });
+  }, { guestExecution: true });
   return {
     forceMfaForAllUsers: Boolean(res?.forceMfaForAllUsers),
     mfaOtpMailEnabled: res?.mfaOtpMailEnabled !== false,
@@ -25,12 +25,15 @@ export async function fetchPublicAuthConfig(): Promise<PublicAuthConfig> {
   };
 }
 
-export function usePublicAuthConfig() {
+export function usePublicAuthConfig(
+  options?: Pick<UseQueryOptions<PublicAuthConfig>, 'enabled'>,
+) {
   return useQuery({
     queryKey: ['public-auth-config'],
     queryFn: fetchPublicAuthConfig,
     staleTime: 60_000,
     retry: false,
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -54,7 +57,7 @@ export async function fetchLoginMethods(email: string): Promise<LoginMethodsResu
   }>(APPWRITE_FUNCTION_IDS.PUBLIC_AUTH_CONFIG, {
     action: 'login_methods',
     email: email.trim().toLowerCase(),
-  });
+  }, { guestExecution: true });
   const emailReg = res?.mfaFactorEmailRegistered;
   const totpReg = res?.mfaFactorTotpRegistered;
   return {

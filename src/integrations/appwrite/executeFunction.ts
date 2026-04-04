@@ -1,13 +1,117 @@
-import { functions } from '../../services/appwrite';
+import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, functions } from '../../services/appwrite';
 import { AppwriteFunctionError } from './errors';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+/** Minimal execution shape from REST (SDK-compatible fields we read). */
+type ExecutionRecord = {
+  $id: string;
+  status?: string;
+  responseStatusCode?: number;
+  responseBody?: string;
+  errors?: string;
+};
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function isTerminalExecutionStatus(status: string | undefined): boolean {
   const s = (status || '').toLowerCase();
   return s === 'completed' || s === 'failed' || s === 'canceled' || s === 'cancelled';
+}
+
+function executionEndpointBase(): string {
+  return `${APPWRITE_ENDPOINT.replace(/\/$/, '')}/functions`;
+}
+
+const guestFetchHeaders: Record<string, string> = {
+  'X-Appwrite-Project': APPWRITE_PROJECT_ID,
+  'X-Appwrite-Response-Format': '1.8.0',
+};
+
+const getErrorMessage = (parsedBody: unknown, fallback: string): string => {
+  if (parsedBody && typeof parsedBody === 'object') {
+    const parsed = parsedBody as Record<string, unknown>;
+    if (typeof parsed.message === 'string' && parsed.message) return parsed.message;
+    if (typeof parsed.error === 'string' && parsed.error) return parsed.error;
+  }
+
+  if (typeof parsedBody === 'string' && parsedBody) return parsedBody;
+  return fallback;
+};
+
+/**
+ * Create a function execution without attaching the logged-in session (no JWT / session cookie).
+ * Needed when the browser holds an MFA-pending session: Appwrite rejects normal SDK calls with
+ * "More factors are required…" but guest `execute: any` functions should still run.
+ */
+async function guestCreateExecution(
+  functionId: string,
+  bodyPayload: string | undefined,
+  opts: { async: boolean; path?: string; method?: HttpMethod },
+): Promise<ExecutionRecord> {
+  const reqBody: Record<string, unknown> = {
+    body: bodyPayload ?? '',
+    async: opts.async,
+  };
+  if (opts.path !== undefined) reqBody.path = opts.path;
+  if (opts.method !== undefined) reqBody.method = opts.method;
+
+  const url = `${executionEndpointBase()}/${encodeURIComponent(functionId)}/executions`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { ...guestFetchHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify(reqBody),
+    credentials: 'omit',
+    mode: 'cors',
+  });
+  const rawText = await res.text();
+  let parsed: unknown = null;
+  if (rawText.trim()) {
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = rawText;
+    }
+  }
+  if (!res.ok) {
+    throw new AppwriteFunctionError({
+      message: getErrorMessage(parsed, `Function "${functionId}" failed with HTTP ${res.status}`),
+      functionId,
+      statusCode: res.status,
+      rawBody: rawText,
+      parsedBody: parsed,
+    });
+  }
+  return parsed as ExecutionRecord;
+}
+
+async function guestGetExecution(functionId: string, executionId: string): Promise<ExecutionRecord> {
+  const url = `${executionEndpointBase()}/${encodeURIComponent(functionId)}/executions/${encodeURIComponent(executionId)}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: guestFetchHeaders,
+    credentials: 'omit',
+    mode: 'cors',
+  });
+  const rawText = await res.text();
+  let parsed: unknown = null;
+  if (rawText.trim()) {
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = rawText;
+    }
+  }
+  if (!res.ok) {
+    throw new AppwriteFunctionError({
+      message: getErrorMessage(parsed, `Get execution failed with HTTP ${res.status}`),
+      functionId,
+      statusCode: res.status,
+      rawBody: rawText,
+      parsedBody: parsed,
+    });
+  }
+  return parsed as ExecutionRecord;
 }
 
 /**
@@ -19,10 +123,13 @@ async function waitForExecutionResult(
   executionId: string,
   maxWaitMs: number,
   pollIntervalMs: number,
+  guestExecution: boolean,
 ) {
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
-    const ex = await functions.getExecution(functionId, executionId);
+    const ex = guestExecution
+      ? await guestGetExecution(functionId, executionId)
+      : await functions.getExecution(functionId, executionId);
     if (isTerminalExecutionStatus(ex.status)) {
       return ex;
     }
@@ -47,6 +154,11 @@ export interface ExecuteFunctionOptions {
   maxAsyncWaitMs?: number;
   parseJson?: boolean;
   throwOnHttpError?: boolean;
+  /**
+   * Do not send the user session. Use for `execute: any` functions on the login screen when an
+   * MFA-incomplete JWT would make Appwrite reject the request.
+   */
+  guestExecution?: boolean;
 }
 
 export interface ExecuteFunctionResult<T> {
@@ -74,17 +186,6 @@ const parseResponseBody = (body: string, parseJson: boolean): unknown => {
   return body;
 };
 
-const getErrorMessage = (parsedBody: unknown, fallback: string): string => {
-  if (parsedBody && typeof parsedBody === 'object') {
-    const parsed = parsedBody as Record<string, unknown>;
-    if (typeof parsed.message === 'string' && parsed.message) return parsed.message;
-    if (typeof parsed.error === 'string' && parsed.error) return parsed.error;
-  }
-
-  if (typeof parsedBody === 'string' && parsedBody) return parsedBody;
-  return fallback;
-};
-
 export async function executeFunctionWithMeta<TResponse = unknown, TPayload = unknown>(
   functionId: string,
   payload?: TPayload,
@@ -98,6 +199,7 @@ export async function executeFunctionWithMeta<TResponse = unknown, TPayload = un
     maxAsyncWaitMs = 60_000,
     parseJson = true,
     throwOnHttpError = true,
+    guestExecution = false,
   } = options;
 
   const body =
@@ -107,17 +209,34 @@ export async function executeFunctionWithMeta<TResponse = unknown, TPayload = un
         ? payload
         : JSON.stringify(payload);
 
-  let execution = await functions.createExecution(
-    functionId,
-    body,
-    longRunning ? true : isAsync,
-    path,
-    method as any,
-  );
+  const runAsync = longRunning ? true : isAsync;
+
+  let execution: ExecutionRecord;
+  if (guestExecution) {
+    execution = await guestCreateExecution(functionId, body, {
+      async: runAsync,
+      path,
+      method,
+    });
+  } else {
+    execution = (await functions.createExecution(
+      functionId,
+      body,
+      runAsync,
+      path,
+      method as any,
+    )) as ExecutionRecord;
+  }
 
   if (longRunning) {
     if (!isTerminalExecutionStatus(execution.status)) {
-      execution = await waitForExecutionResult(functionId, execution.$id, maxAsyncWaitMs, 600);
+      execution = await waitForExecutionResult(
+        functionId,
+        execution.$id,
+        maxAsyncWaitMs,
+        600,
+        guestExecution,
+      );
     }
   }
 

@@ -1,18 +1,21 @@
 import { useAuth, usePublicAuthConfig } from '@/domains/auth';
 import { mergeProfilePrefs, parseProfilePrefs, type PrefsRecord, type ProfilePrefs } from '@/domains/profile/profilePrefs';
-import { account } from '@/services/appwrite';
+import { account, OAuthProvider } from '@/services/appwrite';
 import { AuthenticatorType } from 'appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { FaGithub } from 'react-icons/fa6';
+import { useSearchParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 
 type ConfigurePanel = 'totp' | null;
 
 const UserProfileSecurityTab = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, linkGitHubIdentity, listOAuthIdentities, unlinkOAuthIdentity } = useAuth();
   const { data: publicAuth } = usePublicAuthConfig();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -38,6 +41,55 @@ const UserProfileSecurityTab = () => {
     queryFn: () => account.listMfaFactors(),
     enabled: Boolean(user),
   });
+
+  const identitiesQuery = useQuery({
+    queryKey: ['oauth-identities'],
+    queryFn: () => listOAuthIdentities(),
+    enabled: Boolean(user),
+  });
+
+  const [oauthFlash, setOauthFlash] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
+
+  useEffect(() => {
+    const o = searchParams.get('oauth');
+    if (o === 'github_linked') {
+      setOauthFlash({ variant: 'success', text: 'GitHub was linked to your account. You can sign in with GitHub next time.' });
+      void queryClient.invalidateQueries({ queryKey: ['oauth-identities'] });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('oauth');
+          return next;
+        },
+        { replace: true },
+      );
+    } else if (o === 'github_error') {
+      setOauthFlash({ variant: 'danger', text: 'GitHub could not be linked. Try again or use another account.' });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('oauth');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [searchParams, queryClient, setSearchParams]);
+
+  const unlinkIdentityMutation = useMutation({
+    mutationFn: (identityId: string) => unlinkOAuthIdentity(identityId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['oauth-identities'] });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Could not remove the linked account.';
+      setOauthFlash({ variant: 'danger', text: msg });
+    },
+  });
+
+  const githubIdentity = identitiesQuery.data?.find(
+    (i) => i.provider === OAuthProvider.Github || i.provider === 'github',
+  );
 
   const p = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
   const mfaEnabledOnAccount = Boolean(user && typeof user.mfa === 'boolean' && user.mfa);
@@ -308,6 +360,84 @@ const UserProfileSecurityTab = () => {
             </Button>
           </div>
         </Form>
+      </section>
+
+      <hr className="my-0 border-light" />
+
+      <section>
+        <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Connected accounts</p>
+        <p className="text-muted fs-sm mb-3">
+          Link GitHub to sign in with OAuth2. Appwrite stores this as an{' '}
+          <a
+            href="https://appwrite.io/docs/products/auth/identities"
+            target="_blank"
+            rel="noreferrer"
+            className="link-offset-2">
+            identity
+          </a>{' '}
+          on your user.
+        </p>
+        {oauthFlash ? (
+          <Alert
+            variant={oauthFlash.variant}
+            className="py-2 fs-sm mb-3"
+            dismissible
+            onClose={() => setOauthFlash(null)}>
+            {oauthFlash.text}
+          </Alert>
+        ) : null}
+        <div className="border rounded p-3 mb-0">
+          <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div className="d-flex align-items-center gap-3 min-w-0">
+              <div className="rounded-3 bg-dark bg-opacity-10 text-body flex-shrink-0 d-flex align-items-center justify-content-center p-3">
+                <FaGithub size={22} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <p className="fw-semibold mb-0 fs-sm">GitHub</p>
+                {identitiesQuery.isLoading ? (
+                  <Spinner animation="border" size="sm" className="mt-2" />
+                ) : githubIdentity ? (
+                  <p className="text-muted small mb-0 text-break">
+                    Linked
+                    {githubIdentity.providerEmail
+                      ? ` as ${githubIdentity.providerEmail}`
+                      : githubIdentity.providerUid
+                        ? ` (ID ${githubIdentity.providerUid})`
+                        : ''}
+                  </p>
+                ) : (
+                  <p className="text-muted small mb-0">Not connected</p>
+                )}
+              </div>
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              {githubIdentity ? (
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  disabled={unlinkIdentityMutation.isPending}
+                  onClick={() => {
+                    if (!window.confirm('Disconnect GitHub from this account? You can link it again later.')) return;
+                    unlinkIdentityMutation.mutate(githubIdentity.$id);
+                  }}>
+                  {unlinkIdentityMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Disconnect'}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  disabled={identitiesQuery.isLoading}
+                  onClick={() => {
+                    setOauthFlash(null);
+                    linkGitHubIdentity();
+                  }}>
+                  <FaGithub className="me-2" size={16} aria-hidden />
+                  Link GitHub
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       </section>
 
       <hr className="my-0 border-light" />

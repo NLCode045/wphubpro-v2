@@ -1,15 +1,29 @@
+import { ROUTE_PATHS } from '@/config/routePaths';
 import { clearPagespeedSessionStorage } from '@/domains/sites/pagespeedSessionCache';
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import type { Models } from 'appwrite';
 import { AppwriteException, AuthenticationFactor } from 'appwrite';
 import { account, teams, ID, OAuthProvider } from '../../services/appwrite';
 import type { User } from '../../types';
 
+/** GitHub OAuth scopes — see https://appwrite.io/docs/products/auth/oauth2 */
+const GITHUB_OAUTH_SCOPES = ['read:user', 'user:email'] as const;
+
 function getOAuthRedirectUrls() {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return {
-    success: `${origin}/dashboard`,
-    failure: `${origin}/login`,
+    success: `${origin}${ROUTE_PATHS.DASHBOARD}`,
+    failure: `${origin}${ROUTE_PATHS.LOGIN}`,
+  };
+}
+
+function getGitHubLinkIdentityUrls() {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const base = `${origin}${ROUTE_PATHS.PROFILE}?tab=security`;
+  return {
+    success: `${base}&oauth=github_linked`,
+    failure: `${base}&oauth=github_error`,
   };
 }
 
@@ -37,7 +51,15 @@ interface AuthContextType {
   completeMfaChallengeLogin: (challengeId: string, otp: string) => Promise<void>;
   /** Abandon MFA sign-in and clear the partial session. */
   cancelMfaLogin: () => Promise<void>;
+  /** Start GitHub OAuth2 sign-in (new or existing user). See https://appwrite.io/docs/products/auth/oauth2 */
   loginWithGitHub: () => void;
+  /**
+   * While signed in, start GitHub OAuth2 to attach an identity to the current account.
+   * See https://appwrite.io/docs/products/auth/identities
+   */
+  linkGitHubIdentity: () => void;
+  listOAuthIdentities: () => Promise<Models.Identity[]>;
+  unlinkOAuthIdentity: (identityId: string) => Promise<void>;
   /** Appwrite Email OTP step 1 — sends code to the address; returns target user id for {@link verifyLoginEmailOtp}. */
   sendLoginEmailOtp: (email: string) => Promise<{ userId: string }>;
   /** Appwrite Email OTP step 2 — completes session after user enters code from email. */
@@ -136,7 +158,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loginWithGitHub = () => {
     const { success, failure } = getOAuthRedirectUrls();
-    account.createOAuth2Session(OAuthProvider.Github, success, failure, ['user:email']);
+    account.createOAuth2Session(OAuthProvider.Github, success, failure, [...GITHUB_OAUTH_SCOPES]);
+  };
+
+  const linkGitHubIdentity = () => {
+    const { success, failure } = getGitHubLinkIdentityUrls();
+    account.createOAuth2Session(OAuthProvider.Github, success, failure, [...GITHUB_OAUTH_SCOPES]);
+  };
+
+  const listOAuthIdentities = async (): Promise<Models.Identity[]> => {
+    const res = await account.listIdentities();
+    if (Array.isArray(res)) {
+      return res as Models.Identity[];
+    }
+    const list = (res as { identities?: Models.Identity[] }).identities;
+    return Array.isArray(list) ? list : [];
+  };
+
+  const unlinkOAuthIdentity = async (identityId: string) => {
+    await account.deleteIdentity(identityId);
+    await refreshUser();
   };
 
   const sendLoginEmailOtp = async (email: string) => {
@@ -309,6 +350,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         completeMfaChallengeLogin,
         cancelMfaLogin,
         loginWithGitHub,
+        linkGitHubIdentity,
+        listOAuthIdentities,
+        unlinkOAuthIdentity,
         sendLoginEmailOtp,
         verifyLoginEmailOtp,
         beginDoubleAuthAfterPassword,

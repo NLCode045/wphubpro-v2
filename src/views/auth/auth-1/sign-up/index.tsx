@@ -4,11 +4,12 @@ import { ROUTE_PATHS } from '@/config/routePaths'
 import { useAuth } from '@/domains/auth'
 import { currentYear } from '@/helpers'
 import { useState, type FormEvent } from 'react'
+import { FaGithub } from 'react-icons/fa6'
 import { Link } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
 const SignUpPage = () => {
-  const { register } = useAuth()
+  const { register, loginWithGitHub } = useAuth()
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -127,6 +128,34 @@ const SignUpPage = () => {
                     </Button>
                   </div>
                 </Form>
+
+                <div className="position-relative text-center my-3">
+                  <hr className="border-light" />
+                  <span className="position-absolute top-50 start-50 translate-middle bg-white px-2 text-muted small">
+                    or
+                  </span>
+                </div>
+
+                <div className="d-grid mb-2">
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
+                    onClick={() => loginWithGitHub()}>
+                    <FaGithub size={18} />
+                    Continue with GitHub
+                  </Button>
+                </div>
+                <p className="text-muted text-center fs-xs mb-0">
+                  Uses OAuth2; if your GitHub email matches an existing account, it will be linked.{' '}
+                  <a
+                    href="https://appwrite.io/docs/products/auth/oauth2"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="link-offset-2">
+                    Learn more
+                  </a>
+                </p>
               </div>
 
               <p className="text-muted text-center mt-4 mb-0">

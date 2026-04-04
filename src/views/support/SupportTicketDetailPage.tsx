@@ -19,7 +19,7 @@ import {
   Spinner,
 } from 'react-bootstrap';
 import { TbArrowLeft, TbBell, TbBellOff } from 'react-icons/tb';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { SupportTicketChatCard } from '@/views/support/SupportTicketChatCard';
 import {
   categoryLabel,
@@ -171,7 +171,6 @@ export default function SupportTicketDetailPage() {
   const updateTicket = useUpdateTicket();
   const updateStatusOnly = useUpdateTicketStatus();
   const setFollow = useSetTicketFollow();
-  const addMsg = useAddTicketMessage();
 
   const { data: adminUsers } = useAdminUsersList({ role: 'admin', limit: 100 });
 
@@ -357,7 +356,14 @@ export default function SupportTicketDetailPage() {
                   </Col>
                 </Row>
                 <p className="text-muted small mb-2">
-                  Notifications: <strong>{ticket.notifyChannel === 'email' ? 'Email' : ticket.notifyChannel === 'both' ? 'Both' : 'Platform'}</strong>
+                  Notifications:{' '}
+                  <strong>
+                    {ticket.notifyChannel === 'email'
+                      ? 'Email'
+                      : ticket.notifyChannel === 'both'
+                        ? 'Both'
+                        : 'Platform'}
+                  </strong>
                 </p>
 
                 <ContextBlock context={context} isAdmin={!!isAdmin} />

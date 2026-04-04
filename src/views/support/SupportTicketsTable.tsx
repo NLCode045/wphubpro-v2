@@ -13,7 +13,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
-import { Button, Card, CardFooter, CardHeader, Col, Row } from 'react-bootstrap';
+import { Card, CardFooter, CardHeader, Col, Row } from 'react-bootstrap';
 import { LuSearch, LuShuffle } from 'react-icons/lu';
 import { TbAlertTriangle, TbEye } from 'react-icons/tb';
 import { Link } from 'react-router';

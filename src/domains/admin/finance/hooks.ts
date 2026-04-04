@@ -2,13 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/domains/auth'
 import { executeFunction } from '@/integrations/appwrite/executeFunction'
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite'
-import type { StripePlan } from '@/types'
+import type { StripePlan, SubscriptionDetailsResponse } from '@/types'
 import type {
   AdminFinanceSummary,
   AdminPaymentIntentDetail,
   AdminPaymentIntentRow,
   AdminSubscriptionRow,
-  SubscriptionDetailsResponse,
 } from './types'
 
 const SUBS_FN = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS

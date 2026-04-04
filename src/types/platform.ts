@@ -40,6 +40,8 @@ export interface StripePlan {
   id: string;
   name: string;
   description: string;
+  /** From `stripe-products` list: product `active` → `active` / `inactive`. */
+  status: string;
   /** Major currency units (euros), not cents — matches `stripe-products` (`unit_amount / 100`). */
   monthlyPrice: number;
   /** Major currency units (euros), not cents. */

@@ -9,7 +9,7 @@ import { TbSettings } from 'react-icons/tb'
 import user3 from '@/assets/images/users/user-3.jpg'
 
 const UserProfile = () => {
-  const { logout, user } = useAuth()
+  const { logout, user, isAdmin } = useAuth()
   const navigate = useNavigate()
 
   const displayName = user?.name?.trim() || user?.email || 'Account'
@@ -41,7 +41,9 @@ const UserProfile = () => {
           </DropdownToggle>
 
           <DropdownMenu>
-            {userDropdownItems.map((item, idx) => (
+            {userDropdownItems
+              .filter((item) => !item.adminOnly || isAdmin)
+              .map((item, idx) => (
               <Fragment key={idx}>
                 {item.isHeader ? (
                   <div className="dropdown-header noti-title">

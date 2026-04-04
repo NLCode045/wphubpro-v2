@@ -1,3 +1,4 @@
+import { ROUTE_PATHS } from '@/config/routePaths'
 import { useDashboardNav } from '@/context/DashboardNavContext'
 import { horizontalAdminMenuItems, horizontalMenuItems } from '@/layouts/components/data'
 import type { MenuItemType } from '@/types/layout'
@@ -5,6 +6,13 @@ import {Link, useLocation} from "react-router";
 import { Fragment } from 'react'
 import { Dropdown, DropdownMenu, DropdownToggle } from 'react-bootstrap'
 import { TbChevronDown } from 'react-icons/tb'
+
+function menuPathActive(url: string | undefined, pathname: string): boolean {
+  if (!url) return false
+  if (pathname === url) return true
+  if (url === ROUTE_PATHS.ADMIN_DASHBOARD) return false
+  return pathname.startsWith(`${url}/`)
+}
 
 const MenuItemWithChildren = ({
   item,

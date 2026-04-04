@@ -10,7 +10,7 @@ import { TbChevronDown } from 'react-icons/tb'
 import user3 from '@/assets/images/users/user-3.jpg'
 
 const UserProfile = () => {
-  const { logout, user } = useAuth()
+  const { logout, user, isAdmin } = useAuth()
   const navigate = useNavigate()
 
   const displayName = user?.name?.trim() || user?.email || 'Account'
@@ -31,7 +31,9 @@ const UserProfile = () => {
           </div>
         </DropdownToggle>
         <DropdownMenu className="dropdown-menu-end">
-          {userDropdownItems.map((item, idx) => (
+          {userDropdownItems
+            .filter((item) => !item.adminOnly || isAdmin)
+            .map((item, idx) => (
             <Fragment key={idx}>
               {item.isHeader ? (
                 <div className="dropdown-header noti-title">

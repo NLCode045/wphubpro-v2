@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { executeFunction } from '../../integrations/appwrite/executeFunction';
+import { APPWRITE_FUNCTION_IDS } from '../../services/appwrite';
 import type { ForumCategory, ForumThread, ForumPost } from '../../types';
+
+const FORUM_FN = APPWRITE_FUNCTION_IDS.FORUM;
 
 interface CategoryDoc {
   $id: string;
@@ -64,7 +67,7 @@ export const useForumCategories = () => {
   return useQuery({
     queryKey: ['forumCategories'],
     queryFn: async () => {
-      const res = await executeFunction<{ categories: CategoryDoc[] }>('forum', {
+      const res = await executeFunction<{ categories: CategoryDoc[] }>(FORUM_FN, {
         action: 'listCategories',
       });
       return (res?.categories ?? []).map(mapCategory);
@@ -76,7 +79,7 @@ export const useForumThreads = (categoryId?: string) => {
   return useQuery({
     queryKey: ['forumThreads', categoryId],
     queryFn: async () => {
-      const res = await executeFunction<{ threads: ThreadDoc[]; total: number }>('forum', {
+      const res = await executeFunction<{ threads: ThreadDoc[]; total: number }>(FORUM_FN, {
         action: 'listThreads',
         categoryId,
       });
@@ -92,7 +95,7 @@ export const useForumThread = (threadId: string | undefined) => {
   return useQuery({
     queryKey: ['forumThread', threadId],
     queryFn: async () => {
-      const res = await executeFunction<{ thread: ThreadDoc; posts: PostDoc[] }>('forum', {
+      const res = await executeFunction<{ thread: ThreadDoc; posts: PostDoc[] }>(FORUM_FN, {
         action: 'getThread',
         threadId,
       });
@@ -109,7 +112,7 @@ export const useCreateForumThread = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { categoryId: string; title: string; body: string }) =>
-      executeFunction<{ thread: ThreadDoc }>('forum', { action: 'createThread', ...data }),
+      executeFunction<{ thread: ThreadDoc }>(FORUM_FN, { action: 'createThread', ...data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['forumThreads'] });
     },
@@ -120,7 +123,7 @@ export const useAddForumPost = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { threadId: string; body: string }) =>
-      executeFunction('forum', { action: 'addPost', ...data }),
+      executeFunction(FORUM_FN, { action: 'addPost', ...data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['forumThreads'] });
       queryClient.invalidateQueries({ queryKey: ['forumThread', variables.threadId] });

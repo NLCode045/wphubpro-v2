@@ -19,7 +19,7 @@ export function useMyAccountDoc(userId: string | undefined) {
         Query.equal('user_id', userId!),
       ]);
       const doc = res.documents[0];
-      return (doc as MyAccountDoc | undefined) ?? null;
+      return doc ? (doc as unknown as MyAccountDoc) : null;
     },
   });
 }

@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Query } from 'appwrite';
-import { databases, functions, ID, DATABASE_ID, COLLECTIONS } from '@/services/appwrite';
+import {
+  APPWRITE_FUNCTION_IDS,
+  COLLECTIONS,
+  DATABASE_ID,
+  databases,
+  functions,
+  ID,
+} from '@/services/appwrite';
 import { searchWpPlugins, searchWpThemes } from '@/services/wordpress';
 import type { LibraryItem } from '@/types';
 import { useNotificationContext } from '@/context/useNotificationContext';
@@ -17,8 +24,8 @@ import {
 } from '@/domains/library';
 
 const LIBRARY_COLLECTION = COLLECTIONS.LIBRARY;
-const ZIP_PARSER_FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_ZIP_PARSER ?? 'zip-parser';
-const LIBRARY_DELETE_FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_LIBRARY_DELETE ?? 'library-delete-version';
+const ZIP_PARSER_FUNCTION_ID = APPWRITE_FUNCTION_IDS.ZIP_PARSER;
+const LIBRARY_DELETE_FUNCTION_ID = APPWRITE_FUNCTION_IDS.LIBRARY_DELETE_VERSION;
 
 function docToFirstItem(doc: Record<string, unknown>): LibraryItem {
   return mapLibraryDocumentToItem(doc);

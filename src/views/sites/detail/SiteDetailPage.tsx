@@ -1,6 +1,7 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
 import { TabNavLabel } from '@/components/TabNavLabel';
-import { useFetchSiteMetaIfNeeded, useSite, useSitesStatusPoll } from '@/domains/sites';
+import { useNotificationContext } from '@/context/useNotificationContext';
+import { useFetchSiteMetaIfNeeded, useSite, useRequestSiteHealthRefresh, useSitesStatusPoll } from '@/domains/sites';
 import { hasUpdate, parsePluginsMeta, parseThemesMeta } from '@/domains/sites/installedMeta';
 import type { Site, WordPressPlugin, WordPressTheme } from '@/types';
 import ViewModeToggle, { type LibraryViewMode } from '@/views/library/components/ViewModeToggle';
@@ -12,6 +13,7 @@ import { SiteDetailHealthPanel, SiteDetailLogsPanel } from '@/views/sites/detail
 import { SiteHealthTabStatusBadge } from '@/views/sites/detail/SiteHealthTabStatusBadge';
 import { SITE_DETAIL_TAB_CONFIG } from '@/views/sites/detail/siteDetailNavTabs';
 import { useEffect, useMemo, useState } from 'react';
+import { TbStethoscope } from 'react-icons/tb';
 import { Button, Card, CardBody, Col, Container, Nav, Row, Spinner, Tab, Table } from 'react-bootstrap';
 import { Link, useParams, useSearchParams } from 'react-router';
 
@@ -217,6 +219,10 @@ const SiteDetailPage = () => {
 
   const { data: site, isLoading, isError, error } = useSite(siteId);
   const enabled = site?.enabled !== false;
+  const { showNotification } = useNotificationContext();
+  const refreshHealthFromBridge = useRequestSiteHealthRefresh();
+  const canPushHealthFromNav =
+    Boolean(site?.siteUrl?.trim()) && site?.enabled !== false && !refreshHealthFromBridge.isPending;
 
   useSitesStatusPoll(siteId && enabled ? [siteId] : []);
   useFetchSiteMetaIfNeeded(site);
@@ -271,29 +277,63 @@ const SiteDetailPage = () => {
             <Col xl={9}>
               <Card className="mb-3 shadow-sm">
                 <CardBody className="pb-0 border-bottom border-light">
-                  <Nav variant="underline" className="gap-3 flex-nowrap mb-0">
-                    {TAB_KEYS.map((key, i) => {
-                      const { label, Icon } = SITE_DETAIL_TAB_CONFIG[key];
-                      return (
-                        <Nav.Item key={key}>
-                          <Nav.Link
-                            active={tab === i}
-                            href="#"
-                            className="py-2 px-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setTabKey(key);
-                            }}
-                          >
-                            <span className="d-inline-flex align-items-center gap-2">
-                              <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
-                              {key === 'health' ? <SiteHealthTabStatusBadge healthMeta={site.healthMeta} /> : null}
-                            </span>
-                          </Nav.Link>
-                        </Nav.Item>
-                      );
-                    })}
-                  </Nav>
+                  <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0">
+                    <Nav variant="underline" className="gap-3 flex-nowrap mb-0 flex-grow-1 min-w-0">
+                      {TAB_KEYS.map((key, i) => {
+                        const { label, Icon } = SITE_DETAIL_TAB_CONFIG[key];
+                        return (
+                          <Nav.Item key={key}>
+                            <Nav.Link
+                              active={tab === i}
+                              href="#"
+                              className="py-2 px-0"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setTabKey(key);
+                              }}
+                            >
+                              <span className="d-inline-flex align-items-center gap-2">
+                                <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
+                                {key === 'health' ? <SiteHealthTabStatusBadge healthMeta={site.healthMeta} /> : null}
+                              </span>
+                            </Nav.Link>
+                          </Nav.Item>
+                        );
+                      })}
+                    </Nav>
+                    <Button
+                      type="button"
+                      variant="light"
+                      size="sm"
+                      className="d-inline-flex align-items-center justify-content-center flex-shrink-0 rounded-circle p-2 border"
+                      disabled={!canPushHealthFromNav}
+                      title="Ask the bridge on WordPress to send updated Site Health data"
+                      aria-label="Refresh Site Health from WordPress"
+                      aria-busy={refreshHealthFromBridge.isPending}
+                      onClick={() => {
+                        refreshHealthFromBridge.mutate(site.$id, {
+                          onSuccess: (res) => {
+                            showNotification({
+                              title: 'Site Health',
+                              message: res.message,
+                              variant: 'success',
+                              delay: 4000,
+                            });
+                          },
+                          onError: (err) => {
+                            showNotification({
+                              title: 'Site Health',
+                              message: err instanceof Error ? err.message : 'Request failed.',
+                              variant: 'danger',
+                              delay: 6000,
+                            });
+                          },
+                        });
+                      }}
+                    >
+                      <TbStethoscope className="fs-lg" aria-hidden />
+                    </Button>
+                  </div>
                 </CardBody>
                 <CardBody className="pt-4 pb-4">
               {tab === 0 && (

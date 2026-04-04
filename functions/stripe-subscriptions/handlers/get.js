@@ -78,22 +78,20 @@ module.exports = async ({ req, res, log, error }) => {
       limit: 10, // Fetch multiple to find the active one
     });
 
-    // If no subscription, create default signup plan subscription (every user has a plan)
-    let defaultPriceId = process.env.STRIPE_FREE_TIER_PRICE_ID;
-    if (!defaultPriceId) {
-      try {
-        const settingsDocs = await databases.listDocuments(
-          DATABASE_ID,
-          process.env.SETTINGS_COLLECTION_ID || "platform_settings",
-          [sdk.Query.equal("key", "stripe_signup_plan"), sdk.Query.limit(1)]
-        );
-        if (settingsDocs.documents?.length > 0 && settingsDocs.documents[0].value) {
-          const stripeSettings = JSON.parse(settingsDocs.documents[0].value);
-          defaultPriceId = stripeSettings.defaultSignupPlanPriceId || null;
-        }
-      } catch (e) {
-        log("Could not read Stripe settings: " + e.message);
+    // If no subscription, create default signup plan subscription when configured in platform_settings
+    let defaultPriceId = null;
+    try {
+      const settingsDocs = await databases.listDocuments(
+        DATABASE_ID,
+        process.env.SETTINGS_COLLECTION_ID || "platform_settings",
+        [sdk.Query.equal("key", "stripe_signup_plan"), sdk.Query.limit(1)]
+      );
+      if (settingsDocs.documents?.length > 0 && settingsDocs.documents[0].value) {
+        const stripeSettings = JSON.parse(settingsDocs.documents[0].value);
+        defaultPriceId = (stripeSettings.defaultSignupPlanPriceId || "").trim() || null;
       }
+    } catch (e) {
+      log("Could not read Stripe settings: " + e.message);
     }
     if (subscriptions.data.length === 0 && defaultPriceId) {
       try {

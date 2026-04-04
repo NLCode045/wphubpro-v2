@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, ListGroup, Modal, Spinner } from 'react-bootstrap';
+import { Button, ListGroup, Modal } from 'react-bootstrap';
 import { TbCloudDownload, TbLink, TbUpload } from 'react-icons/tb';
 import type { AddLibrarySourcePayload, LibrarySourceKind } from './addLibraryTypes';
 

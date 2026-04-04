@@ -1,30 +1,356 @@
 import AppLogo from '@/components/AppLogo'
 import { ROUTE_PATHS } from '@/config/routePaths'
-import { useAuth } from '@/domains/auth'
+import { useAuth, usePublicAuthConfig } from '@/domains/auth'
+import { fetchLoginMethods, type LoginMethodsResult } from '@/domains/auth/publicAuthConfig'
+import { mergeProfilePrefs, type PrefsRecord, type ProfilePrefs } from '@/domains/profile/profilePrefs'
 import { currentYear } from '@/helpers'
-import { useState, type FormEvent } from 'react'
-import { FaGithub } from 'react-icons/fa6'
-import { Link } from 'react-router'
+import { account } from '@/services/appwrite'
+import { AppwriteException } from 'appwrite'
+import { useEffect, useState, type FormEvent } from 'react'
+import { FaEnvelope, FaGithub, FaMobileScreenButton } from 'react-icons/fa6'
+import { Link, useNavigate } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
+/** Sign-in with email + password; second step only when Appwrite requires MFA (user has MFA enabled). */
+type PasswordSignInFlow =
+  | { step: 'password' }
+  | { step: 'pick_second'; mfaPending: boolean }
+  | { step: 'email_verification'; mode: 'token'; userId: string }
+  | { step: 'email_verification'; mode: 'mfa'; challengeId: string }
+  | { step: 'totp'; challengeId: string }
+
+function isMfaFactorsRequiredError(err: unknown): boolean {
+  if (err instanceof AppwriteException) {
+    return err.type === 'user_more_factors_required'
+  }
+  return (err as { type?: string }).type === 'user_more_factors_required'
+}
+
 const SignInPage = () => {
-  const { login, loginWithGitHub } = useAuth()
+  const {
+    login,
+    refreshUser,
+    beginTotpMfaChallenge,
+    beginEmailMfaChallenge,
+    completeMfaChallengeLogin,
+    cancelMfaLogin,
+    loginWithGitHub,
+    verifyLoginEmailOtp,
+  } = useAuth()
+  const navigate = useNavigate()
+
+  /**
+   * Drop invalid sessions on load; keep MFA-pending sessions (e.g. after GitHub OAuth) so the user can
+   * finish email / authenticator verification.
+   */
+  const [loginScreenSessionCleared, setLoginScreenSessionCleared] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        await account.get()
+        await cancelMfaLogin()
+      } catch (e: unknown) {
+        if (isMfaFactorsRequiredError(e)) {
+          if (!cancelled) {
+            setPwdFlow({ step: 'pick_second', mfaPending: true })
+          }
+        } else {
+          await cancelMfaLogin()
+        }
+      } finally {
+        if (!cancelled) setLoginScreenSessionCleared(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig({
+    enabled: loginScreenSessionCleared,
+  })
+  const publicAuthBlocking = !loginScreenSessionCleared || publicAuthLoading
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [pwdFlow, setPwdFlow] = useState<PasswordSignInFlow>({ step: 'password' })
 
-  const handleSubmit = async (e: FormEvent) => {
+  const [pickSecondFactors, setPickSecondFactors] = useState<{ totp: boolean; email: boolean } | null>(null)
+  const [pickSecondPrefs, setPickSecondPrefs] = useState<LoginMethodsResult | null>(null)
+  const [pickSecondLoading, setPickSecondLoading] = useState(false)
+  /** Which MFA card is starting a challenge (password step still uses `loading`). */
+  const [pickSecondAction, setPickSecondAction] = useState<'email' | 'totp' | null>(null)
+
+  useEffect(() => {
+    if (pwdFlow.step !== 'pick_second') {
+      setPickSecondFactors(null)
+      setPickSecondPrefs(null)
+      setPickSecondLoading(false)
+      return
+    }
+    const em = email.trim()
+    const mfaSessionPending = pwdFlow.step === 'pick_second' && pwdFlow.mfaPending
+    if (!em) {
+      if (mfaSessionPending) {
+        setPickSecondFactors({ email: true, totp: true })
+        setPickSecondPrefs({
+          mfaFactorEmailEnabled: true,
+          mfaFactorAuthenticatorEnabled: true,
+          mfaFactorEmailRegistered: null,
+          mfaFactorTotpRegistered: null,
+        })
+        setPickSecondLoading(false)
+      } else {
+        setPickSecondFactors(null)
+        setPickSecondPrefs(null)
+      }
+      return
+    }
+    let cancelled = false
+    setPickSecondLoading(true)
+    ;(async () => {
+      try {
+        const lm = await fetchLoginMethods(em)
+        let totp = lm.mfaFactorTotpRegistered
+        let emailFactor = lm.mfaFactorEmailRegistered
+        if (totp === null || emailFactor === null) {
+          // MFA-pending sessions cannot call listMfaFactors — Appwrite returns 401 and pollutes the console.
+          if (mfaSessionPending) {
+            if (totp === null) totp = true
+            if (emailFactor === null) emailFactor = true
+          } else {
+            try {
+              const factors = await account.listMfaFactors()
+              if (totp === null) totp = factors.totp
+              if (emailFactor === null) emailFactor = factors.email
+            } catch {
+              if (totp === null) totp = true
+              if (emailFactor === null) emailFactor = true
+            }
+          }
+        }
+        if (!cancelled) {
+          setPickSecondFactors({ totp: Boolean(totp), email: Boolean(emailFactor) })
+          setPickSecondPrefs(lm)
+        }
+      } catch {
+        if (!cancelled) {
+          setPickSecondFactors({ email: true, totp: true })
+          setPickSecondPrefs({
+            mfaFactorEmailEnabled: true,
+            mfaFactorAuthenticatorEnabled: true,
+            mfaFactorEmailRegistered: null,
+            mfaFactorTotpRegistered: null,
+          })
+        }
+      } finally {
+        if (!cancelled) setPickSecondLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [pwdFlow, email])
+
+  const handlePasswordSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    const trimmedEmail = email.trim()
+    try {
+      const { mfaPending } = await login(email, password)
+      setVerificationCode('')
+      if (mfaPending) {
+        setPwdFlow({ step: 'pick_second', mfaPending: true })
+        return
+      }
+
+      const forceMfa = publicAuth?.forceMfaForAllUsers === true && !publicAuthError
+
+      if (forceMfa) {
+        try {
+          await account.updateMFA(true)
+          let prefsSrc: PrefsRecord = {}
+          try {
+            const u = await account.get()
+            prefsSrc = (u.prefs as PrefsRecord) ?? {}
+          } catch (e1: unknown) {
+            if (isMfaFactorsRequiredError(e1)) {
+              try {
+                await account.updatePrefs(
+                  mergeProfilePrefs(prefsSrc, { mfaFactorEmailEnabled: true } satisfies Partial<ProfilePrefs>),
+                )
+              } catch {
+                /* prefs may fail until MFA completes */
+              }
+              setPwdFlow({ step: 'pick_second', mfaPending: true })
+              return
+            }
+            throw e1
+          }
+          await account.updatePrefs(
+            mergeProfilePrefs(prefsSrc, { mfaFactorEmailEnabled: true } satisfies Partial<ProfilePrefs>),
+          )
+          await account.deleteSession('current')
+          await account.createEmailPasswordSession(trimmedEmail, password)
+          try {
+            await account.get()
+            await refreshUser()
+            navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+            return
+          } catch (e2: unknown) {
+            if (isMfaFactorsRequiredError(e2)) {
+              setPwdFlow({ step: 'pick_second', mfaPending: true })
+              return
+            }
+            throw e2
+          }
+        } catch (err: unknown) {
+          setError(
+            err instanceof Error ? err.message : 'Could not enable required MFA. Try again or contact support.',
+          )
+          return
+        }
+      }
+
+      await refreshUser()
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePickEmail = async () => {
+    if (pwdFlow.step !== 'pick_second') return
+    setError(null)
+    setPickSecondAction('email')
+    setVerificationCode('')
+    try {
+      const challengeId = await beginEmailMfaChallenge()
+      setPwdFlow({ step: 'email_verification', mode: 'mfa', challengeId })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not send verification email.')
+    } finally {
+      setPickSecondAction(null)
+    }
+  }
+
+  const handlePickAuthenticator = async () => {
+    setError(null)
+    setPickSecondAction('totp')
+    setVerificationCode('')
+    try {
+      const challengeId = await beginTotpMfaChallenge()
+      setPwdFlow({ step: 'totp', challengeId })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not start authenticator verification.')
+    } finally {
+      setPickSecondAction(null)
+    }
+  }
+
+  const handleVerifySecondFactor = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
-      await login(email, password)
+      if (pwdFlow.step === 'email_verification') {
+        if (pwdFlow.mode === 'token') {
+          await verifyLoginEmailOtp(pwdFlow.userId, verificationCode)
+        } else {
+          await completeMfaChallengeLogin(pwdFlow.challengeId, verificationCode)
+        }
+      } else if (pwdFlow.step === 'totp') {
+        await completeMfaChallengeLogin(pwdFlow.challengeId, verificationCode)
+      }
+      await refreshUser()
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.')
+      setError(err instanceof Error ? err.message : 'Invalid or expired code.')
+    } finally {
       setLoading(false)
     }
   }
+
+  const leavePickSecond = async () => {
+    await cancelMfaLogin()
+    setPwdFlow({ step: 'password' })
+    setVerificationCode('')
+    setError(null)
+  }
+
+  const cancelCodeStep = async () => {
+    if (pwdFlow.step === 'email_verification' && pwdFlow.mode === 'token') {
+      setPwdFlow({ step: 'password' })
+      setVerificationCode('')
+      setError(null)
+      return
+    }
+    await cancelMfaLogin()
+    setPwdFlow({ step: 'password' })
+    setVerificationCode('')
+    setError(null)
+  }
+
+  const platformMail = publicAuth?.mfaOtpMailEnabled !== false && !publicAuthError
+  const platformTotp = publicAuth?.mfaAuthenticatorEnabled !== false && !publicAuthError
+  /** True unless admin explicitly disabled email MFA (allows fallback when config fetch failed). */
+  const platformAllowsEmailMfa = publicAuth?.mfaOtpMailEnabled !== false
+  const pickSecondMfaPending = pwdFlow.step === 'pick_second' ? pwdFlow.mfaPending : false
+  const showEmailMfaChoice =
+    platformMail &&
+    pickSecondFactors?.email === true &&
+    pickSecondPrefs?.mfaFactorEmailEnabled !== false
+  const showTotpMfaChoice =
+    platformTotp &&
+    pickSecondFactors?.totp === true &&
+    pickSecondPrefs?.mfaFactorAuthenticatorEnabled !== false
+  /** No card matched server/prefs; still offer email OTP when MFA is required (Appwrite almost always has email factor). */
+  const pickSecondEmailOtpFallback =
+    pickSecondMfaPending &&
+    !pickSecondLoading &&
+    !showEmailMfaChoice &&
+    !showTotpMfaChoice &&
+    platformAllowsEmailMfa
+  /** Second step only after password when MFA is required (pick_second). */
+  const showEmailSecondStep =
+    !pickSecondLoading && (showEmailMfaChoice || pickSecondEmailOtpFallback)
+  const showTotpSecondStep = !pickSecondLoading && showTotpMfaChoice
+  const pickSecondCardBusy = pickSecondAction !== null
+  const pickSecondMisconfigured =
+    pwdFlow.step === 'pick_second' &&
+    pickSecondMfaPending &&
+    !pickSecondLoading &&
+    !showEmailSecondStep &&
+    !showTotpSecondStep
+
+  const showPasswordStep = pwdFlow.step === 'password'
+  const showPickSecond = pwdFlow.step === 'pick_second'
+  const showEmailCodeStep = pwdFlow.step === 'email_verification'
+  const showTotpStep = pwdFlow.step === 'totp'
+
+  const orgRequiresMfa = Boolean(publicAuth?.forceMfaForAllUsers && !publicAuthError)
+
+  const brandLine = (() => {
+    if (pwdFlow.step === 'pick_second') {
+      return orgRequiresMfa
+        ? 'Your organization requires multi-factor authentication. Choose how to verify.'
+        : 'Choose how you want to verify — pick a method you enabled in your security settings.'
+    }
+    if (pwdFlow.step === 'email_verification') {
+      return `Enter the code we sent to ${email.trim() || 'your email'}.`
+    }
+    if (pwdFlow.step === 'totp') {
+      return 'Enter the 6-digit code from your authenticator app.'
+    }
+    return "Let's get you signed in. Enter your email and password to continue."
+  })()
 
   return (
     <div className="auth-box overflow-hidden align-items-center d-flex" style={{ minHeight: '100vh' }}>
@@ -38,76 +364,283 @@ const SignInPage = () => {
 
               <div className="auth-brand text-center mb-4">
                 <AppLogo />
-                <p className="text-muted w-lg-75 mt-3 mx-auto">
-                  Let&apos;s get you signed in. Enter your email and password to continue.
-                </p>
+                <p className="text-muted w-lg-75 mt-3 mx-auto">{brandLine}</p>
               </div>
 
-              <Form onSubmit={handleSubmit}>
-                {error && (
-                  <Alert variant="danger" className="mb-3 py-2">
-                    {error}
-                  </Alert>
-                )}
-
-                <div className="mb-3 form-group">
-                  <FormLabel>
-                    Email address <span className="text-danger">*</span>
-                  </FormLabel>
-                  <FormControl
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
+              {publicAuthBlocking ? (
+                <div className="d-flex align-items-center justify-content-center gap-2 text-muted py-4">
+                  <Spinner animation="border" size="sm" />
+                  Loading…
                 </div>
+              ) : null}
 
-                <div className="mb-3 form-group">
-                  <div className="d-flex justify-content-between align-items-center mb-1">
-                    <FormLabel className="mb-0">
-                      Password <span className="text-danger">*</span>
+              {!publicAuthBlocking && publicAuthError ? (
+                <Alert variant="warning" className="py-2 fs-sm mb-3">
+                  Could not load sign-in options. You can still try email and password.
+                </Alert>
+              ) : null}
+
+              {!publicAuthBlocking && showPasswordStep && (
+                <Form onSubmit={handlePasswordSubmit}>
+                  {error ? (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  ) : null}
+
+                  <div className="mb-3 form-group">
+                    <FormLabel>
+                      Email address <span className="text-danger">*</span>
                     </FormLabel>
-                    <Link to={ROUTE_PATHS.FORGOT_PASSWORD} className="text-decoration-underline link-offset-3 text-muted small">
-                      Forgot password?
-                    </Link>
+                    <FormControl
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
                   </div>
-                  <FormControl
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
 
-                <div className="d-grid mb-3">
-                  <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Spinner animation="border" size="sm" className="me-2" />
-                        Signing in…
-                      </>
-                    ) : (
-                      'Sign In'
-                    )}
-                  </Button>
-                </div>
+                  <div className="mb-3 form-group">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <FormLabel className="mb-0">
+                        Password <span className="text-danger">*</span>
+                      </FormLabel>
+                      <Link
+                        to={ROUTE_PATHS.FORGOT_PASSWORD}
+                        className="text-decoration-underline link-offset-3 text-muted small">
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <FormControl
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
 
-                <div className="d-grid mb-3">
-                  <Button
-                    type="button"
-                    variant="outline-secondary"
-                    className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
-                    onClick={() => loginWithGitHub()}
-                  >
-                    <FaGithub size={18} />
-                    Continue with GitHub
-                  </Button>
+                  <div className="d-grid mb-2">
+                    <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2" />
+                          Verifying…
+                        </>
+                      ) : (
+                        'Continue'
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="d-grid mb-3">
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      className="fw-semibold py-2 d-inline-flex align-items-center justify-content-center gap-2"
+                      onClick={() => loginWithGitHub()}>
+                      <FaGithub size={18} />
+                      Continue with GitHub
+                    </Button>
+                  </div>
+                </Form>
+              )}
+
+              {!publicAuthBlocking && showPickSecond && (
+                <div>
+                  {error ? (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  ) : null}
+                  <p className="text-muted fs-sm mb-3">
+                    {orgRequiresMfa
+                      ? 'Multi-factor authentication is required. Pick a verification method below.'
+                      : 'Your password was accepted. Select one of your enabled verification methods below.'}
+                  </p>
+                  {pickSecondLoading ? (
+                    <div className="d-flex align-items-center gap-2 text-muted fs-sm mb-3">
+                      <Spinner animation="border" size="sm" />
+                      Loading your sign-in options…
+                    </div>
+                  ) : null}
+                  {pickSecondMisconfigured ? (
+                    <Alert variant="danger" className="py-2 fs-sm mb-3">
+                      No MFA method is available for your account. Contact support or update your security settings in
+                      your profile.
+                    </Alert>
+                  ) : null}
+                  <div className="d-flex flex-column gap-3 mb-3">
+                    {showEmailSecondStep ? (
+                      <Card
+                        className={`border border-light-subtle shadow-sm user-select-none ${
+                          pickSecondCardBusy && pickSecondAction !== 'email' ? 'opacity-50' : ''
+                        }`}
+                        role="button"
+                        tabIndex={pickSecondCardBusy || pickSecondLoading ? -1 : 0}
+                        onClick={() => {
+                          if (pickSecondCardBusy || pickSecondLoading) return
+                          void handlePickEmail()
+                        }}
+                        onKeyDown={(e) => {
+                          if (pickSecondCardBusy || pickSecondLoading) return
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            void handlePickEmail()
+                          }
+                        }}
+                        style={{
+                          cursor: pickSecondCardBusy || pickSecondLoading ? 'default' : 'pointer',
+                        }}
+                        aria-busy={pickSecondAction === 'email'}
+                        aria-label="Sign in with email verification code">
+                        <Card.Body className="d-flex flex-row align-items-center gap-3 p-3 p-md-4">
+                          <div
+                            className="rounded-3 bg-primary bg-opacity-10 text-primary flex-shrink-0 d-flex align-items-center justify-content-center"
+                            style={{ width: 52, height: 52 }}>
+                            <FaEnvelope size={22} aria-hidden />
+                          </div>
+                          <div className="flex-grow-1 min-w-0 text-start">
+                            <Card.Title as="h6" className="mb-1 fs-base fw-semibold">
+                              Email code
+                            </Card.Title>
+                            <Card.Text className="text-muted small mb-2 mb-md-0">
+                              Receive a one-time code in your inbox. Use the address on your account.
+                              {pickSecondEmailOtpFallback ? (
+                                <span className="d-block mt-1 fs-xs fst-italic">
+                                  Offered by default when your saved MFA methods could not be confirmed.
+                                </span>
+                              ) : null}
+                            </Card.Text>
+                            {pickSecondAction === 'email' ? (
+                              <div className="d-flex align-items-center gap-2 text-primary fs-sm">
+                                <Spinner animation="border" size="sm" />
+                                Sending code…
+                              </div>
+                            ) : (
+                              <span className="text-primary fs-sm fw-semibold">Continue with email →</span>
+                            )}
+                          </div>
+                        </Card.Body>
+                      </Card>
+                    ) : null}
+                    {showTotpSecondStep ? (
+                      <Card
+                        className={`border border-light-subtle shadow-sm user-select-none ${
+                          pickSecondCardBusy && pickSecondAction !== 'totp' ? 'opacity-50' : ''
+                        }`}
+                        role="button"
+                        tabIndex={pickSecondCardBusy || pickSecondLoading ? -1 : 0}
+                        onClick={() => {
+                          if (pickSecondCardBusy || pickSecondLoading) return
+                          void handlePickAuthenticator()
+                        }}
+                        onKeyDown={(e) => {
+                          if (pickSecondCardBusy || pickSecondLoading) return
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            void handlePickAuthenticator()
+                          }
+                        }}
+                        style={{
+                          cursor: pickSecondCardBusy || pickSecondLoading ? 'default' : 'pointer',
+                        }}
+                        aria-busy={pickSecondAction === 'totp'}
+                        aria-label="Sign in with authenticator app">
+                        <Card.Body className="d-flex flex-row align-items-center gap-3 p-3 p-md-4">
+                          <div
+                            className="rounded-3 bg-secondary bg-opacity-10 text-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center"
+                            style={{ width: 52, height: 52 }}>
+                            <FaMobileScreenButton size={22} aria-hidden />
+                          </div>
+                          <div className="flex-grow-1 min-w-0 text-start">
+                            <Card.Title as="h6" className="mb-1 fs-base fw-semibold">
+                              Authenticator app
+                            </Card.Title>
+                            <Card.Text className="text-muted small mb-2 mb-md-0">
+                              Open your authenticator app and enter the 6-digit code for this account.
+                            </Card.Text>
+                            {pickSecondAction === 'totp' ? (
+                              <div className="d-flex align-items-center gap-2 text-primary fs-sm">
+                                <Spinner animation="border" size="sm" />
+                                Preparing…
+                              </div>
+                            ) : (
+                              <span className="text-primary fs-sm fw-semibold">Continue with app →</span>
+                            )}
+                          </div>
+                        </Card.Body>
+                      </Card>
+                    ) : null}
+                  </div>
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="text-muted"
+                      disabled={pickSecondCardBusy}
+                      onClick={() => void leavePickSecond()}>
+                      Back to email and password
+                    </Button>
+                  </div>
                 </div>
-              </Form>
+              )}
+
+              {!publicAuthBlocking && (showEmailCodeStep || showTotpStep) && (
+                <Form onSubmit={handleVerifySecondFactor}>
+                  {error ? (
+                    <Alert variant="danger" className="mb-3 py-2">
+                      {error}
+                    </Alert>
+                  ) : null}
+                  {showTotpStep ? (
+                    <p className="text-muted fs-sm mb-3">
+                      Open your authenticator app and enter the code for{' '}
+                      <strong>{email.trim() || 'your account'}</strong>.
+                    </p>
+                  ) : (
+                    <p className="text-muted fs-sm mb-3">
+                      Check your inbox (and spam) for a message from us with your verification code.
+                    </p>
+                  )}
+                  <div className="mb-3 form-group">
+                    <FormLabel>{showTotpStep ? 'Authenticator code' : 'Verification code'}</FormLabel>
+                    <FormControl
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="6-digit code"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="d-grid gap-2 mb-3">
+                    <Button type="submit" className="btn-primary fw-semibold py-2" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2" />
+                          Verifying…
+                        </>
+                      ) : (
+                        'Verify and sign in'
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      size="sm"
+                      disabled={loading}
+                      onClick={() => void cancelCodeStep()}>
+                      Cancel
+                    </Button>
+                  </div>
+                </Form>
+              )}
 
               <p className="text-muted text-center mt-4 mb-0">
                 New here?{' '}

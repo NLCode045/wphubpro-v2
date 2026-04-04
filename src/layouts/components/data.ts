@@ -1,7 +1,16 @@
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { type MenuItemType } from '@/types/layout'
 import { type IconType } from 'react-icons'
-import { TbLayoutDashboard, TbLibrary, TbLogout2, TbUserCircle, TbUsers, TbWorld } from 'react-icons/tb'
+import {
+  TbCoin,
+  TbLayoutDashboard,
+  TbLibrary,
+  TbLogout2,
+  TbSettings,
+  TbUserCircle,
+  TbUsers,
+  TbWorld,
+} from 'react-icons/tb'
 
 type UserDropdownItemType = {
   label?: string
@@ -90,6 +99,18 @@ export const adminMenuItems: MenuItemType[] = [
     icon: TbUsers,
     url: ROUTE_PATHS.ADMIN_USERS,
   },
+  {
+    key: 'admin-settings',
+    label: 'Platform settings',
+    icon: TbSettings,
+    url: ROUTE_PATHS.ADMIN_SETTINGS,
+  },
+  {
+    key: 'admin-finance',
+    label: 'Finance',
+    icon: TbCoin,
+    url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
+  },
 ]
 
 export const horizontalAdminMenuItems: MenuItemType[] = [
@@ -104,5 +125,17 @@ export const horizontalAdminMenuItems: MenuItemType[] = [
     label: 'Users',
     icon: TbUsers,
     url: ROUTE_PATHS.ADMIN_USERS,
+  },
+  {
+    key: 'admin-settings',
+    label: 'Settings',
+    icon: TbSettings,
+    url: ROUTE_PATHS.ADMIN_SETTINGS,
+  },
+  {
+    key: 'admin-finance',
+    label: 'Finance',
+    icon: TbCoin,
+    url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
   },
 ]

@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../auth';
 import { executeFunction } from '../../integrations/appwrite/executeFunction';
+import { APPWRITE_FUNCTION_IDS } from '../../services/appwrite';
 import type { Notification } from '../../types';
+
+const NOTIFICATIONS_FN = APPWRITE_FUNCTION_IDS.NOTIFICATIONS;
 
 interface NotificationsResponse {
   notifications: Array<{
@@ -35,7 +38,7 @@ export const useNotifications = (options?: { unreadOnly?: boolean; limit?: numbe
   return useQuery({
     queryKey: ['notifications', user?.$id, options?.unreadOnly, options?.limit],
     queryFn: async () => {
-      const res = await executeFunction<NotificationsResponse>('notifications', {
+      const res = await executeFunction<NotificationsResponse>(NOTIFICATIONS_FN, {
         action: 'list',
         unreadOnly: options?.unreadOnly,
         limit: options?.limit ?? 50,
@@ -53,7 +56,7 @@ export const useMarkNotificationRead = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (notificationId: string) =>
-      executeFunction('notifications', { action: 'markRead', notificationId }),
+      executeFunction(NOTIFICATIONS_FN, { action: 'markRead', notificationId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -63,7 +66,7 @@ export const useMarkNotificationRead = () => {
 export const useMarkAllNotificationsRead = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => executeFunction('notifications', { action: 'markAllRead' }),
+    mutationFn: () => executeFunction(NOTIFICATIONS_FN, { action: 'markAllRead' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },

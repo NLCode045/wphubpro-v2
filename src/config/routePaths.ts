@@ -21,4 +21,16 @@ export const ROUTE_PATHS = {
   /** Admin area default route (full admin UI to be implemented later). */
   ADMIN_DASHBOARD: '/admin',
   ADMIN_USERS: '/admin/users',
+  ADMIN_SETTINGS: '/admin/settings',
+  ADMIN_FINANCE: '/admin/finance',
+  ADMIN_FINANCE_DASHBOARD: '/admin/finance/dashboard',
+  ADMIN_FINANCE_SUBSCRIPTIONS: '/admin/finance/subscriptions',
+  ADMIN_FINANCE_PLANS: '/admin/finance/plans',
+  ADMIN_FINANCE_PAYMENTS: '/admin/finance/payments',
+  adminFinanceSubscriptionPath: (subscriptionId: string) =>
+    `/admin/finance/subscriptions/${encodeURIComponent(subscriptionId)}`,
+  adminFinancePlanPath: (productId: string) =>
+    `/admin/finance/plans/${encodeURIComponent(productId)}`,
+  adminFinancePaymentPath: (paymentIntentId: string) =>
+    `/admin/finance/payments/${encodeURIComponent(paymentIntentId)}`,
 } as const;

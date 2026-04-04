@@ -319,80 +319,111 @@ const FinanceDashboardPage = () => {
         </>
       )}
 
-      <h5 className="mb-3">Recent paid invoices</h5>
-      <div className="table-responsive mb-4">
-        <Table size="sm" align-middle>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Customer</th>
-              <th>Invoice ID</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.recentPaidInvoices.map((inv) => (
-              <tr key={inv.id}>
-                <td className="small text-nowrap">{new Date(inv.created * 1000).toLocaleString()}</td>
-                <td className="small">{inv.customerDisplayName}</td>
-                <td className="font-monospace small">
-                  {inv.subscriptionId ? (
-                    <Link to={ROUTE_PATHS.adminFinanceSubscriptionPath(inv.subscriptionId)}>
-                      {inv.number ?? inv.id}
-                    </Link>
-                  ) : (
-                    (inv.number ?? inv.id) as string
-                  )}
-                </td>
-                <td>{formatMoney(inv.amount_paid, inv.currency)}</td>
-              </tr>
-            ))}
-            {data.recentPaidInvoices.length === 0 && (
-              <tr>
-                <td colSpan={4} className="text-muted text-center py-3">
-                  No paid invoices.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </Table>
-      </div>
+      <Card className="mb-4">
+        <Card.Header className="bg-transparent py-3">
+          <Card.Title as="h5" className="mb-0">
+            Recent paid invoices
+          </Card.Title>
+          <p className="text-muted small mt-1 mb-0">
+            Invoice ID links to the related subscription when available.
+          </p>
+        </Card.Header>
+        <Card.Body className="pt-0">
+          <div className="table-responsive">
+            <Table size="sm" align-middle className="mb-0">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Invoice ID</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentPaidInvoices.map((inv) => (
+                  <tr key={inv.id}>
+                    <td className="small text-nowrap">{new Date(inv.created * 1000).toLocaleString()}</td>
+                    <td className="small">{inv.customerDisplayName}</td>
+                    <td className="small">
+                      {inv.subscriptionId ? (
+                        <Link
+                          to={ROUTE_PATHS.adminFinanceSubscriptionPath(inv.subscriptionId)}
+                          className="font-monospace"
+                        >
+                          {inv.number ?? inv.id}
+                        </Link>
+                      ) : (
+                        <span className="font-monospace">{inv.number ?? inv.id}</span>
+                      )}
+                      {inv.number && inv.id !== inv.number && (
+                        <span className="text-muted d-block font-monospace fs-xs">{inv.id}</span>
+                      )}
+                    </td>
+                    <td>{formatMoney(inv.amount_paid, inv.currency)}</td>
+                  </tr>
+                ))}
+                {data.recentPaidInvoices.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="text-muted text-center py-3">
+                      No paid invoices.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
+        </Card.Body>
+      </Card>
 
-      <h5 className="mb-3">Recent subscription changes</h5>
-      <p className="text-muted small">From Stripe events (about the last 30 days).</p>
-      <div className="table-responsive">
-        <Table size="sm" align-middle>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>User</th>
-              <th>Amount</th>
-              <th>Plan</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.recentSubscriptionChanges.map((row) => (
-              <tr key={row.id}>
-                <td className="small text-nowrap">{new Date(row.created * 1000).toLocaleString()}</td>
-                <td className="small">{row.userDisplayName}</td>
-                <td>{formatMoney(row.amountCents, row.currency)}</td>
-                <td className="small">{row.planName}</td>
-                <td>
-                  <Badge bg={actionVariant(row.action)}>{row.action}</Badge>
-                </td>
-              </tr>
-            ))}
-            {data.recentSubscriptionChanges.length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-muted text-center py-3">
-                  No recent events.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </Table>
-      </div>
+      <Card>
+        <Card.Header className="bg-transparent py-3">
+          <Card.Title as="h5" className="mb-0">
+            Recent subscription changes
+          </Card.Title>
+          <p className="text-muted small mt-1 mb-0">
+            From Stripe events (about the last 30 days). User name links to the subscription.
+          </p>
+        </Card.Header>
+        <Card.Body className="pt-0">
+          <div className="table-responsive">
+            <Table size="sm" align-middle className="mb-0">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>User</th>
+                  <th>Amount</th>
+                  <th>Plan</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentSubscriptionChanges.map((row) => (
+                  <tr key={row.id}>
+                    <td className="small text-nowrap">{new Date(row.created * 1000).toLocaleString()}</td>
+                    <td className="small">
+                      <Link to={ROUTE_PATHS.adminFinanceSubscriptionPath(row.subscriptionId)}>
+                        {row.userDisplayName}
+                      </Link>
+                    </td>
+                    <td>{formatMoney(row.amountCents, row.currency)}</td>
+                    <td className="small">{row.planName}</td>
+                    <td>
+                      <Badge bg={actionVariant(row.action)}>{row.action}</Badge>
+                    </td>
+                  </tr>
+                ))}
+                {data.recentSubscriptionChanges.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-muted text-center py-3">
+                      No recent events.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
+        </Card.Body>
+      </Card>
     </div>
   )
 }

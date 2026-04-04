@@ -62,6 +62,12 @@ export const menuItems: MenuItemType[] = [
     icon: TbLibrary,
     url: '/library',
   },
+  {
+    key: 'support',
+    label: 'Support',
+    icon: TbLifeBuoy,
+    url: ROUTE_PATHS.SUPPORT,
+  },
 ]
 
 export const horizontalMenuItems: MenuItemType[] = [
@@ -82,6 +88,12 @@ export const horizontalMenuItems: MenuItemType[] = [
     label: 'Library',
     icon: TbLibrary,
     url: '/library',
+  },
+  {
+    key: 'support',
+    label: 'Support',
+    icon: TbLifeBuoy,
+    url: ROUTE_PATHS.SUPPORT,
   },
 ]
 
@@ -112,6 +124,12 @@ export const adminMenuItems: MenuItemType[] = [
     icon: TbCoin,
     url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
   },
+  {
+    key: 'admin-support',
+    label: 'Support',
+    icon: TbLifeBuoy,
+    url: ROUTE_PATHS.ADMIN_SUPPORT,
+  },
 ]
 
 export const horizontalAdminMenuItems: MenuItemType[] = [
@@ -138,5 +156,11 @@ export const horizontalAdminMenuItems: MenuItemType[] = [
     label: 'Finance',
     icon: TbCoin,
     url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
+  },
+  {
+    key: 'admin-support',
+    label: 'Support',
+    icon: TbLifeBuoy,
+    url: ROUTE_PATHS.ADMIN_SUPPORT,
   },
 ]

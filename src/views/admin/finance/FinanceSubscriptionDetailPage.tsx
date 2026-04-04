@@ -25,7 +25,7 @@ const FinanceSubscriptionDetailPage = () => {
   const navigate = useNavigate()
   const { showNotification } = useNotificationContext()
   const { data, isLoading, error, refetch } = useAdminSubscriptionDetails(subscriptionId)
-  const { data: plans } = useAdminStripePlansList()
+  const { data: plansList } = useAdminStripePlansList()
 
   const [newPriceId, setNewPriceId] = useState('')
 

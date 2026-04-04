@@ -105,18 +105,30 @@ export function useAdminSubscriptionDetails(subscriptionId: string | undefined) 
   })
 }
 
+export type AdminStripePlansListData = {
+  plans: StripePlan[]
+  subscriptionCountsTruncated: boolean
+}
+
 export function useAdminStripePlansList() {
   const enabled = useFinanceAdminEnabled()
-  return useQuery<StripePlan[], Error>({
+  return useQuery<AdminStripePlansListData, Error>({
     queryKey: ['admin', 'finance', 'plans'],
     queryFn: async () => {
-      const res = await executeFunction<{ plans?: StripePlan[] }>(PRODUCTS_FN, {
+      const res = await executeFunction<{
+        plans?: StripePlan[]
+        subscriptionCountsTruncated?: boolean
+      }>(PRODUCTS_FN, {
         action: 'list',
         active_only: false,
         exclude_hidden: false,
         exclude_non_sellable: false,
+        include_active_subscription_counts: true,
       })
-      return res.plans ?? []
+      return {
+        plans: res.plans ?? [],
+        subscriptionCountsTruncated: res.subscriptionCountsTruncated === true,
+      }
     },
     enabled,
     staleTime: 120_000,

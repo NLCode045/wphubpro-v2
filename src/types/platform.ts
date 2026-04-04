@@ -52,6 +52,8 @@ export interface StripePlan {
   metadata: StripePlanMetadata[];
   /** All prices for the product when returned by `stripe-products` `list`. */
   allPrices?: StripePlanAllPrice[];
+  /** Admin list only: active + trialing + past_due + paused subs on any price of this product (deduped). */
+  activeSubscriptionsCount?: number;
 }
 
 export interface UsageMetrics {

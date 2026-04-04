@@ -3,6 +3,7 @@ import TablePagination from '@/components/table/TablePagination';
 import { ROUTE_PATHS } from '@/config/routePaths';
 import type { Ticket } from '@/types';
 import {
+  type ColumnDef,
   type ColumnFiltersState,
   createColumnHelper,
   getCoreRowModel,
@@ -39,8 +40,8 @@ export function SupportTicketsTable({ tickets, adminMode, newTicketTo }: Props) 
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 8 });
 
-  const columns = useMemo(() => {
-    const cols = [
+  const columns = useMemo((): ColumnDef<Ticket>[] => {
+    const cols: ColumnDef<Ticket>[] = [
       columnHelper.accessor('$id', {
         header: 'ID',
         cell: ({ row }) => (

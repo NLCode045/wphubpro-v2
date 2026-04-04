@@ -9,7 +9,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { useMemo } from 'react'
-import { Badge, Spinner } from 'react-bootstrap'
+import { Alert, Badge, Spinner } from 'react-bootstrap'
 import { useNavigate } from 'react-router'
 
 const columnHelper = createColumnHelper<StripePlan>()

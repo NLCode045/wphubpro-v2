@@ -41,7 +41,7 @@ const FinanceSubscriptionsPage = () => {
 
   const { data: plansData } = useAdminStripePlansList()
   const planOptions = useMemo(() => {
-    const list = plansData ?? []
+    const list = plansData?.plans ?? []
     const opts: { id: string; label: string }[] = []
     for (const p of list) {
       opts.push({ id: p.id, label: p.name })

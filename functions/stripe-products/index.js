@@ -80,7 +80,36 @@ async function handleListProducts(req, res, log, error) {
   );
 
   plans = plans.filter(Boolean);
-  return res.json({ success: true, plans, total: plans.length });
+
+  const includeCounts =
+    payload.include_active_subscription_counts === true ||
+    payload.include_active_subscription_counts === "true";
+  let subscriptionCountsTruncated = false;
+  const MAX_PRODUCTS_FOR_SUBSCRIPTION_COUNTS = 40;
+  const MAX_PAGES_PER_PRICE_FOR_LIST = 15;
+
+  if (includeCounts && plans.length && (await ensureAdmin(req))) {
+    const slice = plans.slice(0, MAX_PRODUCTS_FOR_SUBSCRIPTION_COUNTS);
+    if (plans.length > MAX_PRODUCTS_FOR_SUBSCRIPTION_COUNTS) subscriptionCountsTruncated = true;
+
+    for (let i = 0; i < slice.length; i += 1) {
+      const planRow = slice[i];
+      try {
+        const { count, truncated } = await countActiveSubscriptionsForProduct(stripe, planRow.id, {
+          maxPagesPerPrice: MAX_PAGES_PER_PRICE_FOR_LIST,
+        });
+        planRow.activeSubscriptionsCount = count;
+        if (truncated) subscriptionCountsTruncated = true;
+      } catch {
+        planRow.activeSubscriptionsCount = 0;
+        subscriptionCountsTruncated = true;
+      }
+    }
+  }
+
+  const out = { success: true, plans, total: plans.length };
+  if (includeCounts && subscriptionCountsTruncated) out.subscriptionCountsTruncated = true;
+  return res.json(out);
 }
 
 async function handleCreate(req, res, log, error) {
@@ -255,6 +284,59 @@ async function handleUpdate(req, res, log, error) {
   });
 }
 
+const SUBSCRIPTION_COUNT_STATUSES = ["active", "trialing", "past_due", "paused"];
+
+/** Active + inactive prices for a product (subscriptions may reference archived prices). */
+async function getProductPricesBundle(stripe, productId) {
+  const [activePricesRes, inactivePricesRes] = await Promise.all([
+    stripe.prices.list({ product: productId, limit: 100, active: true }),
+    stripe.prices.list({ product: productId, limit: 100, active: false }),
+  ]);
+  const seenIds = new Set();
+  const allPrices = [...activePricesRes.data, ...inactivePricesRes.data].filter((p) => {
+    if (seenIds.has(p.id)) return false;
+    seenIds.add(p.id);
+    return true;
+  });
+  const priceIds = allPrices.map((p) => p.id).filter(Boolean);
+  const pricesTruncated = Boolean(activePricesRes.has_more || inactivePricesRes.has_more);
+  return { allPrices, priceIds, pricesTruncated };
+}
+
+/**
+ * Dedupe by subscription id across all prices on the product (same notion as plan detail).
+ * @returns {{ count: number, truncated: boolean }}
+ */
+async function countActiveSubscriptionsForProduct(stripe, productId, { maxPagesPerPrice = 15 } = {}) {
+  const { priceIds, pricesTruncated } = await getProductPricesBundle(stripe, productId);
+  const seenSubIds = new Set();
+  let truncated = pricesTruncated;
+
+  for (const priceId of priceIds) {
+    let hasMore = true;
+    let startingAfter = null;
+    let pagesForPrice = 0;
+    while (hasMore) {
+      if (pagesForPrice >= maxPagesPerPrice) {
+        truncated = true;
+        break;
+      }
+      pagesForPrice += 1;
+      const subsParams = { price: priceId, status: "all", limit: 100 };
+      if (startingAfter) subsParams.starting_after = startingAfter;
+      const subs = await stripe.subscriptions.list(subsParams);
+      for (const sub of subs.data) {
+        if (SUBSCRIPTION_COUNT_STATUSES.includes(sub.status)) seenSubIds.add(sub.id);
+      }
+      hasMore = subs.has_more;
+      if (subs.data.length) startingAfter = subs.data[subs.data.length - 1].id;
+      else hasMore = false;
+    }
+  }
+
+  return { count: seenSubIds.size, truncated };
+}
+
 async function ensureAdmin(req) {
   const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
   const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
@@ -302,20 +384,9 @@ async function handleGet(req, res, log, error) {
   const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
 
   const product = await stripe.products.retrieve(productId);
-  // Fetch both active and inactive prices - subscriptions may reference archived prices
-  const [activePricesRes, inactivePricesRes] = await Promise.all([
-    stripe.prices.list({ product: productId, limit: 100, active: true }),
-    stripe.prices.list({ product: productId, limit: 100, active: false }),
-  ]);
-  const seenIds = new Set();
-  const allPrices = [...activePricesRes.data, ...inactivePricesRes.data].filter((p) => {
-    if (seenIds.has(p.id)) return false;
-    seenIds.add(p.id);
-    return true;
-  });
+  const { allPrices, priceIds } = await getProductPricesBundle(stripe, productId);
   const monthlyPrice = allPrices.find((p) => p.recurring?.interval === "month");
   const yearlyPrice = allPrices.find((p) => p.recurring?.interval === "year");
-  const priceIds = allPrices.map((p) => p.id).filter(Boolean);
 
   const metadata = Object.entries(product.metadata || {}).map(([key, value]) => ({ key, value }));
 
@@ -340,6 +411,7 @@ async function handleGet(req, res, log, error) {
   const subscribers = [];
   const customerIds = new Set();
   const now = Math.floor(Date.now() / 1000);
+  const seenSubscriptionIds = new Set();
 
   for (const priceId of priceIds) {
     let hasMore = true;
@@ -349,8 +421,10 @@ async function handleGet(req, res, log, error) {
       if (startingAfter) subsParams.starting_after = startingAfter;
       const subs = await stripe.subscriptions.list(subsParams);
       for (const sub of subs.data) {
+        if (seenSubscriptionIds.has(sub.id)) continue;
         const status = sub.status;
-        if (["active", "trialing", "past_due", "paused"].includes(status)) {
+        if (SUBSCRIPTION_COUNT_STATUSES.includes(status)) {
+          seenSubscriptionIds.add(sub.id);
           totalSubscriptions++;
           const priceItem = sub.items?.data?.[0];
           const price = priceItem?.price;

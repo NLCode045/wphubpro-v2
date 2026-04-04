@@ -1,5 +1,5 @@
 import { ROUTE_PATHS } from '@/config/routePaths'
-import { useDashboardNav } from '@/context/DashboardNavContext'
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { horizontalAdminMenuItems, horizontalMenuItems } from '@/layouts/components/data'
 import type { MenuItemType } from '@/types/layout'
 import {Link, useLocation} from "react-router";
@@ -85,8 +85,8 @@ const MenuItem = ({ item, linkClass, wrapperClass, level }: { item: MenuItemType
 }
 
 const AppMenu = () => {
-  const { mode } = useDashboardNav()
-  const items = mode === 'admin' ? horizontalAdminMenuItems : horizontalMenuItems
+  const effectiveAdmin = useEffectiveIsAdmin()
+  const items = effectiveAdmin ? horizontalAdminMenuItems : horizontalMenuItems
 
   return (
     <div className="collapse navbar-collapse">

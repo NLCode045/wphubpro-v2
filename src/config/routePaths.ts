@@ -21,6 +21,8 @@ export const ROUTE_PATHS = {
   /** Admin area default route (full admin UI to be implemented later). */
   ADMIN_DASHBOARD: '/admin',
   ADMIN_USERS: '/admin/users',
+  /** Path pattern: `/admin/users/:userId` */
+  adminUserPath: (userId: string) => `/admin/users/${encodeURIComponent(userId)}`,
   ADMIN_SETTINGS: '/admin/settings',
   ADMIN_FINANCE: '/admin/finance',
   ADMIN_FINANCE_DASHBOARD: '/admin/finance/dashboard',

@@ -1,5 +1,6 @@
 import { userDropdownItems } from '@/layouts/components/data'
 import { ROUTE_PATHS } from '@/config/routePaths'
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { useAuth } from '@/domains/auth'
 
 import { Link, useNavigate } from 'react-router'
@@ -10,7 +11,8 @@ import { TbChevronDown } from 'react-icons/tb'
 import user3 from '@/assets/images/users/user-3.jpg'
 
 const UserProfile = () => {
-  const { logout, user, isAdmin } = useAuth()
+  const { logout, user } = useAuth()
+  const effectiveAdmin = useEffectiveIsAdmin()
   const navigate = useNavigate()
 
   const displayName = user?.name?.trim() || user?.email || 'Account'
@@ -32,7 +34,7 @@ const UserProfile = () => {
         </DropdownToggle>
         <DropdownMenu className="dropdown-menu-end">
           {userDropdownItems
-            .filter((item) => !item.adminOnly || isAdmin)
+            .filter((item) => !item.adminOnly || effectiveAdmin)
             .map((item, idx) => (
             <Fragment key={idx}>
               {item.isHeader ? (

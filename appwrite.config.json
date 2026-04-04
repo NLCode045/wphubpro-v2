@@ -1823,7 +1823,15 @@
                     "default": null,
                     "encrypt": false
                 },
-                
+                {
+                    "key": "admin_notes",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 20000,
+                    "default": null,
+                    "encrypt": false
+                },
                 {
                     "key": "avatar",
                     "type": "string",

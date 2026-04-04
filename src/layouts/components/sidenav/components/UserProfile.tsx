@@ -1,5 +1,6 @@
 import { userDropdownItems } from '@/layouts/components/data'
 import { ROUTE_PATHS } from '@/config/routePaths'
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { useAuth } from '@/domains/auth'
 import { Link, useNavigate } from 'react-router'
 import { Fragment } from 'react'
@@ -9,7 +10,8 @@ import { TbSettings } from 'react-icons/tb'
 import user3 from '@/assets/images/users/user-3.jpg'
 
 const UserProfile = () => {
-  const { logout, user, isAdmin } = useAuth()
+  const { logout, user } = useAuth()
+  const effectiveAdmin = useEffectiveIsAdmin()
   const navigate = useNavigate()
 
   const displayName = user?.name?.trim() || user?.email || 'Account'
@@ -27,7 +29,7 @@ const UserProfile = () => {
             <img src={user3} alt="user-image" width="36" height="36" className="rounded-circle mb-2 avatar-md" />
             <span className="sidenav-user-name fw-bold">{displayName}</span>
             <span className="fs-12 fw-semibold" data-lang="user-role">
-              {user?.isAdmin ? 'Administrator' : 'Member'}
+              {effectiveAdmin ? 'Administrator' : 'Member'}
             </span>
           </Link>
         </div>
@@ -42,7 +44,7 @@ const UserProfile = () => {
 
           <DropdownMenu>
             {userDropdownItems
-              .filter((item) => !item.adminOnly || isAdmin)
+              .filter((item) => !item.adminOnly || effectiveAdmin)
               .map((item, idx) => (
               <Fragment key={idx}>
                 {item.isHeader ? (

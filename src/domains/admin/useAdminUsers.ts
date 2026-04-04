@@ -23,6 +23,7 @@ export interface AccountDoc {
   current_plan_id?: string | null;
   stripe_customer_id?: string | null;
   avatar?: string | null;
+  admin_notes?: string | null;
   [key: string]: unknown;
 }
 

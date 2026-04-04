@@ -2,6 +2,7 @@ export {
   checkoutUpdateTypeForPlanChange,
   findPlanSelectionByPriceId,
   selectedPlanAmountCents,
+  subscriptionStatusAllowsInPlacePlanChange,
 } from './planCheckout';
 export type {
   BillingAccountContext,

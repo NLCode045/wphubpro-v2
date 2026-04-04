@@ -37,7 +37,7 @@ const PER_PAGE_OPTIONS = [12, 24, 48] as const;
 
 const AdminUsersOverviewPage = () => {
   const { isAdmin } = useAuth();
-  const { setMode } = useDashboardNav();
+  const { mode } = useDashboardNav();
   const navigate = useNavigate();
   const { showNotification } = useNotificationContext();
 
@@ -58,8 +58,10 @@ const AdminUsersOverviewPage = () => {
       navigate(ROUTE_PATHS.DASHBOARD, { replace: true });
       return;
     }
-    setMode('admin');
-  }, [isAdmin, navigate, setMode]);
+    if (mode !== 'admin') {
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true });
+    }
+  }, [isAdmin, mode, navigate]);
 
   const { data, isLoading, isError, error, refetch } = useAdminUsersList({
     limit,
@@ -111,7 +113,7 @@ const AdminUsersOverviewPage = () => {
     }
   };
 
-  if (!isAdmin) {
+  if (!isAdmin || mode !== 'admin') {
     return null;
   }
 

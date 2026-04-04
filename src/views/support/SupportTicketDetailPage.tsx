@@ -1,5 +1,6 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { ROUTE_PATHS } from '@/config/routePaths';
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin';
 import { useAuth } from '@/domains/auth';
 import { useAdminUsersList } from '@/domains/admin/useAdminUsers';
 import { useSetTicketFollow, useTicket, useUpdateTicket, useUpdateTicketStatus } from '@/domains/tickets';
@@ -164,14 +165,18 @@ function ActivityTimeline({ activities }: { activities: TicketActivity[] }) {
 
 export default function SupportTicketDetailPage() {
   const { ticketId } = useParams<{ ticketId: string }>();
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
+  const effectiveAdmin = useEffectiveIsAdmin();
   const { showNotification } = useNotificationContext();
   const q = useTicket(ticketId);
   const updateTicket = useUpdateTicket();
   const updateStatusOnly = useUpdateTicketStatus();
   const setFollow = useSetTicketFollow();
 
-  const { data: adminUsers } = useAdminUsersList({ role: 'admin', limit: 100 });
+  const { data: adminUsers } = useAdminUsersList(
+    { role: 'admin', limit: 100 },
+    { enabled: effectiveAdmin },
+  );
 
   const [admStatus, setAdmStatus] = useState<TicketStatus>('open');
   const [admPriority, setAdmPriority] = useState<Ticket['priority']>('medium');
@@ -369,9 +374,9 @@ export default function SupportTicketDetailPage() {
                   </strong>
                 </p>
 
-                <ContextBlock context={context} isAdmin={!!isAdmin} />
+                <ContextBlock context={context} isAdmin={effectiveAdmin} />
 
-                {isAdmin ? (
+                {effectiveAdmin ? (
                   <Card className="mb-3 border-primary border-opacity-25">
                     <CardHeader>
                       <h6 className="mb-0">Admin</h6>

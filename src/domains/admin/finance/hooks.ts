@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useAuth } from '@/domains/auth'
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { executeFunction } from '@/integrations/appwrite/executeFunction'
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite'
 import type { StripePlan, SubscriptionDetailsResponse } from '@/types'
@@ -17,8 +17,7 @@ const PRODUCTS_FN = APPWRITE_FUNCTION_IDS.STRIPE_PRODUCTS
 const INVOICES_FN = APPWRITE_FUNCTION_IDS.STRIPE_INVOICES
 
 export function useFinanceAdminEnabled() {
-  const { isAdmin } = useAuth()
-  return Boolean(isAdmin)
+  return useEffectiveIsAdmin()
 }
 
 export function useFinanceSummary() {

@@ -1,6 +1,11 @@
 const sdk = require("node-appwrite");
 const stripe = require("stripe");
 const handleList = require("./handlers/list");
+const handleGetDetail = require("./handlers/get-detail");
+const handleSendPasswordRecovery = require("./handlers/send-password-recovery");
+const handleDeleteUser = require("./handlers/delete-user");
+const handleUpdateAccount = require("./handlers/update-account");
+const handleEnsureStripeCustomer = require("./handlers/ensure-stripe-customer");
 
 function createClient(sdkLib, { endpoint, projectId, apiKey }) {
   const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
@@ -46,6 +51,16 @@ module.exports = async ({ req, res, log, error }) => {
       "login-as": "login-as",
       loginas: "login-as",
       impersonate: "login-as",
+      "get-detail": "get-detail",
+      getdetail: "get-detail",
+      "send-password-recovery": "send-password-recovery",
+      "password-recovery": "send-password-recovery",
+      "delete-user": "delete-user",
+      deleteuser: "delete-user",
+      "update-account": "update-account",
+      updateaccount: "update-account",
+      "ensure-stripe-customer": "ensure-stripe-customer",
+      ensurestripecustomer: "ensure-stripe-customer",
     };
     const action = actionMap[actionRaw] || actionRaw;
 
@@ -71,10 +86,29 @@ module.exports = async ({ req, res, log, error }) => {
     if (action === "login-as") {
       return await handleLoginAs({ req, res, log, error }, ctx);
     }
+    if (action === "get-detail") {
+      return await handleGetDetail({ req, res, log, error }, ctx);
+    }
+    if (action === "send-password-recovery") {
+      return await handleSendPasswordRecovery({ req, res, log, error }, ctx);
+    }
+    if (action === "delete-user") {
+      return await handleDeleteUser({ req, res, log, error }, ctx);
+    }
+    if (action === "update-account") {
+      return await handleUpdateAccount({ req, res, log, error }, ctx);
+    }
+    if (action === "ensure-stripe-customer") {
+      return await handleEnsureStripeCustomer({ req, res, log, error }, ctx);
+    }
 
     return res.json(
-      { success: false, message: 'Invalid or missing action. Use action: "list", "update", or "login-as".' },
-      400
+      {
+        success: false,
+        message:
+          'Invalid or missing action. Use: "list", "update", "login-as", "get-detail", "send-password-recovery", "delete-user", "update-account", "ensure-stripe-customer".',
+      },
+      400,
     );
   } catch (err) {
     error(`admin-manage-users failed: ${err.message}`);

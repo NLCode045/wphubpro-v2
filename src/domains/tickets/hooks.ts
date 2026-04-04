@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin';
 import { useAuth } from '../auth';
 import { executeFunction } from '../../integrations/appwrite/executeFunction';
 import { APPWRITE_FUNCTION_IDS } from '../../services/appwrite';
@@ -109,7 +110,8 @@ export const useTickets = () => {
 };
 
 export const useAdminTickets = () => {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
+  const effectiveAdmin = useEffectiveIsAdmin();
   return useQuery({
     queryKey: ['adminTickets'],
     queryFn: async () => {
@@ -121,7 +123,7 @@ export const useAdminTickets = () => {
         total: res?.total ?? 0,
       };
     },
-    enabled: !!user && !!isAdmin,
+    enabled: !!user && effectiveAdmin,
   });
 };
 

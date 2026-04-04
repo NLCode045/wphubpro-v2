@@ -19,6 +19,7 @@ import {
   checkoutUpdateTypeForPlanChange,
   findPlanSelectionByPriceId,
   selectedPlanAmountCents,
+  subscriptionStatusAllowsInPlacePlanChange,
   useCancelScheduledPlanChange,
   useCancelSubscription,
   useCreateCheckoutSession,
@@ -243,6 +244,8 @@ const UserProfileSubscriptionTab = () => {
     subscription.priceAmount === 0 ||
     (subscription.planId ?? '').toUpperCase() === 'FREE';
 
+  const canModifyStripeSubscription = subscriptionStatusAllowsInPlacePlanChange(subscription?.status);
+
   const outstandingCents = useMemo(() => {
     if (!invoices?.length) return { total: 0, currency: 'eur', count: 0 };
     let total = 0;
@@ -312,8 +315,9 @@ const UserProfileSubscriptionTab = () => {
       return;
     }
     const newCents = selectedPlanAmountCents(selection.plan, yearly);
-    const hasActivePaid = Boolean(subscription && !isFree);
-    const currentCents = subscription?.priceAmount ?? 0;
+    const hasActivePaid = Boolean(subscription && !isFree && canModifyStripeSubscription);
+    const currentCents =
+      subscription && !isFree && canModifyStripeSubscription ? (subscription.priceAmount ?? 0) : 0;
     const updateType = checkoutUpdateTypeForPlanChange({
       hasActivePaidSubscription: hasActivePaid,
       currentPriceAmountCents: currentCents,
@@ -490,7 +494,10 @@ const UserProfileSubscriptionTab = () => {
                 >
                   Change plan
                 </Button>
-                {subscription && !isFree && !subscription.cancelAtPeriodEnd ? (
+                {subscription &&
+                !isFree &&
+                canModifyStripeSubscription &&
+                !subscription.cancelAtPeriodEnd ? (
                   <Button
                     variant="outline-danger"
                     size="sm"
@@ -513,6 +520,13 @@ const UserProfileSubscriptionTab = () => {
             {subscription?.cancelAtPeriodEnd && !cancelEffectiveDate ? (
               <Alert variant="warning" className="py-2 mb-3 fs-sm">
                 This subscription will end at the end of the current billing period.
+              </Alert>
+            ) : null}
+
+            {subscription && !canModifyStripeSubscription && !isFree ? (
+              <Alert variant="info" className="py-2 mb-3 fs-sm">
+                This subscription is ended. Use <strong>Change plan</strong> to subscribe again—you can pick
+                any plan, including an upgrade.
               </Alert>
             ) : null}
 
@@ -1031,13 +1045,18 @@ const UserProfileSubscriptionTab = () => {
                   const hasPrice = priceId != null && amount != null;
                   const currentPriceId = subscription?.priceId?.trim() || null;
                   const isCurrentPlan = Boolean(
-                    currentPriceId && priceId && currentPriceId === priceId
+                    canModifyStripeSubscription &&
+                      currentPriceId &&
+                      priceId &&
+                      currentPriceId === priceId
                   );
                   const currentCents =
-                    subscription && !isFree ? (subscription.priceAmount ?? 0) : 0;
+                    subscription && !isFree && canModifyStripeSubscription
+                      ? (subscription.priceAmount ?? 0)
+                      : 0;
                   const rowCents = hasPrice ? selectedPlanAmountCents(plan, changePlanYearly) : 0;
                   const switchLabel =
-                    !subscription || isFree
+                    !subscription || isFree || !canModifyStripeSubscription
                       ? 'Choose plan'
                       : !hasPrice
                         ? 'Switch to this plan'

@@ -1,9 +1,9 @@
 
 
+import { useDashboardNav } from '@/context/DashboardNavContext'
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { useLayoutContext } from '@/context/useLayoutContext'
 import { scrollToElement } from '@/helpers/layout'
-import { useDashboardNav } from '@/context/DashboardNavContext'
-import { useAuth } from '@/domains/auth'
 import { adminMenuItems, menuItems } from '@/layouts/components/data'
 import type { MenuItemType } from '@/types/layout'
 import { ROUTE_PATHS } from '@/config/routePaths'
@@ -128,12 +128,10 @@ const MenuItem = ({ item }: { item: MenuItemType }) => {
 }
 
 const AppMenu = () => {
-  const { isAdmin } = useAuth()
   const { pathname } = useLocation()
   const { mode } = useDashboardNav()
-  const onAdminRoute = pathname.startsWith('/admin')
-  const items =
-    isAdmin && (mode === 'admin' || onAdminRoute) ? adminMenuItems : menuItems
+  const effectiveAdmin = useEffectiveIsAdmin()
+  const items = effectiveAdmin ? adminMenuItems : menuItems
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null)
 
   const scrollToActiveLink = () => {

@@ -2,8 +2,10 @@ import AppLogo from '@/components/AppLogo'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useAuth, usePublicAuthConfig } from '@/domains/auth'
 import { fetchLoginMethods, type LoginMethodsResult } from '@/domains/auth/publicAuthConfig'
+import { mergeProfilePrefs, type PrefsRecord, type ProfilePrefs } from '@/domains/profile/profilePrefs'
 import { currentYear } from '@/helpers'
 import { account } from '@/services/appwrite'
+import { AppwriteException } from 'appwrite'
 import { useEffect, useState, type FormEvent } from 'react'
 import { FaEnvelope, FaGithub, FaMobileScreenButton } from 'react-icons/fa6'
 import { Link, useNavigate } from 'react-router'
@@ -16,6 +18,13 @@ type PasswordSignInFlow =
   | { step: 'email_verification'; mode: 'token'; userId: string }
   | { step: 'email_verification'; mode: 'mfa'; challengeId: string }
   | { step: 'totp'; challengeId: string }
+
+function isMfaFactorsRequiredError(err: unknown): boolean {
+  if (err instanceof AppwriteException) {
+    return err.type === 'user_more_factors_required'
+  }
+  return (err as { type?: string }).type === 'user_more_factors_required'
+}
 
 const SignInPage = () => {
   const {
@@ -101,15 +110,65 @@ const SignInPage = () => {
     e.preventDefault()
     setError(null)
     setLoading(true)
+    const trimmedEmail = email.trim()
     try {
       const { mfaPending } = await login(email, password)
       setVerificationCode('')
-      if (!mfaPending) {
-        await refreshUser()
-        navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+      if (mfaPending) {
+        setPwdFlow({ step: 'pick_second', mfaPending: true })
         return
       }
-      setPwdFlow({ step: 'pick_second', mfaPending })
+
+      const forceMfa = publicAuth?.forceMfaForAllUsers === true && !publicAuthError
+
+      if (forceMfa) {
+        try {
+          await account.updateMFA(true)
+          let prefsSrc: PrefsRecord = {}
+          try {
+            const u = await account.get()
+            prefsSrc = (u.prefs as PrefsRecord) ?? {}
+          } catch (e1: unknown) {
+            if (isMfaFactorsRequiredError(e1)) {
+              try {
+                await account.updatePrefs(
+                  mergeProfilePrefs(prefsSrc, { mfaFactorEmailEnabled: true } satisfies Partial<ProfilePrefs>),
+                )
+              } catch {
+                /* prefs may fail until MFA completes */
+              }
+              setPwdFlow({ step: 'pick_second', mfaPending: true })
+              return
+            }
+            throw e1
+          }
+          await account.updatePrefs(
+            mergeProfilePrefs(prefsSrc, { mfaFactorEmailEnabled: true } satisfies Partial<ProfilePrefs>),
+          )
+          await account.deleteSession('current')
+          await account.createEmailPasswordSession(trimmedEmail, password)
+          try {
+            await account.get()
+            await refreshUser()
+            navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+            return
+          } catch (e2: unknown) {
+            if (isMfaFactorsRequiredError(e2)) {
+              setPwdFlow({ step: 'pick_second', mfaPending: true })
+              return
+            }
+            throw e2
+          }
+        } catch (err: unknown) {
+          setError(
+            err instanceof Error ? err.message : 'Could not enable required MFA. Try again or contact support.',
+          )
+          return
+        }
+      }
+
+      await refreshUser()
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.')
     } finally {
@@ -226,9 +285,13 @@ const SignInPage = () => {
   const showEmailCodeStep = pwdFlow.step === 'email_verification'
   const showTotpStep = pwdFlow.step === 'totp'
 
+  const orgRequiresMfa = Boolean(publicAuth?.forceMfaForAllUsers && !publicAuthError)
+
   const brandLine = (() => {
     if (pwdFlow.step === 'pick_second') {
-      return 'Choose how you want to verify — pick a method you enabled in your security settings.'
+      return orgRequiresMfa
+        ? 'Your organization requires multi-factor authentication. Choose how to verify.'
+        : 'Choose how you want to verify — pick a method you enabled in your security settings.'
     }
     if (pwdFlow.step === 'email_verification') {
       return `Enter the code we sent to ${email.trim() || 'your email'}.`
@@ -344,7 +407,9 @@ const SignInPage = () => {
                     </Alert>
                   ) : null}
                   <p className="text-muted fs-sm mb-3">
-                    Your password was accepted. Select one of your enabled verification methods below.
+                    {orgRequiresMfa
+                      ? 'Multi-factor authentication is required. Pick a verification method below.'
+                      : 'Your password was accepted. Select one of your enabled verification methods below.'}
                   </p>
                   {pickSecondLoading ? (
                     <div className="d-flex align-items-center gap-2 text-muted fs-sm mb-3">
@@ -358,105 +423,109 @@ const SignInPage = () => {
                       your profile.
                     </Alert>
                   ) : null}
-                  <Row className="g-3 mb-3">
+                  <div className="d-flex flex-column gap-3 mb-3">
                     {showEmailSecondStep ? (
-                      <Col xs={12} md={showTotpSecondStep ? 6 : 12}>
-                        <Card
-                          className={`h-100 border border-light-subtle shadow-sm user-select-none ${
-                            pickSecondCardBusy && pickSecondAction !== 'email' ? 'opacity-50' : ''
-                          }`}
-                          role="button"
-                          tabIndex={pickSecondCardBusy || pickSecondLoading ? -1 : 0}
-                          onClick={() => {
-                            if (pickSecondCardBusy || pickSecondLoading) return
+                      <Card
+                        className={`border border-light-subtle shadow-sm user-select-none ${
+                          pickSecondCardBusy && pickSecondAction !== 'email' ? 'opacity-50' : ''
+                        }`}
+                        role="button"
+                        tabIndex={pickSecondCardBusy || pickSecondLoading ? -1 : 0}
+                        onClick={() => {
+                          if (pickSecondCardBusy || pickSecondLoading) return
+                          void handlePickEmail()
+                        }}
+                        onKeyDown={(e) => {
+                          if (pickSecondCardBusy || pickSecondLoading) return
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
                             void handlePickEmail()
-                          }}
-                          onKeyDown={(e) => {
-                            if (pickSecondCardBusy || pickSecondLoading) return
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              void handlePickEmail()
-                            }
-                          }}
-                          style={{
-                            cursor: pickSecondCardBusy || pickSecondLoading ? 'default' : 'pointer',
-                          }}
-                          aria-busy={pickSecondAction === 'email'}
-                          aria-label="Sign in with email verification code">
-                          <Card.Body className="d-flex flex-column align-items-start gap-2 p-3 p-md-4">
-                            <div className="rounded-3 bg-primary bg-opacity-10 text-primary p-3">
-                              <FaEnvelope size={22} aria-hidden />
-                            </div>
-                            <Card.Title as="h6" className="mb-0 fs-base fw-semibold">
+                          }
+                        }}
+                        style={{
+                          cursor: pickSecondCardBusy || pickSecondLoading ? 'default' : 'pointer',
+                        }}
+                        aria-busy={pickSecondAction === 'email'}
+                        aria-label="Sign in with email verification code">
+                        <Card.Body className="d-flex flex-row align-items-center gap-3 p-3 p-md-4">
+                          <div
+                            className="rounded-3 bg-primary bg-opacity-10 text-primary flex-shrink-0 d-flex align-items-center justify-content-center"
+                            style={{ width: 52, height: 52 }}>
+                            <FaEnvelope size={22} aria-hidden />
+                          </div>
+                          <div className="flex-grow-1 min-w-0 text-start">
+                            <Card.Title as="h6" className="mb-1 fs-base fw-semibold">
                               Email code
                             </Card.Title>
-                            <Card.Text className="text-muted small mb-0">
+                            <Card.Text className="text-muted small mb-2 mb-md-0">
                               Receive a one-time code in your inbox. Use the address on your account.
                               {pickSecondEmailOtpFallback ? (
-                                <span className="d-block mt-2 fs-xs fst-italic">
+                                <span className="d-block mt-1 fs-xs fst-italic">
                                   Offered by default when your saved MFA methods could not be confirmed.
                                 </span>
                               ) : null}
                             </Card.Text>
                             {pickSecondAction === 'email' ? (
-                              <div className="d-flex align-items-center gap-2 text-primary fs-sm mt-1">
+                              <div className="d-flex align-items-center gap-2 text-primary fs-sm">
                                 <Spinner animation="border" size="sm" />
                                 Sending code…
                               </div>
                             ) : (
-                              <span className="text-primary fs-sm fw-semibold mt-1">Continue with email →</span>
+                              <span className="text-primary fs-sm fw-semibold">Continue with email →</span>
                             )}
-                          </Card.Body>
-                        </Card>
-                      </Col>
+                          </div>
+                        </Card.Body>
+                      </Card>
                     ) : null}
                     {showTotpSecondStep ? (
-                      <Col xs={12} md={showEmailSecondStep ? 6 : 12}>
-                        <Card
-                          className={`h-100 border border-light-subtle shadow-sm user-select-none ${
-                            pickSecondCardBusy && pickSecondAction !== 'totp' ? 'opacity-50' : ''
-                          }`}
-                          role="button"
-                          tabIndex={pickSecondCardBusy || pickSecondLoading ? -1 : 0}
-                          onClick={() => {
-                            if (pickSecondCardBusy || pickSecondLoading) return
+                      <Card
+                        className={`border border-light-subtle shadow-sm user-select-none ${
+                          pickSecondCardBusy && pickSecondAction !== 'totp' ? 'opacity-50' : ''
+                        }`}
+                        role="button"
+                        tabIndex={pickSecondCardBusy || pickSecondLoading ? -1 : 0}
+                        onClick={() => {
+                          if (pickSecondCardBusy || pickSecondLoading) return
+                          void handlePickAuthenticator()
+                        }}
+                        onKeyDown={(e) => {
+                          if (pickSecondCardBusy || pickSecondLoading) return
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
                             void handlePickAuthenticator()
-                          }}
-                          onKeyDown={(e) => {
-                            if (pickSecondCardBusy || pickSecondLoading) return
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              void handlePickAuthenticator()
-                            }
-                          }}
-                          style={{
-                            cursor: pickSecondCardBusy || pickSecondLoading ? 'default' : 'pointer',
-                          }}
-                          aria-busy={pickSecondAction === 'totp'}
-                          aria-label="Sign in with authenticator app">
-                          <Card.Body className="d-flex flex-column align-items-start gap-2 p-3 p-md-4">
-                            <div className="rounded-3 bg-secondary bg-opacity-10 text-body-secondary p-3">
-                              <FaMobileScreenButton size={22} aria-hidden />
-                            </div>
-                            <Card.Title as="h6" className="mb-0 fs-base fw-semibold">
+                          }
+                        }}
+                        style={{
+                          cursor: pickSecondCardBusy || pickSecondLoading ? 'default' : 'pointer',
+                        }}
+                        aria-busy={pickSecondAction === 'totp'}
+                        aria-label="Sign in with authenticator app">
+                        <Card.Body className="d-flex flex-row align-items-center gap-3 p-3 p-md-4">
+                          <div
+                            className="rounded-3 bg-secondary bg-opacity-10 text-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center"
+                            style={{ width: 52, height: 52 }}>
+                            <FaMobileScreenButton size={22} aria-hidden />
+                          </div>
+                          <div className="flex-grow-1 min-w-0 text-start">
+                            <Card.Title as="h6" className="mb-1 fs-base fw-semibold">
                               Authenticator app
                             </Card.Title>
-                            <Card.Text className="text-muted small mb-0">
+                            <Card.Text className="text-muted small mb-2 mb-md-0">
                               Open your authenticator app and enter the 6-digit code for this account.
                             </Card.Text>
                             {pickSecondAction === 'totp' ? (
-                              <div className="d-flex align-items-center gap-2 text-primary fs-sm mt-1">
+                              <div className="d-flex align-items-center gap-2 text-primary fs-sm">
                                 <Spinner animation="border" size="sm" />
                                 Preparing…
                               </div>
                             ) : (
-                              <span className="text-primary fs-sm fw-semibold mt-1">Continue with app →</span>
+                              <span className="text-primary fs-sm fw-semibold">Continue with app →</span>
                             )}
-                          </Card.Body>
-                        </Card>
-                      </Col>
+                          </div>
+                        </Card.Body>
+                      </Card>
                     ) : null}
-                  </Row>
+                  </div>
                   <div className="text-center">
                     <Button
                       type="button"

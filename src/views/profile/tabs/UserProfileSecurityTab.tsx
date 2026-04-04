@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 
-type ConfigurePanel = 'otp' | 'totp' | null;
+type ConfigurePanel = 'totp' | null;
 
 const UserProfileSecurityTab = () => {
   const { user, refreshUser } = useAuth();
@@ -25,7 +25,6 @@ const UserProfileSecurityTab = () => {
 
   const [wantsMfaSetup, setWantsMfaSetup] = useState(false);
   const [openConfigure, setOpenConfigure] = useState<ConfigurePanel>(null);
-  const [mfaOtpEmailDraft, setMfaOtpEmailDraft] = useState('');
 
   const forceMfa = Boolean(publicAuth?.forceMfaForAllUsers);
   const platformMail = publicAuth?.mfaOtpMailEnabled !== false;
@@ -50,9 +49,7 @@ const UserProfileSecurityTab = () => {
   useEffect(() => {
     setPrefEmailMfa(p.mfaFactorEmailEnabled !== false);
     setPrefAuthenticatorMfa(p.mfaFactorAuthenticatorEnabled !== false);
-    const delivery = p.mfaOtpDeliveryEmail?.trim() || user?.email?.trim() || '';
-    setMfaOtpEmailDraft(delivery);
-  }, [user?.prefs, user?.email, p.mfaFactorEmailEnabled, p.mfaFactorAuthenticatorEnabled, p.mfaOtpDeliveryEmail]);
+  }, [user?.prefs, p.mfaFactorEmailEnabled, p.mfaFactorAuthenticatorEnabled]);
 
   const factorPrefMutation = useMutation({
     mutationFn: async (patch: { mfaFactorEmailEnabled?: boolean; mfaFactorAuthenticatorEnabled?: boolean }) => {
@@ -65,27 +62,6 @@ const UserProfileSecurityTab = () => {
     },
     onError: async (err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Could not save preference.';
-      setMfaMessage({ variant: 'danger', text: msg });
-      await refreshUser();
-    },
-  });
-
-  const saveOtpEmailMutation = useMutation({
-    mutationFn: async (email: string) => {
-      if (!user) throw new Error('Not signed in.');
-      const trimmed = email.trim();
-      if (!trimmed) throw new Error('Enter an email address.');
-      const base = mergeProfilePrefs(user.prefs as PrefsRecord | null, {
-        mfaOtpDeliveryEmail: trimmed,
-      });
-      await account.updatePrefs(base);
-    },
-    onSuccess: async () => {
-      setMfaMessage({ variant: 'success', text: 'MFA OTP email saved.' });
-      await refreshUser();
-    },
-    onError: async (err: unknown) => {
-      const msg = err instanceof Error ? err.message : 'Could not save email.';
       setMfaMessage({ variant: 'danger', text: msg });
       await refreshUser();
     },
@@ -391,8 +367,9 @@ const UserProfileSecurityTab = () => {
           <>
             <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-2">MFA methods</p>
             <p className="text-muted fs-sm mb-3">
-              Choose which methods we may offer after your password. Use <strong>Configure</strong> for each method you
-              turn on. With MFA active, at least one method must stay enabled.
+              Choose which methods we may offer after your password. Email OTP codes are always sent to your primary
+              account email. Use <strong>Configure</strong> for the authenticator app. With MFA active, at least one
+              method must stay enabled.
             </p>
 
             {!platformMail && !platformTotp ? (
@@ -403,67 +380,29 @@ const UserProfileSecurityTab = () => {
 
             {platformMail ? (
               <div className="border rounded p-3 mb-3">
-                <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                  <Form.Check
-                    type="switch"
-                    id="profile-mfa-pref-email"
-                    className="mb-0"
-                    label="OTP mail"
-                    checked={prefEmailMfa}
-                    disabled={
-                      factorPrefMutation.isPending ||
-                      !emailReady ||
-                      (otpMailOnlyMethod && prefEmailMfa)
-                    }
-                    onChange={(e) => persistFactorPrefs({ mfaFactorEmailEnabled: e.target.checked })}
-                  />
-                  <Button
-                    variant="outline-primary"
-                    size="sm"
-                    disabled={!prefEmailMfa}
-                    onClick={() => toggleConfigure('otp')}
-                  >
-                    {openConfigure === 'otp' ? 'Close' : 'Configure'}
-                  </Button>
-                </div>
+                <Form.Check
+                  type="switch"
+                  id="profile-mfa-pref-email"
+                  className="mb-2"
+                  label="OTP mail"
+                  checked={prefEmailMfa}
+                  disabled={
+                    factorPrefMutation.isPending ||
+                    !emailReady ||
+                    (otpMailOnlyMethod && prefEmailMfa)
+                  }
+                  onChange={(e) => persistFactorPrefs({ mfaFactorEmailEnabled: e.target.checked })}
+                />
                 {!emailReady ? (
                   <Form.Text className="d-block mb-0">Confirm your account email to use OTP mail.</Form.Text>
                 ) : otpMailOnlyMethod ? (
                   <Form.Text className="d-block mb-0">Required — your only enabled sign-in method right now.</Form.Text>
-                ) : null}
-
-                {openConfigure === 'otp' && prefEmailMfa ? (
-                  <div className="mt-3 pt-3 border-top">
-                    <p className="fs-sm fw-semibold mb-2">OTP mail delivery</p>
-                    <p className="text-muted fs-xs mb-3">
-                      Address where you want MFA codes sent. It can differ from your primary account email (
-                      <span className="text-break">{user?.email ?? '—'}</span>). Stored in your profile; the live
-                      sign-in flow may still use your Appwrite account email until the platform sends codes to this
-                      address.
-                    </p>
-                    <Form
-                      className="d-flex flex-wrap align-items-end gap-2"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        saveOtpEmailMutation.mutate(mfaOtpEmailDraft);
-                      }}
-                    >
-                      <Form.Group controlId="mfa-otp-delivery-email" className="flex-grow-1" style={{ minWidth: '14rem' }}>
-                        <Form.Label className="fs-sm">MFA OTP email</Form.Label>
-                        <Form.Control
-                          type="email"
-                          autoComplete="email"
-                          value={mfaOtpEmailDraft}
-                          onChange={(e) => setMfaOtpEmailDraft(e.target.value)}
-                          placeholder={user?.email ?? 'you@example.com'}
-                        />
-                      </Form.Group>
-                      <Button type="submit" variant="primary" size="sm" disabled={saveOtpEmailMutation.isPending}>
-                        {saveOtpEmailMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Save email'}
-                      </Button>
-                    </Form>
-                  </div>
-                ) : null}
+                ) : (
+                  <Form.Text className="d-block mb-0 text-muted">
+                    One-time codes are sent to your primary email:{' '}
+                    <span className="text-break fw-medium text-body">{user?.email ?? '—'}</span>
+                  </Form.Text>
+                )}
               </div>
             ) : null}
 

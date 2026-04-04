@@ -1,5 +1,7 @@
 const sdk = require("node-appwrite");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2023-10-16",
+});
 
 module.exports = async ({ req, res, log, error }) => {
   const client = new sdk.Client();

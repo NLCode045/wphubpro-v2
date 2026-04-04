@@ -39,7 +39,12 @@ import { useAuth } from '@/domains/auth';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import { StripeElementsModal } from '@/integrations/stripe/StripeElementsModal';
 import { StripePaymentIntentModal } from '@/integrations/stripe/StripePaymentIntentModal';
-import type { StripePlan, StripeProrationPreviewResponse, SubscriptionDetailsResponse } from '@/types';
+import type {
+  StripePaymentMethod,
+  StripePlan,
+  StripeProrationPreviewResponse,
+  SubscriptionDetailsResponse,
+} from '@/types';
 
 const formatMoney = (amountCents: number, currency = 'eur') =>
   (amountCents / 100).toLocaleString('nl-NL', {
@@ -63,6 +68,16 @@ const formatBillingDate = (unixSeconds: number) =>
     month: 'long',
     year: 'numeric',
   });
+
+function formatPaymentMethodLabel(pm: StripePaymentMethod): string {
+  const card = pm.card;
+  if (card) {
+    return `${card.brand} ·••• ${card.last4} (${String(card.exp_month).padStart(2, '0')}/${card.exp_year})`;
+  }
+  return pm.type;
+}
+
+const EMPTY_PAYMENT_METHODS: StripePaymentMethod[] = [];
 
 function nextInvoiceFromDetails(details: SubscriptionDetailsResponse) {
   const ui = details.upcoming_invoice;
@@ -114,7 +129,9 @@ const UserProfileSubscriptionTab = () => {
     billingCtx
   );
   const { data: invoices, isLoading: invoicesLoading } = useInvoices(billingCtx);
-  const { data: paymentMethods, isLoading: pmLoading } = usePaymentMethods(billingCtx);
+  const { data: paymentMethodsData, isLoading: pmLoading } = usePaymentMethods(billingCtx);
+  const paymentMethods = paymentMethodsData?.paymentMethods ?? EMPTY_PAYMENT_METHODS;
+  const customerDefaultPaymentMethodId = paymentMethodsData?.defaultPaymentMethodId ?? null;
   const { data: stripePlans, isLoading: plansLoading } = useStripePlans(billingCtx);
 
   const cancelSubscription = useCancelSubscription();
@@ -132,6 +149,8 @@ const UserProfileSubscriptionTab = () => {
   const [changePlanYearly, setChangePlanYearly] = useState(false);
   const [payIntent, setPayIntent] = useState<PayIntentState>(null);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmState>(null);
+  /** When the customer has saved cards but no default, checkout uses this payment method id */
+  const [checkoutPaymentMethodId, setCheckoutPaymentMethodId] = useState<string | null>(null);
 
   const [billingName, setBillingName] = useState('');
   const [billingEmail, setBillingEmail] = useState('');
@@ -190,7 +209,28 @@ const UserProfileSubscriptionTab = () => {
     }
   }, [queryClient, searchParams, setSearchParams, showNotification]);
 
-  const defaultPaymentMethodId = subscriptionDetails?.payment_method?.id ?? null;
+  useEffect(() => {
+    if (customerDefaultPaymentMethodId) {
+      setCheckoutPaymentMethodId(null);
+      return;
+    }
+    if (paymentMethods.length === 0) {
+      setCheckoutPaymentMethodId(null);
+      return;
+    }
+    setCheckoutPaymentMethodId((prev) => {
+      if (prev && paymentMethods.some((p) => p.id === prev)) return prev;
+      return paymentMethods[0].id;
+    });
+  }, [customerDefaultPaymentMethodId, paymentMethods]);
+
+  const defaultPaymentMethodId =
+    customerDefaultPaymentMethodId ?? subscriptionDetails?.payment_method?.id ?? null;
+  const needsCheckoutPaymentMethodChoice = Boolean(
+    paymentMethods.length > 0 && !customerDefaultPaymentMethodId
+  );
+  const checkoutPaymentMethodBlocking =
+    needsCheckoutPaymentMethodChoice && (!checkoutPaymentMethodId || pmLoading);
   const planId = accountDoc?.current_plan_id?.trim() || '';
   const hasStripeCustomer = Boolean(stripeCustomerId);
 
@@ -235,8 +275,12 @@ const UserProfileSubscriptionTab = () => {
 
   const runPlanCheckout = (priceId: string, updateType?: 'upgrade' | 'downgrade') => {
     const returnUrl = `${window.location.origin}${window.location.pathname}?tab=subscription`;
+    const paymentMethodId =
+      needsCheckoutPaymentMethodChoice && checkoutPaymentMethodId
+        ? checkoutPaymentMethodId
+        : undefined;
     createCheckout.mutate(
-      { priceId, returnUrl, updateType },
+      { priceId, returnUrl, updateType, paymentMethodId },
       {
         onSuccess: (data) => {
           if (data?.payment?.clientSecret) {
@@ -933,6 +977,29 @@ const UserProfileSubscriptionTab = () => {
                 step. <strong>Downgrades</strong> take effect at the start of your next billing period (see
                 scheduled plan change above when set).
               </Alert>
+              {needsCheckoutPaymentMethodChoice ? (
+                <Alert variant="warning" className="fs-sm mb-3 py-3">
+                  <Form.Group className="mb-0">
+                    <Form.Label className="fw-semibold">Payment method for checkout</Form.Label>
+                    <p className="text-muted fs-sm mb-2">
+                      You do not have a default card on file. Choose which saved card to use for this change.
+                      You can set a default under Payment methods below.
+                    </p>
+                    <Form.Select
+                      aria-label="Payment method for checkout"
+                      value={checkoutPaymentMethodId ?? ''}
+                      onChange={(e) => setCheckoutPaymentMethodId(e.target.value || null)}
+                      disabled={pmLoading || paymentMethods.length === 0}
+                    >
+                      {paymentMethods.map((pm) => (
+                        <option key={pm.id} value={pm.id}>
+                          {formatPaymentMethodLabel(pm)}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Alert>
+              ) : null}
               <div className="d-flex align-items-center justify-content-center gap-3 mb-4 pb-3 border-bottom">
                 <span className={`fs-sm ${!changePlanYearly ? 'fw-semibold text-body' : 'text-muted'}`}>
                   Monthly
@@ -1011,7 +1078,9 @@ const UserProfileSubscriptionTab = () => {
                                 variant="primary"
                                 size="sm"
                                 disabled={
-                                  createCheckout.isPending || previewProration.isPending
+                                  createCheckout.isPending ||
+                                  previewProration.isPending ||
+                                  checkoutPaymentMethodBlocking
                                 }
                                 onClick={() => handleSelectPlanPrice(priceId, changePlanYearly)}
                               >
@@ -1054,6 +1123,26 @@ const UserProfileSubscriptionTab = () => {
                   ))}
                 </ul>
               ) : null}
+              {needsCheckoutPaymentMethodChoice ? (
+                <Form.Group className="mt-3 mb-0">
+                  <Form.Label className="fw-semibold fs-sm">Payment method</Form.Label>
+                  <p className="text-muted fs-sm mb-2">
+                    No default card is set. Choose a saved card for this payment.
+                  </p>
+                  <Form.Select
+                    aria-label="Payment method for upgrade"
+                    value={checkoutPaymentMethodId ?? ''}
+                    onChange={(e) => setCheckoutPaymentMethodId(e.target.value || null)}
+                    disabled={pmLoading || paymentMethods.length === 0}
+                  >
+                    {paymentMethods.map((pm) => (
+                      <option key={pm.id} value={pm.id}>
+                        {formatPaymentMethodLabel(pm)}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              ) : null}
             </>
           ) : null}
         </Modal.Body>
@@ -1063,7 +1152,7 @@ const UserProfileSubscriptionTab = () => {
           </Button>
           <Button
             variant="primary"
-            disabled={createCheckout.isPending}
+            disabled={createCheckout.isPending || checkoutPaymentMethodBlocking}
             onClick={handleConfirmUpgrade}
           >
             {createCheckout.isPending ? 'Processing…' : 'Continue to payment'}

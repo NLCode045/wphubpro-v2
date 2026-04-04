@@ -2027,6 +2027,42 @@
                     "size": 255,
                     "default": null,
                     "encrypt": false
+                },
+                {
+                    "key": "assigned_to_user_id",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "context_json",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 10000,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "notify_channel",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 20,
+                    "default": "platform",
+                    "encrypt": false
+                },
+                {
+                    "key": "follower_ids",
+                    "type": "string",
+                    "required": false,
+                    "array": true,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
                 }
             ],
             "indexes": [
@@ -2047,6 +2083,76 @@
                     "status": "available",
                     "columns": [
                         "status"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "ticket_activities",
+            "$permissions": [
+                "read(\"team:admin\")"
+            ],
+            "databaseId": "platform_db",
+            "name": "Ticket activities",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "ticket_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "actor_user_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "action",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 80,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "summary",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 500,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "detail_json",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 4000,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "ticket_id_activity_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "ticket_id"
                     ],
                     "orders": [
                         "ASC"

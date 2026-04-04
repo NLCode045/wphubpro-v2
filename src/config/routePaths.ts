@@ -33,4 +33,10 @@ export const ROUTE_PATHS = {
     `/admin/finance/plans/${encodeURIComponent(productId)}`,
   adminFinancePaymentPath: (paymentIntentId: string) =>
     `/admin/finance/payments/${encodeURIComponent(paymentIntentId)}`,
+  /** Member support hub */
+  SUPPORT: '/support',
+  SUPPORT_NEW: '/support/new',
+  supportTicketPath: (ticketId: string) => `/support/${encodeURIComponent(ticketId)}`,
+  /** Admin: all support tickets */
+  ADMIN_SUPPORT: '/admin/support',
 } as const;

@@ -113,10 +113,17 @@ module.exports = async ({ req, res, log, error }) => {
     const user = { $id: userId };
     log("Processing checkout for user: " + user.$id);
 
-    const { priceId, returnUrl, updateType } = payload;
+    const { priceId, returnUrl, updateType, paymentMethodId } = payload;
     if (!priceId) {
       error("Missing priceId in request payload");
       return res.json({ error: "priceId is required" }, 400);
+    }
+
+    async function assertPaymentMethodBelongsToCustomer(pmId) {
+      const pm = await stripe.paymentMethods.retrieve(pmId);
+      if (pm.customer !== stripeCustomerId) {
+        throw new Error("Payment method does not belong to this customer");
+      }
     }
 
     if (returnUrl) {
@@ -140,6 +147,18 @@ module.exports = async ({ req, res, log, error }) => {
     }
 
     log("Found Stripe customer: " + stripeCustomerId);
+
+    if (paymentMethodId) {
+      try {
+        await assertPaymentMethodBelongsToCustomer(paymentMethodId);
+      } catch (pmErr) {
+        error("Invalid paymentMethodId: " + (pmErr.message || pmErr));
+        return res.json(
+          { error: pmErr.message || "Invalid payment method", code: "invalid_payment_method" },
+          400
+        );
+      }
+    }
 
     const subscriptionsList = await stripe.subscriptions.list({
       customer: stripeCustomerId,
@@ -259,7 +278,7 @@ module.exports = async ({ req, res, log, error }) => {
         }
 
         log("Processing upgrade (immediate with proration)...");
-        updated = await stripe.subscriptions.update(activeSubscription.id, {
+        const upgradeParams = {
           proration_behavior: "always_invoice",
           items: [
             {
@@ -272,7 +291,11 @@ module.exports = async ({ req, res, log, error }) => {
             product_label: productLabel,
             appwrite_user_id: user.$id,
           }),
-        });
+        };
+        if (paymentMethodId) {
+          upgradeParams.default_payment_method = paymentMethodId;
+        }
+        updated = await stripe.subscriptions.update(activeSubscription.id, upgradeParams);
         log("Subscription updated in-place: " + updated.id);
 
         const { payment } = await buildPaymentFromSubscriptionId(stripe, updated.id);
@@ -296,7 +319,7 @@ module.exports = async ({ req, res, log, error }) => {
     }
 
     log("No active subscription — creating subscription (in-app payment flow)...");
-    const created = await stripe.subscriptions.create({
+    const createParams = {
       customer: stripeCustomerId,
       items: [{ price: priceId, quantity: 1 }],
       payment_behavior: "default_incomplete",
@@ -306,7 +329,11 @@ module.exports = async ({ req, res, log, error }) => {
         appwrite_user_id: user.$id,
         product_label: productLabel,
       },
-    });
+    };
+    if (paymentMethodId) {
+      createParams.default_payment_method = paymentMethodId;
+    }
+    const created = await stripe.subscriptions.create(createParams);
 
     const { payment } = await buildPaymentFromSubscriptionId(stripe, created.id);
 

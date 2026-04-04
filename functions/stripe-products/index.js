@@ -1,6 +1,8 @@
 const Stripe = require("stripe");
 const sdk = require("node-appwrite");
 
+const handleDeletePlan = require("./handlers/admin-delete-plan");
+
 function parsePayload(req) {
   if (!req) return {};
   if (req.body && typeof req.body === "object") return req.body;
@@ -527,6 +529,7 @@ module.exports = async ({ req, res, log, error }) => {
       "set-active": "set-active",
       "set-price-active": "set-price-active",
       "create-price": "create-price",
+      "delete-plan": "delete-plan",
     };
     const action = actionMap[actionRaw] || actionRaw;
 
@@ -551,11 +554,14 @@ module.exports = async ({ req, res, log, error }) => {
     if (action === "create-price") {
       return await handleCreatePrice(req, res, log, error);
     }
+    if (action === "delete-plan") {
+      return handleDeletePlan({ req, res, log, error });
+    }
 
     return res.json({
       success: false,
       message:
-        'Invalid action. Use "list", "create", "update", "get", "set-active", "set-price-active", or "create-price".',
+        'Invalid action. Use "list", "create", "update", "get", "set-active", "set-price-active", "create-price", or "delete-plan".',
     }, 400);
   } catch (err) {
     error("stripe-products failed: " + err.message);

@@ -4,10 +4,12 @@ import { executeFunction } from '@/integrations/appwrite/executeFunction'
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite'
 import type { StripePlan, SubscriptionDetailsResponse } from '@/types'
 import type {
+  AdminFinanceDashboardResponse,
   AdminFinanceSummary,
   AdminPaymentIntentDetail,
   AdminPaymentIntentRow,
   AdminSubscriptionRow,
+  FinanceDashboardPeriod,
 } from './types'
 
 const SUBS_FN = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS
@@ -28,6 +30,24 @@ export function useFinanceSummary() {
         action: 'admin-finance-summary',
       })
       if (!res?.success) throw new Error((res as { error?: string })?.error || 'Summary failed')
+      return res
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useFinanceDashboard(period: FinanceDashboardPeriod) {
+  const enabled = useFinanceAdminEnabled()
+  return useQuery<AdminFinanceDashboardResponse, Error>({
+    queryKey: ['admin', 'finance', 'dashboard', period],
+    queryFn: async () => {
+      const res = await executeFunction<AdminFinanceDashboardResponse>(
+        SUBS_FN,
+        { action: 'admin-finance-dashboard', period },
+        { longRunning: true, maxAsyncWaitMs: 120_000 },
+      )
+      if (!res?.success) throw new Error((res as { error?: string })?.error || 'Dashboard failed')
       return res
     },
     enabled,
@@ -266,6 +286,49 @@ export function useAdminSetPriceActive() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'finance', 'plans'] })
       void qc.invalidateQueries({ queryKey: ['admin', 'finance', 'plan'] })
+    },
+  })
+}
+
+export type AdminDeletePlanResponse = {
+  success: boolean
+  mode?: 'deleted' | 'archived' | 'retired'
+  message?: string
+  migratedCount?: number
+  failedMigrations?: { subscriptionId: string; error: string }[]
+  subscriptionCount?: number
+  remainingCount?: number
+}
+
+export function useAdminDeletePlan() {
+  const qc = useQueryClient()
+  return useMutation<
+    AdminDeletePlanResponse,
+    Error,
+    {
+      productId: string
+      migrateSubscribers: boolean
+      targetPriceId?: string
+      proration_behavior?: 'always_invoice' | 'none'
+    }
+  >({
+    mutationFn: async (body) => {
+      const res = await executeFunction<AdminDeletePlanResponse>(
+        PRODUCTS_FN,
+        {
+          action: 'delete-plan',
+          productId: body.productId,
+          migrateSubscribers: body.migrateSubscribers,
+          targetPriceId: body.targetPriceId,
+          proration_behavior: body.proration_behavior,
+        },
+        { longRunning: true, maxAsyncWaitMs: 180_000 },
+      )
+      if (!res?.success) throw new Error(res?.message || 'Delete plan failed')
+      return res
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'finance'] })
     },
   })
 }

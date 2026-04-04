@@ -8,6 +8,7 @@ export type {
   CancelSubscriptionResult,
   CheckoutSessionResult,
   EnsureStripeCustomerResult,
+  PaymentMethodsData,
   StripeCustomerBilling,
   UpdateBillingDetailsPayload,
   UseStripePlansOptions,

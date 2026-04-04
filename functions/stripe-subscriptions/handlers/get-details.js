@@ -1,5 +1,7 @@
 const sdk = require("node-appwrite");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2023-10-16",
+});
 const buildSubscriptionDetailsPayload = require("./subscription-details-common");
 
 function parsePayload(req, payloadFromIndex) {

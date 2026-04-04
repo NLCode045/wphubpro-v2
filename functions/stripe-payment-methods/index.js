@@ -101,10 +101,13 @@ module.exports = async ({ req, res, log, error }) => {
     }
 
     if (action === "list") {
-      const paymentMethods = await stripe.paymentMethods.list({
-        customer: stripeCustomerId,
-        type: "card",
-      });
+      const [paymentMethods, customer] = await Promise.all([
+        stripe.paymentMethods.list({
+          customer: stripeCustomerId,
+          type: "card",
+        }),
+        stripe.customers.retrieve(stripeCustomerId),
+      ]);
       const list = (paymentMethods.data || []).map((pm) => ({
         id: pm.id,
         type: pm.type,
@@ -117,7 +120,10 @@ module.exports = async ({ req, res, log, error }) => {
             }
           : null,
       }));
-      return res.json({ success: true, paymentMethods: list });
+      const dpm = customer.invoice_settings?.default_payment_method;
+      const defaultPaymentMethodId =
+        typeof dpm === "string" ? dpm : dpm && dpm.id ? dpm.id : null;
+      return res.json({ success: true, paymentMethods: list, defaultPaymentMethodId });
     }
 
     if (action === "create-setup-intent") {

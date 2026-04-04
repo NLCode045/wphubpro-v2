@@ -30,7 +30,7 @@ const MenuItemWithChildren = ({
 
   const isChildActive = (items: MenuItemType[]): boolean =>
     items.some((child) => {
-      if (child.url && pathname.endsWith(child.url)) return true
+      if (child.url && menuPathActive(child.url, pathname)) return true
       if (child.children) return isChildActive(child.children)
       return false
     })
@@ -66,8 +66,8 @@ const MenuItemWithChildren = ({
 
 const MenuItem = ({ item, linkClass, wrapperClass, level }: { item: MenuItemType; linkClass?: string; wrapperClass?: string; level?: number }) => {
   const menuLevel = level ?? 1
-  const {pathname} = useLocation()
-  const isActive = item.url && pathname.endsWith(item.url)
+  const { pathname } = useLocation()
+  const isActive = item.url ? menuPathActive(item.url, pathname) : false
 
   const link = (
     <Link to={item.url ?? '/'} className={`${linkClass ?? ''} ${isActive ? 'active' : ''}`}>

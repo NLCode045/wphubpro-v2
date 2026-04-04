@@ -475,6 +475,13 @@ const UserProfileSubscriptionTab = () => {
                 )}
               </div>
               <div className="d-flex flex-wrap gap-2">
+                <ContactSupportButton
+                  category="billing"
+                  context={{
+                    sourceLabel: 'Billing & subscription',
+                    subscriptionId: subscriptionId ?? undefined,
+                  }}
+                />
                 <Button
                   variant="outline-primary"
                   size="sm"

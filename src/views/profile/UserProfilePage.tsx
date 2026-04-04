@@ -75,6 +75,9 @@ const UserProfilePage = () => {
   return (
     <Container fluid>
       <PageBreadcrumb title={title} subtitle="Account" />
+      <div className="d-flex justify-content-end mb-2">
+        <ContactSupportButton category="account" context={{ sourceLabel: 'Profile' }} />
+      </div>
 
       <Row className="justify-content-center">
         <Col xxl={12}>

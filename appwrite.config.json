@@ -392,7 +392,7 @@
         {
             "$id": "recovery-manager",
             "name": "recovery-manager",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/recovery-manager",
             "entrypoint": "index.js",
             "execute": [
@@ -486,7 +486,7 @@
         {
             "$id": "site-heartbeat-log",
             "name": "site-heartbeat-log",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/site-heartbeat-log",
             "entrypoint": "index.js",
             "execute": [
@@ -657,7 +657,7 @@
         {
             "$id": "fetch-site-meta",
             "name": "fetch-site-meta",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/fetch-site-meta",
             "entrypoint": "index.js",
             "execute": [
@@ -682,7 +682,7 @@
         {
             "$id": "site-pagespeed",
             "name": "site-pagespeed",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/site-pagespeed",
             "entrypoint": "index.js",
             "execute": [
@@ -707,7 +707,7 @@
         {
             "$id": "site-app-icon-preview",
             "name": "site-app-icon-preview",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/site-app-icon-preview",
             "entrypoint": "index.js",
             "execute": [

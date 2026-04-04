@@ -101,7 +101,6 @@ async function handleListProducts(req, res, log, error) {
         planRow.activeSubscriptionsCount = count;
         if (truncated) subscriptionCountsTruncated = true;
       } catch {
-        planRow.activeSubscriptionsCount = 0;
         subscriptionCountsTruncated = true;
       }
     }

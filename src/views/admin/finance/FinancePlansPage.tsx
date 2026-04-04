@@ -50,6 +50,20 @@ const FinancePlansPage = () => {
         header: 'Currency',
         cell: ({ getValue }) => <span className="text-uppercase">{getValue()}</span>,
       }),
+      columnHelper.accessor('activeSubscriptionsCount', {
+        id: 'activeSubscriptionsCount',
+        header: 'Active subs',
+        enableSorting: true,
+        sortingFn: (rowA, rowB, columnId) => {
+          const a = rowA.getValue(columnId) as number | undefined
+          const b = rowB.getValue(columnId) as number | undefined
+          return (a ?? -1) - (b ?? -1)
+        },
+        cell: ({ getValue }) => {
+          const n = getValue()
+          return n == null ? '—' : n
+        },
+      }),
     ],
     [],
   )
@@ -72,11 +86,19 @@ const FinancePlansPage = () => {
   if (error) return <p className="text-danger">{error.message}</p>
 
   return (
-    <DataTable
-      table={table}
-      onRowClick={openRow}
-      emptyMessage="No plans returned from Stripe."
-    />
+    <>
+      {subscriptionCountsTruncated ? (
+        <Alert variant="secondary" className="mb-3 py-2 small">
+          Some subscription counts may be incomplete: results are capped for performance (Stripe
+          pagination or product limit).
+        </Alert>
+      ) : null}
+      <DataTable
+        table={table}
+        onRowClick={openRow}
+        emptyMessage="No plans returned from Stripe."
+      />
+    </>
   )
 }
 

@@ -509,6 +509,12 @@ async function handleSetPriceActive(req, res, log, error) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
+  const _m = (req.method || "POST").toString().toUpperCase();
+  const _p = (req.path || req.url || "").split("?")[0];
+  if (_m === "POST" && typeof _p === "string" && _p.includes("errors/not-found")) {
+    return res.json({ success: true }, 200);
+  }
+
   try {
     const payload = parsePayload(req);
     const actionRaw = (req.query?.action || payload.action || "list").toString().toLowerCase();

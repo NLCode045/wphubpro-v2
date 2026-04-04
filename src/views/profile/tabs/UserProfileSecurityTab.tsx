@@ -40,11 +40,13 @@ const UserProfileSecurityTab = () => {
   });
 
   const p = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
-  const mfaEnabled = Boolean(user && typeof user.mfa === 'boolean' && user.mfa);
+  const mfaEnabledOnAccount = Boolean(user && typeof user.mfa === 'boolean' && user.mfa);
+  /** Shown in UI: on when the account has MFA or the platform mandates it for everyone. */
+  const mfaShownAsOn = mfaEnabledOnAccount || forceMfa;
 
   useEffect(() => {
-    if (mfaEnabled) setWantsMfaSetup(false);
-  }, [mfaEnabled]);
+    if (mfaEnabledOnAccount) setWantsMfaSetup(false);
+  }, [mfaEnabledOnAccount]);
 
   useEffect(() => {
     setPrefEmailMfa(p.mfaFactorEmailEnabled !== false);
@@ -198,11 +200,11 @@ const UserProfileSecurityTab = () => {
 
   const emailSignInActive = platformMail && emailReady && prefEmailMfa;
   const authenticatorSignInActive = platformTotp && totpReady && prefAuthenticatorMfa;
-  const otpMailOnlyMethod = mfaEnabled && emailSignInActive && !authenticatorSignInActive;
-  const authenticatorOnlyMethod = mfaEnabled && authenticatorSignInActive && !emailSignInActive;
+  const otpMailOnlyMethod = mfaShownAsOn && emailSignInActive && !authenticatorSignInActive;
+  const authenticatorOnlyMethod = mfaShownAsOn && authenticatorSignInActive && !emailSignInActive;
 
-  const revealMfaOptions = mfaEnabled || wantsMfaSetup;
-  const canTurnOffMfa = mfaEnabled && !forceMfa;
+  const revealMfaOptions = mfaShownAsOn || wantsMfaSetup;
+  const canTurnOffMfa = mfaEnabledOnAccount && !forceMfa;
 
   const persistFactorPrefs = (patch: { mfaFactorEmailEnabled?: boolean; mfaFactorAuthenticatorEnabled?: boolean }) => {
     const nextEmail =
@@ -211,7 +213,7 @@ const UserProfileSecurityTab = () => {
       patch.mfaFactorAuthenticatorEnabled !== undefined ? patch.mfaFactorAuthenticatorEnabled : prefAuthenticatorMfa;
     const nextEmailActive = platformMail && emailReady && nextEmail;
     const nextAuthActive = platformTotp && totpReady && nextAuth;
-    if (mfaEnabled && !nextEmailActive && !nextAuthActive) {
+    if (mfaShownAsOn && !nextEmailActive && !nextAuthActive) {
       setMfaMessage({
         variant: 'danger',
         text: 'With MFA on, keep at least one sign-in method enabled (OTP mail or authenticator).',
@@ -237,7 +239,7 @@ const UserProfileSecurityTab = () => {
     }
     setWantsMfaSetup(false);
     setOpenConfigure(null);
-    if (mfaEnabled && !forceMfa) {
+    if (mfaEnabledOnAccount && !forceMfa) {
       disableMfaMutation.mutate();
     }
   };
@@ -334,8 +336,8 @@ const UserProfileSecurityTab = () => {
         ) : null}
 
         <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-          <span className={`badge ${mfaEnabled ? 'badge-soft-success' : 'badge-soft-secondary'} fs-xs`}>
-            {mfaEnabled ? 'MFA on' : 'MFA off'}
+          <span className={`badge ${mfaShownAsOn ? 'badge-soft-success' : 'badge-soft-secondary'} fs-xs`}>
+            {mfaShownAsOn ? 'MFA on' : 'MFA off'}
           </span>
           {platformMail && emailReady ? (
             <span className="badge badge-soft-info fs-xs">Email OTP available</span>
@@ -350,11 +352,11 @@ const UserProfileSecurityTab = () => {
             type="switch"
             id="profile-mfa-master"
             label="Enable multi-factor authentication"
-            checked={mfaEnabled}
+            checked={mfaShownAsOn}
             disabled={
               tryEnableMfaMutation.isPending ||
               disableMfaMutation.isPending ||
-              (forceMfa && mfaEnabled)
+              (forceMfa && mfaEnabledOnAccount)
             }
             onChange={(e) => onMasterMfaChange(e.target.checked)}
           />

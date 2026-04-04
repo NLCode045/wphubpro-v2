@@ -102,9 +102,12 @@ export function SupportTicketsTable({ tickets, adminMode, newTicketTo }: Props) 
         id: 'actions',
         header: 'Actions',
         cell: ({ row }) => (
-          <Button as={Link} to={ROUTE_PATHS.supportTicketPath(row.original.$id)} size="sm" variant="light" className="btn-icon rounded">
+          <Link
+            to={ROUTE_PATHS.supportTicketPath(row.original.$id)}
+            className="btn btn-light btn-icon btn-sm rounded d-inline-flex align-items-center justify-content-center"
+          >
             <TbEye className="fs-lg" />
-          </Button>
+          </Link>
         ),
       })
     );

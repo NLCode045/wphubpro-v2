@@ -18,7 +18,8 @@ const FinancePlansPage = () => {
   const navigate = useNavigate()
   const { data, isLoading, error } = useAdminStripePlansList()
 
-  const plans = data ?? []
+  const plans = data?.plans ?? []
+  const subscriptionCountsTruncated = data?.subscriptionCountsTruncated ?? false
 
   const columns = useMemo(
     () => [

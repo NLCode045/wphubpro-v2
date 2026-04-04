@@ -2,6 +2,7 @@ import { ROUTE_PATHS } from '@/config/routePaths'
 import { type MenuItemType } from '@/types/layout'
 import { type IconType } from 'react-icons'
 import {
+  TbCoin,
   TbLayoutDashboard,
   TbLibrary,
   TbLogout2,
@@ -104,6 +105,12 @@ export const adminMenuItems: MenuItemType[] = [
     icon: TbSettings,
     url: ROUTE_PATHS.ADMIN_SETTINGS,
   },
+  {
+    key: 'admin-finance',
+    label: 'Finance',
+    icon: TbCoin,
+    url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
+  },
 ]
 
 export const horizontalAdminMenuItems: MenuItemType[] = [
@@ -124,5 +131,11 @@ export const horizontalAdminMenuItems: MenuItemType[] = [
     label: 'Settings',
     icon: TbSettings,
     url: ROUTE_PATHS.ADMIN_SETTINGS,
+  },
+  {
+    key: 'admin-finance',
+    label: 'Finance',
+    icon: TbCoin,
+    url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
   },
 ]

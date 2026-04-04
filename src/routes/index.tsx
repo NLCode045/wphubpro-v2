@@ -3,6 +3,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import MainLayout from '@/layouts/MainLayout.tsx'
 import AdminDashboardPage from '@/views/admin'
+import AdminPlatformSettingsPage from '@/views/admin/settings'
 import AdminUsersOverviewPage from '@/views/admin/users'
 import DashboardPage from '@/views/dashboard'
 import LibraryPage from '@/views/library'
@@ -65,6 +66,7 @@ export const routes: RouteObject[] = [
       { path: ROUTE_PATHS.PROFILE, element: <UserProfilePage /> },
       { path: ROUTE_PATHS.ADMIN_DASHBOARD, element: <AdminDashboardPage /> },
       { path: ROUTE_PATHS.ADMIN_USERS, element: <AdminUsersOverviewPage /> },
+      { path: ROUTE_PATHS.ADMIN_SETTINGS, element: <AdminPlatformSettingsPage /> },
       { path: ROUTE_PATHS.SITES, element: <SitesPage /> },
       { path: `${ROUTE_PATHS.SITES}/:siteId/plugins/:pluginId`, element: <SiteExtensionDetailPage /> },
       { path: `${ROUTE_PATHS.SITES}/:siteId/themes/:themeId`, element: <SiteExtensionDetailPage /> },

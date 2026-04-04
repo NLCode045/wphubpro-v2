@@ -7,7 +7,7 @@ import DT from 'datatables.net-bs5'
 import DataTable from 'datatables.net-react'
 
 import 'datatables.net-buttons-bs5'
-import 'datatables.net-buttons/js/buttons.html5'
+import 'datatables.net-buttons/js/buttons.html5.js'
 
 import ReactDOMServer from 'react-dom/server'
 import { TbChevronLeft, TbChevronRight, TbChevronsLeft, TbChevronsRight } from 'react-icons/tb'

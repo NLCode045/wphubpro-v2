@@ -2,10 +2,12 @@ import { parseActionLogForAudit } from '@/domains/sites';
 import { getChecksForDashboard, parseSiteHealthMeta, severityTotalsForChecks } from '@/lib/parseSiteHealthMeta';
 import type { Site, SiteHealthSeverity } from '@/types';
 import SiteActionHistoryList from '@/views/sites/detail/SiteActionHistoryList';
+import { SiteHealthAiAgentModal } from '@/views/sites/detail/SiteHealthAiAgentModal';
 import SiteHealthMetaPanel from '@/views/sites/detail/SiteHealthMetaPanel';
 import { formatChecked, formatSiteHealthCheckedOn } from '@/views/sites/detail/siteDetailFormat';
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Card, CardBody, Table } from 'react-bootstrap';
+import { TbSparkles } from 'react-icons/tb';
 
 export { formatChecked } from '@/views/sites/detail/siteDetailFormat';
 
@@ -19,6 +21,8 @@ export function SiteDetailHealthPanel({ site }: { site: Site }) {
   const warningCount = headerTotals.warning;
 
   const [severityFilters, setSeverityFilters] = useState<Set<SiteHealthSeverity>>(() => new Set());
+  const [healthAiOpen, setHealthAiOpen] = useState(false);
+  const [healthAiSession, setHealthAiSession] = useState(0);
 
   useEffect(() => {
     setSeverityFilters(new Set());
@@ -39,6 +43,21 @@ export function SiteDetailHealthPanel({ site }: { site: Site }) {
       <div className="d-flex flex-wrap justify-content-between align-items-start column-gap-3 row-gap-2 mb-3">
         <div className="d-flex flex-wrap align-items-center gap-2 min-w-0">
           <h5 className="fs-base mb-0">Health</h5>
+          <Button
+            type="button"
+            variant="outline-primary"
+            size="sm"
+            className="rounded-circle p-0 d-inline-flex align-items-center justify-content-center"
+            style={{ width: 32, height: 32 }}
+            title="Health assistant — suggested fixes from Site Health"
+            aria-label="Open health assistant"
+            onClick={() => {
+              setHealthAiSession((n) => n + 1);
+              setHealthAiOpen(true);
+            }}
+          >
+            <TbSparkles size={18} aria-hidden />
+          </Button>
           {criticalCount > 0 ? (
             <Button
               type="button"
@@ -77,6 +96,13 @@ export function SiteDetailHealthPanel({ site }: { site: Site }) {
         </div>
       </div>
       <SiteHealthMetaPanel site={site} severityFilters={severityFilters} setSeverityFilters={setSeverityFilters} />
+      <SiteHealthAiAgentModal
+        key={`health-ai-${site.$id}-${healthAiSession}`}
+        site={site}
+        show={healthAiOpen}
+        sessionKey={healthAiSession}
+        onHide={() => setHealthAiOpen(false)}
+      />
     </div>
   );
 }

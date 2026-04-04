@@ -176,6 +176,27 @@
             "specification": "s-0.5vcpu-512mb"
         },
         {
+            "$id": "public-auth-config",
+            "name": "public-auth-config",
+            "runtime": "node-18.0",
+            "path": "functions/public-auth-config",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "commands": "npm install",
+            "scopes": [
+                "users.read",
+                "documents.read"
+            ],
+            "specification": "s-0.5vcpu-512mb"
+        },
+        {
             "$id": "stripe-portal-link",
             "name": "stripe-portal-link",
             "runtime": "node-18.0",
@@ -480,7 +501,9 @@
             "runtime": "node-18.0",
             "path": "functions/site-heartbeat-poke",
             "entrypoint": "index.js",
-            "execute": [],
+            "execute": [
+                "users"
+            ],
             "enabled": true,
             "logging": true,
             "events": [],
@@ -488,6 +511,29 @@
             "timeout": 60,
             "commands": "npm install",
             "scopes": [
+                "users.read",
+                "databases.read",
+                "documents.read"
+            ],
+            "specification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "health-ai-agent",
+            "name": "health-ai-agent",
+            "runtime": "node-18.0",
+            "path": "functions/health-ai-agent",
+            "entrypoint": "index.js",
+            "execute": [
+                "users"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 120,
+            "commands": "npm install",
+            "scopes": [
+                "users.read",
                 "databases.read",
                 "documents.read"
             ],
@@ -627,7 +673,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 240,
+            "timeout": 300,
             "commands": "npm install",
             "scopes": [
                 "users.read",

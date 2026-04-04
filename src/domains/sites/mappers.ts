@@ -1,5 +1,19 @@
 import type { Site, ConnectionStatus } from '../../types';
 
+/** Appwrite may return large JSON attributes as strings or as already-parsed objects. */
+function jsonBlobToOptionalString(raw: unknown): string | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object') {
+    try {
+      return JSON.stringify(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 function parseMetaData(doc: Record<string, unknown>): Record<string, unknown> {
   const raw = doc.meta_data ?? doc.metaData;
   if (!raw) return {};
@@ -78,13 +92,13 @@ export const mapSiteDocumentToSite = (doc: Record<string, unknown>): Site => {
     status,
     healthStatus,
     lastChecked: String(doc.last_checked ?? doc.lastChecked ?? ''),
-    metaData: (doc.meta_data ?? doc.metaData) as string | undefined,
+    metaData: jsonBlobToOptionalString(doc.meta_data ?? doc.metaData),
     enabled,
-    pluginsMeta: (doc.plugins_meta ?? doc.pluginsMeta) as string | undefined,
-    themesMeta: (doc.themes_meta ?? doc.themesMeta) as string | undefined,
-    wpMeta: (doc.wp_meta ?? doc.wpMeta) as string | undefined,
-    healthMeta: (doc.health_meta ?? doc.healthMeta) as string | undefined,
-    performanceMeta: (doc.performance_meta ?? doc.performanceMeta) as string | undefined,
+    pluginsMeta: jsonBlobToOptionalString(doc.plugins_meta ?? doc.pluginsMeta),
+    themesMeta: jsonBlobToOptionalString(doc.themes_meta ?? doc.themesMeta),
+    wpMeta: jsonBlobToOptionalString(doc.wp_meta ?? doc.wpMeta),
+    healthMeta: jsonBlobToOptionalString(doc.health_meta ?? doc.healthMeta),
+    performanceMeta: jsonBlobToOptionalString(doc.performance_meta ?? doc.performanceMeta),
     connectionStatus: connStatus,
     logData: logData as Site['logData'],
     actionLog,

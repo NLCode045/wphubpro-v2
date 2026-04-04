@@ -41,7 +41,7 @@ const UserProfileSidebarCard = ({ user }: UserProfileSidebarCardProps) => {
 
   const initialsSrc = useMemo(() => {
     try {
-      return avatars.getInitials({ name: displayName, width: 128, height: 128 });
+      return avatars.getInitials(displayName, 128, 128);
     } catch {
       return null;
     }

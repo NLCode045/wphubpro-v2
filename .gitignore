@@ -10,12 +10,10 @@ functions/.env.local
 _deprecated
 dist
 .DS_Store
-wphubpro.code-workspace
-.cursor
 
 # Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
 # Dependencies
-node_modules/
+node_modules
 bower_components/
 
 # Build outputs
@@ -23,4 +21,17 @@ dist/
 build/
 .next/
 out/
-yarn.lock
+
+.vercel
+.env*.local
+
+.cursor
+.cursorignore
+.cursor/agents/
+.cursor/rules/
+.cursor/tools/
+.cursor/workspace/
+.git
+wphubpro-v1
+
+

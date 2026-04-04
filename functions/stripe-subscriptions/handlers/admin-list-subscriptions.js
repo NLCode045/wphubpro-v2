@@ -85,12 +85,14 @@ module.exports = async ({ req, res, log, error, payload: payloadFromIndex }) => 
   try {
     const listParams = {
       limit,
-      expand: ["data.customer", "data.items.data.price.product"],
+      expand: ["data.customer", "data.items.data.price"],
     };
     if (statusFilter) listParams.status = statusFilter;
     if (priceIdFilter) listParams.price = priceIdFilter;
 
     const allRows = [];
+    /** Product IDs we need names for (Stripe allows max 4 expand levels; `data.items.data.price.product` is one too deep). */
+    const productIdsForNames = new Set();
     let startingAfter = null;
     let pages = 0;
 
@@ -108,8 +110,13 @@ module.exports = async ({ req, res, log, error, payload: payloadFromIndex }) => 
             ? productRef
             : null;
         const productId = product?.id || (typeof productRef === "string" ? productRef : null);
+        const planNameFromExpand = product?.name || null;
 
         if (productIdFilter && productId !== productIdFilter) continue;
+
+        if (productId && planNameFromExpand == null) {
+          productIdsForNames.add(productId);
+        }
 
         const customerId =
           typeof sub.customer === "string" ? sub.customer : sub.customer?.id || null;
@@ -124,7 +131,7 @@ module.exports = async ({ req, res, log, error, payload: payloadFromIndex }) => 
           nextBillingDate: sub.current_period_end,
           billingCycle: price?.recurring?.interval || null,
           billingIntervalCount: price?.recurring?.interval_count || 1,
-          planName: product?.name || null,
+          planName: planNameFromExpand,
           priceId: price?.id || null,
           productId,
           customerId,
@@ -138,6 +145,25 @@ module.exports = async ({ req, res, log, error, payload: payloadFromIndex }) => 
       }
       if (!batch.has_more || !batch.data.length) break;
       startingAfter = batch.data[batch.data.length - 1].id;
+    }
+
+    const productNameById = {};
+    if (productIdsForNames.size > 0) {
+      await Promise.all(
+        [...productIdsForNames].map(async (pid) => {
+          try {
+            const pr = await stripe.products.retrieve(pid);
+            productNameById[pid] = pr.name || null;
+          } catch {
+            productNameById[pid] = null;
+          }
+        })
+      );
+    }
+    for (const row of allRows) {
+      if (row.planName == null && row.productId != null && Object.prototype.hasOwnProperty.call(productNameById, row.productId)) {
+        row.planName = productNameById[row.productId];
+      }
     }
 
     let client = null;

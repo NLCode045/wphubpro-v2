@@ -140,6 +140,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (code !== 401) {
           console.error('Session check failed:', message || err);
         }
+        // Drop expired/invalid JWT from the client. Otherwise Appwrite still sends it and rejects
+        // even "guest" function executions with 401. Keep MFA-pending sessions (same 401 type).
+        if (code === 401 && !isMfaFactorsRequiredError(err)) {
+          clearPagespeedSessionStorage();
+          try {
+            await account.deleteSession('current');
+          } catch {
+            /* no session or already cleared */
+          }
+        }
         setUser(null);
         setIsAdmin(false);
       } finally {

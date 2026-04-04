@@ -30,6 +30,7 @@ export function usePublicAuthConfig() {
     queryKey: ['public-auth-config'],
     queryFn: fetchPublicAuthConfig,
     staleTime: 60_000,
+    retry: false,
   });
 }
 

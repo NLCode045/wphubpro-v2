@@ -10,6 +10,11 @@ import type { User } from '../../types';
 /** GitHub OAuth scopes — see https://appwrite.io/docs/products/auth/oauth2 */
 const GITHUB_OAUTH_SCOPES = ['read:user', 'user:email'] as const;
 
+/**
+ * Where the browser lands after Appwrite finishes GitHub OAuth.
+ * GitHub’s “redirect_uri” / “Authorization callback URL” is set in the GitHub OAuth App to the URL
+ * from Appwrite Console → Auth → GitHub (API callback), not these app routes.
+ */
 function getOAuthRedirectUrls() {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return {

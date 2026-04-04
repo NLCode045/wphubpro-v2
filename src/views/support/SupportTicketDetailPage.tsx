@@ -196,31 +196,35 @@ export default function SupportTicketDetailPage() {
 
   const applyAdminPatch = () => {
     if (!ticketId || !ticket) return;
-    const patch: {
-      ticketId: string;
-      status?: TicketStatus;
-      priority?: Ticket['priority'];
-      assignedToUserId?: string | null;
-    } = { ticketId };
-    if (admStatus !== ticket.status) patch.status = admStatus;
-    if (admPriority !== ticket.priority) patch.priority = admPriority;
     const curAssign = ticket.assignedToUserId ?? '';
-    if (admAssignee !== curAssign) patch.assignedToUserId = admAssignee || null;
-    if (Object.keys(patch).length <= 1) {
+    const changed =
+      admStatus !== ticket.status ||
+      admPriority !== ticket.priority ||
+      (admAssignee || '') !== (curAssign || '');
+    if (!changed) {
       showNotification({ title: 'No changes', message: 'Update status, priority, or assignee first.', variant: 'light', delay: 3000 });
       return;
     }
-    updateTicket.mutate(patch, {
-      onSuccess: () =>
-        showNotification({ title: 'Saved', message: 'Ticket updated.', variant: 'success', delay: 3000 }),
-      onError: (e) =>
-        showNotification({
-          title: 'Update failed',
-          message: e instanceof Error ? e.message : 'Try again.',
-          variant: 'danger',
-          delay: 5000,
-        }),
-    });
+    // Always send status (required by older ticket functions); server applies only changed fields.
+    updateTicket.mutate(
+      {
+        ticketId,
+        status: admStatus,
+        priority: admPriority,
+        assignedToUserId: admAssignee || null,
+      },
+      {
+        onSuccess: () =>
+          showNotification({ title: 'Saved', message: 'Ticket updated.', variant: 'success', delay: 3000 }),
+        onError: (e) =>
+          showNotification({
+            title: 'Update failed',
+            message: e instanceof Error ? e.message : 'Try again.',
+            variant: 'danger',
+            delay: 5000,
+          }),
+      },
+    );
   };
 
   const quickClose = () => {

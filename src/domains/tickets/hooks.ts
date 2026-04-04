@@ -211,7 +211,7 @@ export const useUpdateTicket = () => {
       status?: Ticket['status'];
       priority?: Ticket['priority'];
       assignedToUserId?: string | null;
-    }) => executeFunction(TICKETS_FN, { action: 'updateTicket', ...data }),
+    }) => executeFunction(TICKETS_FN, { action: 'updateStatus', ...data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['adminTickets'] });
       queryClient.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });

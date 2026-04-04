@@ -741,7 +741,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 90,
+            "timeout": 180,
             "commands": "npm install",
             "scopes": [
                 "users.read",
@@ -768,7 +768,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 15,
+            "timeout": 90,
             "commands": "npm install",
             "scopes": [
                 "databases.read",
@@ -793,7 +793,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 15,
+            "timeout": 90,
             "commands": "npm install",
             "scopes": [
                 "databases.read",
@@ -863,7 +863,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 15,
+            "timeout": 90,
             "commands": "npm install",
             "scopes": [
                 "documents.read"
@@ -885,7 +885,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 15,
+            "timeout": 90,
             "commands": "npm install",
             "scopes": [
                 "teams.read",

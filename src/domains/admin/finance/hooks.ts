@@ -42,12 +42,17 @@ export function useFinanceDashboard(period: FinanceDashboardPeriod) {
   return useQuery<AdminFinanceDashboardResponse, Error>({
     queryKey: ['admin', 'finance', 'dashboard', period],
     queryFn: async () => {
-      const res = await executeFunction<AdminFinanceDashboardResponse>(
-        SUBS_FN,
-        { action: 'admin-finance-dashboard', period },
-        { longRunning: true, maxAsyncWaitMs: 120_000 },
-      )
-      if (!res?.success) throw new Error((res as { error?: string })?.error || 'Dashboard failed')
+      // Do not use longRunning: async executions often return no responseBody on Appwrite when polling,
+      // so `success` is missing and the UI shows "Dashboard failed". Sync execution waits for the full
+      // response (function timeout is 180s in appwrite.config.json).
+      const res = await executeFunction<AdminFinanceDashboardResponse>(SUBS_FN, {
+        action: 'admin-finance-dashboard',
+        period,
+      })
+      if (!res?.success) {
+        const msg = (res as { error?: string } | null)?.error
+        throw new Error(msg || 'Dashboard failed')
+      }
       return res
     },
     enabled,

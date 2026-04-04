@@ -375,39 +375,8 @@ module.exports = async ({ req, res, log, error }) => {
       return ok(res, { success: true });
     }
 
-    if (action === "updateStatus") {
-      if (!isAdmin) return fail(res, "Admin required", 403);
-      const { ticketId, status } = payload;
-      if (!ticketId || !status) return fail(res, "Missing ticketId or status", 400);
-      if (!VALID_STATUSES.includes(String(status))) return fail(res, "Invalid status", 400);
-
-      const before = normalizeTicketRow(await databases.getDocument(DATABASE_ID, TICKETS_COLLECTION, ticketId));
-      await databases.updateDocument(DATABASE_ID, TICKETS_COLLECTION, ticketId, { status: String(status) });
-      const ticket = normalizeTicketRow(await databases.getDocument(DATABASE_ID, TICKETS_COLLECTION, ticketId));
-
-      try {
-        await logActivity(databases, {
-          ticketId,
-          actorUserId: userId,
-          action: "status",
-          summary: `Status set to ${status}`,
-          detail: { from: before.status, to: status },
-        });
-      } catch (e) {
-        log("activity: " + e.message);
-      }
-
-      await pushTicketNotifications(databases, log, ticket, {
-        title: "Ticket status updated",
-        body: `${ticket.subject}: ${status}`,
-        meta: { ticketId },
-        actorUserId: userId,
-      });
-
-      return ok(res, { success: true });
-    }
-
-    if (action === "updateTicket") {
+    // `updateStatus` is the stable action name (older deployments). `updateTicket` is an alias.
+    if (action === "updateStatus" || action === "updateTicket") {
       if (!isAdmin) return fail(res, "Admin required", 403);
       const { ticketId, status, priority, assignedToUserId } = payload;
       if (!ticketId) return fail(res, "Missing ticketId", 400);
@@ -417,11 +386,13 @@ module.exports = async ({ req, res, log, error }) => {
 
       if (status !== undefined && status !== null && String(status)) {
         if (!VALID_STATUSES.includes(String(status))) return fail(res, "Invalid status", 400);
-        patch.status = String(status);
+        const next = String(status);
+        if (next !== String(before.status || "")) patch.status = next;
       }
       if (priority !== undefined && priority !== null && String(priority)) {
         if (!VALID_PRIORITIES.has(String(priority))) return fail(res, "Invalid priority", 400);
-        patch.priority = String(priority);
+        const next = String(priority);
+        if (next !== String(before.priority || "")) patch.priority = next;
       }
       if (assignedToUserId !== undefined) {
         const raw = assignedToUserId === null || assignedToUserId === "" ? null : String(assignedToUserId).trim();
@@ -429,7 +400,8 @@ module.exports = async ({ req, res, log, error }) => {
           const okAssign = await userIsAdmin(users, teams, raw);
           if (!okAssign) return fail(res, "Assignee must be an admin user", 400);
         }
-        patch.assigned_to_user_id = raw;
+        const prev = before.assigned_to_user_id ? String(before.assigned_to_user_id).trim() : null;
+        if (raw !== prev) patch.assigned_to_user_id = raw;
       }
 
       if (Object.keys(patch).length === 0) return fail(res, "Nothing to update", 400);
@@ -454,7 +426,9 @@ module.exports = async ({ req, res, log, error }) => {
             summary: `Status set to ${patch.status}`,
             detail: { from: before.status, to: patch.status },
           });
-        } catch {}
+        } catch (e) {
+          log("activity: " + e.message);
+        }
       }
       if (patch.priority && patch.priority !== before.priority) {
         try {
@@ -465,7 +439,9 @@ module.exports = async ({ req, res, log, error }) => {
             summary: `Priority set to ${patch.priority}`,
             detail: { from: before.priority, to: patch.priority },
           });
-        } catch {}
+        } catch (e) {
+          log("activity: " + e.message);
+        }
       }
       if ("assigned_to_user_id" in patch) {
         try {
@@ -476,12 +452,15 @@ module.exports = async ({ req, res, log, error }) => {
             summary: patch.assigned_to_user_id ? `Assigned to user ${patch.assigned_to_user_id}` : "Unassigned",
             detail: { from: before.assigned_to_user_id || null, to: patch.assigned_to_user_id || null },
           });
-        } catch {}
+        } catch (e) {
+          log("activity: " + e.message);
+        }
       }
 
+      const notifyTitle = patch.status && patch.status !== before.status ? "Ticket status updated" : "Ticket updated";
       await pushTicketNotifications(databases, log, ticket, {
-        title: "Ticket updated",
-        body: ticket.subject,
+        title: notifyTitle,
+        body: patch.status ? `${ticket.subject}: ${patch.status}` : ticket.subject,
         meta: { ticketId },
         actorUserId: userId,
       });

@@ -2,6 +2,7 @@ import CustomChartJs from '@/components/CustomChartJs'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useFinanceDashboard } from '@/domains/admin/finance/hooks'
 import type { FinanceDashboardPeriod } from '@/domains/admin/finance/types'
+import { AppwriteFunctionError } from '@/integrations/appwrite/errors'
 import { getColor } from '@/helpers/color'
 import type { ChartJSOptionsType } from '@/types'
 import {
@@ -157,10 +158,22 @@ const FinanceDashboardPage = () => {
   }
 
   if (error || !data) {
-    return <p className="text-danger mb-0">{error?.message ?? 'Could not load finance dashboard.'}</p>
+    const hint =
+      error instanceof AppwriteFunctionError &&
+      (String(error.message).includes('Invalid') || String(error.rawBody).includes('admin-finance-dashboard'))
+        ? ' Deploy the latest `stripe-subscriptions` Appwrite function so it includes the `admin-finance-dashboard` action.'
+        : ''
+    return (
+      <div className="border border-danger border-opacity-25 rounded p-3 bg-danger-subtle">
+        <p className="text-danger mb-1 fw-semibold">Could not load finance dashboard</p>
+        <p className="text-danger small mb-0">{error?.message ?? 'Unknown error.'}{hint}</p>
+      </div>
+    )
   }
 
-  const { kpis, byPlan, upgradeDowngradeNote, truncated, rangeLabel } = data.stats
+  const { kpis, byPlan, upgradeDowngradeNote, truncated, rangeLabel, buckets } = data.stats
+  const cumulativeNetEnd =
+    buckets.length > 0 ? buckets[buckets.length - 1].cumulativeNetSubscriptions : 0
 
   return (
     <div>
@@ -232,6 +245,13 @@ const FinanceDashboardPage = () => {
           <div className="border rounded p-3 h-100 bg-light-subtle">
             <div className="text-muted text-uppercase small">Downgrades (period)</div>
             <div className="fs-5 fw-semibold">{kpis.downgradesInPeriod}</div>
+          </div>
+        </Col>
+        <Col md={6} lg={4}>
+          <div className="border rounded p-3 h-100 bg-light-subtle">
+            <div className="text-muted text-uppercase small">Cumulative net new − canceled (range)</div>
+            <div className="fs-5 fw-semibold">{cumulativeNetEnd}</div>
+            <div className="small text-muted">Running total across buckets in the chart.</div>
           </div>
         </Col>
       </Row>

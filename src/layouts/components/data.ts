@@ -5,6 +5,7 @@ import {
   TbCoin,
   TbLayoutDashboard,
   TbLibrary,
+  TbLifeBuoy,
   TbLogout2,
   TbSettings,
   TbUserCircle,

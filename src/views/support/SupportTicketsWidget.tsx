@@ -9,7 +9,7 @@ type Props = {
 };
 
 export function SupportTicketsWidget({ tickets }: Props) {
-  const { openish, resolved, closed, total } = ticketCounts(tickets);
+  const { openish, resolved, closed } = ticketCounts(tickets);
   const escalated = tickets.filter((t) => t.priority === 'urgent' && ['open', 'in_progress'].includes(t.status)).length;
 
   const cards = [
@@ -72,9 +72,6 @@ export function SupportTicketsWidget({ tickets }: Props) {
           </Card>
         </Col>
       ))}
-      <Col className="d-none d-xxl-flex align-items-center">
-        <span className="text-muted small">Total in view: {total}</span>
-      </Col>
     </Row>
   );
 }

@@ -510,7 +510,7 @@
         {
             "$id": "site-heartbeat-poke",
             "name": "site-heartbeat-poke",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/site-heartbeat-poke",
             "entrypoint": "index.js",
             "execute": [
@@ -533,7 +533,7 @@
         {
             "$id": "health-ai-agent",
             "name": "health-ai-agent",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/health-ai-agent",
             "entrypoint": "index.js",
             "execute": [
@@ -556,7 +556,7 @@
         {
             "$id": "site-heartbeat-check",
             "name": "site-heartbeat-check",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/site-heartbeat-check",
             "entrypoint": "index.js",
             "execute": [],
@@ -582,7 +582,7 @@
         {
             "$id": "sync-site-meta",
             "name": "sync-site-meta",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/sync-site-meta",
             "entrypoint": "index.js",
             "execute": [
@@ -607,7 +607,7 @@
         {
             "$id": "site-health",
             "name": "site-health",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/site-health",
             "entrypoint": "index.js",
             "execute": [
@@ -632,7 +632,7 @@
         {
             "$id": "bridge-site-log-action",
             "name": "bridge-site-log-action",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/bridge-site-log-action",
             "entrypoint": "index.js",
             "execute": [
@@ -730,7 +730,7 @@
         {
             "$id": "stripe-subscriptions",
             "name": "stripe-subscriptions",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-subscriptions",
             "entrypoint": "index.js",
             "execute": [
@@ -758,7 +758,7 @@
         {
             "$id": "stripe-customers",
             "name": "stripe-customers",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-customers",
             "entrypoint": "index.js",
             "execute": [
@@ -782,7 +782,7 @@
         {
             "$id": "stripe-core",
             "name": "stripe-core",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-core",
             "entrypoint": "index.js",
             "execute": [
@@ -808,7 +808,7 @@
         {
             "$id": "stripe-invoices",
             "name": "stripe-invoices",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-invoices",
             "entrypoint": "index.js",
             "execute": [
@@ -831,7 +831,7 @@
         {
             "$id": "stripe-payment-methods",
             "name": "stripe-payment-methods",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-payment-methods",
             "entrypoint": "index.js",
             "execute": [
@@ -853,7 +853,7 @@
         {
             "$id": "stripe-order-payments",
             "name": "stripe-order-payments",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-order-payments",
             "entrypoint": "index.js",
             "execute": [
@@ -874,7 +874,7 @@
         {
             "$id": "stripe-products",
             "name": "stripe-products",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-products",
             "entrypoint": "index.js",
             "execute": [
@@ -897,7 +897,7 @@
         {
             "$id": "stripe-dashboard",
             "name": "stripe-dashboard",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-dashboard",
             "entrypoint": "index.js",
             "execute": [
@@ -919,7 +919,7 @@
         {
             "$id": "admin-billing",
             "name": "admin-billing",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/admin-billing",
             "entrypoint": "index.js",
             "execute": [
@@ -946,7 +946,7 @@
         {
             "$id": "notifications",
             "name": "notifications",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/notifications",
             "entrypoint": "index.js",
             "execute": [
@@ -972,7 +972,7 @@
         {
             "$id": "tickets",
             "name": "tickets",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/tickets",
             "entrypoint": "index.js",
             "execute": [
@@ -1026,7 +1026,7 @@
         {
             "$id": "forum",
             "name": "forum",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/forum",
             "entrypoint": "index.js",
             "execute": [
@@ -1052,7 +1052,7 @@
         {
             "$id": "bridge-download-url",
             "name": "bridge-download-url",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/bridge-download-url",
             "entrypoint": "index.js",
             "execute": [
@@ -1075,7 +1075,7 @@
         {
             "$id": "bridge-latest-version",
             "name": "bridge-latest-version",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/bridge-latest-version",
             "entrypoint": "index.js",
             "execute": [

@@ -4,7 +4,7 @@ import type { SupportTicketCategory, SupportTicketContext } from '@/types';
 import { type ButtonProps } from 'react-bootstrap';
 import Button from 'react-bootstrap/Button';
 import { useLocation, useNavigate } from 'react-router';
-import { TbLifeBuoy } from 'react-icons/tb';
+import { TbLifebuoy } from 'react-icons/tb';
 
 type Props = {
   category: SupportTicketCategory;
@@ -43,7 +43,7 @@ export function ContactSupportButton({
 
   return (
     <Button type="button" variant={variant} size={size} className={className} onClick={open}>
-      <TbLifeBuoy className="me-1" />
+      <TbLifebuoy className="me-1" />
       {label}
     </Button>
   );

@@ -77,16 +77,18 @@ module.exports = async ({ req, res, log, error }) => {
 
     const prorationDate = Math.floor(Date.now() / 1000);
 
-    const invoice = await stripe.invoices.retrieveUpcoming({
-      customer: subscription.customer,
+    const invoice = await stripe.invoices.createPreview({
+      customer: subscriptionCustomerId,
       subscription: subscriptionId,
-      subscription_items: [
-        {
-          id: item.id,
-          price: newPriceId,
-        },
-      ],
-      subscription_proration_date: prorationDate,
+      subscription_details: {
+        items: [
+          {
+            id: item.id,
+            price: newPriceId,
+          },
+        ],
+        proration_date: prorationDate,
+      },
     });
 
     return res.json({

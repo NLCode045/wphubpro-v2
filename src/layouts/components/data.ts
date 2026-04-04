@@ -5,7 +5,7 @@ import {
   TbCoin,
   TbLayoutDashboard,
   TbLibrary,
-  TbLifeBuoy,
+  TbLifebuoy,
   TbListDetails,
   TbLogout2,
   TbPackages,
@@ -41,12 +41,12 @@ export const userDropdownItems: UserDropdownItemType[] = [
   },
   {
     label: 'Support',
-    icon: TbLifeBuoy,
+    icon: TbLifebuoy,
     url: ROUTE_PATHS.SUPPORT,
   },
   {
     label: 'Support queue',
-    icon: TbLifeBuoy,
+    icon: TbLifebuoy,
     url: ROUTE_PATHS.ADMIN_SUPPORT,
     adminOnly: true,
   },
@@ -81,7 +81,7 @@ export const menuItems: MenuItemType[] = [
   {
     key: 'support',
     label: 'Support',
-    icon: TbLifeBuoy,
+    icon: TbLifebuoy,
     url: ROUTE_PATHS.SUPPORT,
   },
 ]
@@ -108,7 +108,7 @@ export const horizontalMenuItems: MenuItemType[] = [
   {
     key: 'support',
     label: 'Support',
-    icon: TbLifeBuoy,
+    icon: TbLifebuoy,
     url: ROUTE_PATHS.SUPPORT,
   },
 ]
@@ -168,7 +168,7 @@ export const adminMenuItems: MenuItemType[] = [
   {
     key: 'admin-support',
     label: 'Support',
-    icon: TbLifeBuoy,
+    icon: TbLifebuoy,
     url: ROUTE_PATHS.ADMIN_SUPPORT,
   },
 ]
@@ -226,7 +226,7 @@ export const horizontalAdminMenuItems: MenuItemType[] = [
   {
     key: 'admin-support',
     label: 'Support',
-    icon: TbLifeBuoy,
+    icon: TbLifebuoy,
     url: ROUTE_PATHS.ADMIN_SUPPORT,
   },
 ]

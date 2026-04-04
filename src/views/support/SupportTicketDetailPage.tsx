@@ -164,7 +164,6 @@ function ActivityTimeline({ activities }: { activities: TicketActivity[] }) {
 
 export default function SupportTicketDetailPage() {
   const { ticketId } = useParams<{ ticketId: string }>();
-  const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
   const { showNotification } = useNotificationContext();
   const q = useTicket(ticketId);

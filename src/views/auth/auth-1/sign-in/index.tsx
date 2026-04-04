@@ -38,7 +38,28 @@ const SignInPage = () => {
     verifyLoginEmailOtp,
   } = useAuth()
   const navigate = useNavigate()
-  const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig()
+
+  /** Clear any Appwrite session (including MFA-pending) before loading public config or signing in. */
+  const [loginScreenSessionCleared, setLoginScreenSessionCleared] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        await cancelMfaLogin()
+      } finally {
+        if (!cancelled) setLoginScreenSessionCleared(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // Intentionally once on mount: drop any MFA-partial or stale session before sign-in.
+  }, [])
+
+  const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig({
+    enabled: loginScreenSessionCleared,
+  })
+  const publicAuthBlocking = !loginScreenSessionCleared || publicAuthLoading
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -324,20 +345,20 @@ const SignInPage = () => {
                 <p className="text-muted w-lg-75 mt-3 mx-auto">{brandLine}</p>
               </div>
 
-              {publicAuthLoading ? (
+              {publicAuthBlocking ? (
                 <div className="d-flex align-items-center justify-content-center gap-2 text-muted py-4">
                   <Spinner animation="border" size="sm" />
                   Loading…
                 </div>
               ) : null}
 
-              {!publicAuthLoading && publicAuthError ? (
+              {!publicAuthBlocking && publicAuthError ? (
                 <Alert variant="warning" className="py-2 fs-sm mb-3">
                   Could not load sign-in options. You can still try email and password.
                 </Alert>
               ) : null}
 
-              {!publicAuthLoading && showPasswordStep && (
+              {!publicAuthBlocking && showPasswordStep && (
                 <Form onSubmit={handlePasswordSubmit}>
                   {error ? (
                     <Alert variant="danger" className="mb-3 py-2">
@@ -406,7 +427,7 @@ const SignInPage = () => {
                 </Form>
               )}
 
-              {!publicAuthLoading && showPickSecond && (
+              {!publicAuthBlocking && showPickSecond && (
                 <div>
                   {error ? (
                     <Alert variant="danger" className="mb-3 py-2">
@@ -547,7 +568,7 @@ const SignInPage = () => {
                 </div>
               )}
 
-              {!publicAuthLoading && (showEmailCodeStep || showTotpStep) && (
+              {!publicAuthBlocking && (showEmailCodeStep || showTotpStep) && (
                 <Form onSubmit={handleVerifySecondFactor}>
                   {error ? (
                     <Alert variant="danger" className="mb-3 py-2">

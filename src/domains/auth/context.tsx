@@ -13,7 +13,9 @@ const GITHUB_OAUTH_SCOPES = ['read:user', 'user:email'] as const;
 function getOAuthRedirectUrls() {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return {
-    success: `${origin}${ROUTE_PATHS.DASHBOARD}`,
+    // Land on login so MFA-pending OAuth sessions are not torn down by ProtectedRoute + sign-in mount.
+    // Full sessions still redirect to the dashboard from AuthScreenGate.
+    success: `${origin}${ROUTE_PATHS.LOGIN}`,
     failure: `${origin}${ROUTE_PATHS.LOGIN}`,
   };
 }

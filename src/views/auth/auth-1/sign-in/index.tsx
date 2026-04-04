@@ -39,13 +39,25 @@ const SignInPage = () => {
   } = useAuth()
   const navigate = useNavigate()
 
-  /** Clear any Appwrite session (including MFA-pending) before loading public config or signing in. */
+  /**
+   * Drop invalid sessions on load; keep MFA-pending sessions (e.g. after GitHub OAuth) so the user can
+   * finish email / authenticator verification.
+   */
   const [loginScreenSessionCleared, setLoginScreenSessionCleared] = useState(false)
   useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
+        await account.get()
         await cancelMfaLogin()
+      } catch (e: unknown) {
+        if (isMfaFactorsRequiredError(e)) {
+          if (!cancelled) {
+            setPwdFlow({ step: 'pick_second', mfaPending: true })
+          }
+        } else {
+          await cancelMfaLogin()
+        }
       } finally {
         if (!cancelled) setLoginScreenSessionCleared(true)
       }
@@ -53,7 +65,6 @@ const SignInPage = () => {
     return () => {
       cancelled = true
     }
-    // Intentionally once on mount: drop any MFA-partial or stale session before sign-in.
   }, [])
 
   const { data: publicAuth, isLoading: publicAuthLoading, isError: publicAuthError } = usePublicAuthConfig({
@@ -82,15 +93,26 @@ const SignInPage = () => {
       return
     }
     const em = email.trim()
+    const mfaSessionPending = pwdFlow.step === 'pick_second' && pwdFlow.mfaPending
     if (!em) {
-      setPickSecondFactors(null)
-      setPickSecondPrefs(null)
+      if (mfaSessionPending) {
+        setPickSecondFactors({ email: true, totp: true })
+        setPickSecondPrefs({
+          mfaFactorEmailEnabled: true,
+          mfaFactorAuthenticatorEnabled: true,
+          mfaFactorEmailRegistered: null,
+          mfaFactorTotpRegistered: null,
+        })
+        setPickSecondLoading(false)
+      } else {
+        setPickSecondFactors(null)
+        setPickSecondPrefs(null)
+      }
       return
     }
     let cancelled = false
     setPickSecondLoading(true)
     ;(async () => {
-      const mfaSessionPending = pwdFlow.step === 'pick_second' && pwdFlow.mfaPending
       try {
         const lm = await fetchLoginMethods(em)
         let totp = lm.mfaFactorTotpRegistered

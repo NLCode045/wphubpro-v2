@@ -1,9 +1,17 @@
+import DataTable from '@/components/table/DataTable'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useAdminSubscriptionList, useAdminStripePlansList } from '@/domains/admin/finance/hooks'
 import type { AdminSubscriptionRow } from '@/domains/admin/finance/types'
+import {
+  createColumnHelper,
+  functionalUpdate,
+  getCoreRowModel,
+  useReactTable,
+  type SortingState,
+} from '@tanstack/react-table'
 import { useDebounceValue } from 'usehooks-ts'
 import { useMemo, useState } from 'react'
-import { Button, Col, Form, Row, Spinner, Table } from 'react-bootstrap'
+import { Button, Col, Form, Row, Spinner } from 'react-bootstrap'
 import { useNavigate } from 'react-router'
 
 type SortField =
@@ -15,27 +23,7 @@ type SortField =
   | 'status'
   | 'username'
 
-function SortTh({
-  label,
-  field,
-  current,
-  dir,
-  onSort,
-}: {
-  label: string
-  field: SortField
-  current: SortField
-  dir: 'asc' | 'desc'
-  onSort: (f: SortField) => void
-}) {
-  const active = current === field
-  return (
-    <th role="button" className="user-select-none" onClick={() => onSort(field)}>
-      {label}
-      {active ? (dir === 'asc' ? ' \u2191' : ' \u2193') : ''}
-    </th>
-  )
-}
+const columnHelper = createColumnHelper<AdminSubscriptionRow>()
 
 const FinanceSubscriptionsPage = () => {
   const navigate = useNavigate()
@@ -45,6 +33,11 @@ const FinanceSubscriptionsPage = () => {
   const [debouncedSearch] = useDebounceValue(search, 350)
   const [sortField, setSortField] = useState<SortField>('startDate')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const sorting: SortingState = useMemo(
+    () => [{ id: sortField, desc: sortDir === 'desc' }],
+    [sortField, sortDir],
+  )
 
   const { data: plansData } = useAdminStripePlansList()
   const planOptions = useMemo(() => {
@@ -74,16 +67,85 @@ const FinanceSubscriptionsPage = () => {
 
   const { data, isLoading, error, refetch, isFetching } = useAdminSubscriptionList(listParams)
 
-  const onSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortField(field)
-      setSortDir(field === 'startDate' || field === 'nextBillingDate' ? 'desc' : 'asc')
-    }
-  }
-
   const rows: AdminSubscriptionRow[] = data?.subscriptions ?? []
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('startDate', {
+        id: 'startDate',
+        header: 'Start',
+        enableSorting: true,
+        cell: ({ getValue }) => {
+          const v = getValue()
+          return <span className="small">{v ? new Date(v * 1000).toLocaleDateString() : '—'}</span>
+        },
+      }),
+      columnHelper.accessor('endDate', {
+        id: 'endDate',
+        header: 'End',
+        enableSorting: true,
+        cell: ({ getValue }) => {
+          const v = getValue()
+          return <span className="small">{v ? new Date(v * 1000).toLocaleDateString() : '—'}</span>
+        },
+      }),
+      columnHelper.accessor('nextBillingDate', {
+        id: 'nextBillingDate',
+        header: 'Next billing',
+        enableSorting: true,
+        cell: ({ getValue }) => {
+          const v = getValue()
+          return <span className="small">{v ? new Date(v * 1000).toLocaleDateString() : '—'}</span>
+        },
+      }),
+      columnHelper.accessor('billingCycle', {
+        id: 'billingCycle',
+        header: 'Cycle',
+        enableSorting: true,
+        cell: ({ getValue }) => (
+          <span className="small text-capitalize">{getValue() ?? '—'}</span>
+        ),
+      }),
+      columnHelper.display({
+        id: 'plan',
+        header: 'Plan',
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="small">{row.original.planName ?? row.original.priceId ?? '—'}</span>
+        ),
+      }),
+      columnHelper.accessor('status', {
+        id: 'status',
+        header: 'Status',
+        enableSorting: true,
+        cell: ({ getValue }) => <span className="small text-capitalize">{getValue()}</span>,
+      }),
+      columnHelper.display({
+        id: 'username',
+        header: 'Username',
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="small">{row.original.username ?? row.original.userId ?? '—'}</span>
+        ),
+      }),
+    ],
+    [],
+  )
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    manualSorting: true,
+    onSortingChange: (updater) => {
+      const next = functionalUpdate(updater, sorting)
+      const s = next[0]
+      if (!s) return
+      setSortField(s.id as SortField)
+      setSortDir(s.desc ? 'desc' : 'asc')
+    },
+    getCoreRowModel: getCoreRowModel(),
+  })
 
   const openRow = (r: AdminSubscriptionRow) => {
     navigate(ROUTE_PATHS.adminFinanceSubscriptionPath(r.subscriptionId))
@@ -140,56 +202,12 @@ const FinanceSubscriptionsPage = () => {
       {isLoading ? (
         <Spinner animation="border" />
       ) : (
-        <div className="table-responsive">
-          <Table hover size="sm" className="align-middle">
-            <thead>
-              <tr>
-                <SortTh label="Start" field="startDate" current={sortField} dir={sortDir} onSort={onSort} />
-                <SortTh label="End" field="endDate" current={sortField} dir={sortDir} onSort={onSort} />
-                <SortTh
-                  label="Next billing"
-                  field="nextBillingDate"
-                  current={sortField}
-                  dir={sortDir}
-                  onSort={onSort}
-                />
-                <SortTh label="Cycle" field="billingCycle" current={sortField} dir={sortDir} onSort={onSort} />
-                <SortTh label="Plan" field="plan" current={sortField} dir={sortDir} onSort={onSort} />
-                <SortTh label="Status" field="status" current={sortField} dir={sortDir} onSort={onSort} />
-                <SortTh label="Username" field="username" current={sortField} dir={sortDir} onSort={onSort} />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr
-                  key={r.subscriptionId}
-                  role="button"
-                  onClick={() => openRow(r)}
-                  className={r.hubArchived ? 'table-secondary' : undefined}
-                >
-                  <td className="small">{r.startDate ? new Date(r.startDate * 1000).toLocaleDateString() : '—'}</td>
-                  <td className="small">
-                    {r.endDate ? new Date(r.endDate * 1000).toLocaleDateString() : '—'}
-                  </td>
-                  <td className="small">
-                    {r.nextBillingDate ? new Date(r.nextBillingDate * 1000).toLocaleDateString() : '—'}
-                  </td>
-                  <td className="small text-capitalize">{r.billingCycle ?? '—'}</td>
-                  <td className="small">{r.planName ?? r.priceId ?? '—'}</td>
-                  <td className="small text-capitalize">{r.status}</td>
-                  <td className="small">{r.username ?? r.userId ?? '—'}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center text-muted py-4">
-                    No subscriptions match your filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
-        </div>
+        <DataTable
+          table={table}
+          onRowClick={openRow}
+          rowClassName={(r) => (r.hubArchived ? 'table-secondary' : undefined)}
+          emptyMessage="No subscriptions match your filters."
+        />
       )}
     </div>
   )

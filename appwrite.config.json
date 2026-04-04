@@ -107,7 +107,8 @@
                 "log.read",
                 "log.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "zip-parser",
@@ -129,7 +130,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "library-delete-version",
@@ -151,7 +153,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "manage-settings",
@@ -173,7 +176,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "public-auth-config",
@@ -194,7 +198,8 @@
                 "users.read",
                 "documents.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "stripe-portal-link",
@@ -215,7 +220,8 @@
                 "databases.read",
                 "documents.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "stripe-create-customer",
@@ -238,7 +244,8 @@
                 "documents.write",
                 "users.read"
             ],
-            "specification": "s-1vcpu-512mb"
+            "buildSpecification": "s-1vcpu-512mb",
+            "runtimeSpecification": "s-1vcpu-512mb"
         },
         {
             "$id": "admin-manage-users",
@@ -308,7 +315,8 @@
                 "log.read",
                 "log.write"
             ],
-            "specification": "s-1vcpu-512mb"
+            "buildSpecification": "s-1vcpu-512mb",
+            "runtimeSpecification": "s-1vcpu-512mb"
         },
         {
             "$id": "wphub-sites",
@@ -378,7 +386,8 @@
                 "log.read",
                 "log.write"
             ],
-            "specification": "s-1vcpu-512mb"
+            "buildSpecification": "s-1vcpu-512mb",
+            "runtimeSpecification": "s-1vcpu-512mb"
         },
         {
             "$id": "recovery-manager",
@@ -446,7 +455,8 @@
                 "log.read",
                 "log.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "site-heartbeat",
@@ -470,7 +480,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "site-heartbeat-log",
@@ -493,7 +504,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "site-heartbeat-poke",
@@ -515,7 +527,8 @@
                 "databases.read",
                 "documents.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "health-ai-agent",
@@ -537,7 +550,8 @@
                 "databases.read",
                 "documents.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "site-heartbeat-check",
@@ -562,7 +576,8 @@
                 "execution.read",
                 "execution.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "sync-site-meta",
@@ -586,7 +601,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "site-health",
@@ -610,7 +626,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "bridge-site-log-action",
@@ -634,7 +651,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "fetch-site-meta",
@@ -658,7 +676,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "site-pagespeed",
@@ -682,7 +701,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "site-app-icon-preview",
@@ -704,7 +724,8 @@
                 "databases.read",
                 "documents.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "stripe-subscriptions",
@@ -731,7 +752,8 @@
                 "collections.write",
                 "documents.write"
             ],
-            "specification": "s-1vcpu-512mb"
+            "buildSpecification": "s-1vcpu-512mb",
+            "runtimeSpecification": "s-1vcpu-512mb"
         },
         {
             "$id": "stripe-customers",
@@ -754,7 +776,8 @@
                 "documents.write",
                 "users.read"
             ],
-            "specification": "s-1vcpu-512mb"
+            "buildSpecification": "s-1vcpu-512mb",
+            "runtimeSpecification": "s-1vcpu-512mb"
         },
         {
             "$id": "stripe-core",
@@ -779,7 +802,8 @@
                 "users.read",
                 "users.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "stripe-invoices",
@@ -801,7 +825,8 @@
                 "databases.read",
                 "documents.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "stripe-payment-methods",
@@ -822,7 +847,8 @@
                 "databases.read",
                 "documents.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "stripe-order-payments",
@@ -842,7 +868,8 @@
             "scopes": [
                 "documents.read"
             ],
-            "specification": "s-1vcpu-512mb"
+            "buildSpecification": "s-1vcpu-512mb",
+            "runtimeSpecification": "s-1vcpu-512mb"
         },
         {
             "$id": "stripe-products",
@@ -864,7 +891,8 @@
                 "teams.read",
                 "users.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "stripe-dashboard",
@@ -885,7 +913,8 @@
                 "teams.read",
                 "users.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "admin-billing",
@@ -911,7 +940,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "notifications",
@@ -936,7 +966,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "tickets",
@@ -961,7 +992,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "conversations",
@@ -988,7 +1020,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "forum",
@@ -1013,7 +1046,8 @@
                 "documents.read",
                 "documents.write"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "bridge-download-url",
@@ -1035,7 +1069,8 @@
                 "files.read",
                 "buckets.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "bridge-latest-version",
@@ -1058,7 +1093,8 @@
                 "files.read",
                 "buckets.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
             "$id": "broadcast-bridge-version",
@@ -1079,7 +1115,8 @@
             "scopes": [
                 "databases.read"
             ],
-            "specification": "s-0.5vcpu-512mb"
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
         }
     ],
     "tablesDB": [

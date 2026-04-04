@@ -1,55 +1,81 @@
+import DataTable from '@/components/table/DataTable'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useAdminStripePlansList } from '@/domains/admin/finance/hooks'
-import { Badge, Spinner, Table } from 'react-bootstrap'
+import type { StripePlan } from '@/types'
+import {
+  createColumnHelper,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table'
+import { useMemo } from 'react'
+import { Badge, Spinner } from 'react-bootstrap'
 import { useNavigate } from 'react-router'
+
+const columnHelper = createColumnHelper<StripePlan>()
 
 const FinancePlansPage = () => {
   const navigate = useNavigate()
   const { data, isLoading, error } = useAdminStripePlansList()
 
+  const plans = data ?? []
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('name', {
+        id: 'name',
+        header: 'Name',
+        cell: ({ getValue }) => getValue(),
+      }),
+      columnHelper.accessor('status', {
+        id: 'status',
+        header: 'Status',
+        cell: ({ getValue }) => (
+          <Badge bg={getValue() === 'active' ? 'success' : 'secondary'}>{getValue()}</Badge>
+        ),
+      }),
+      columnHelper.accessor('monthlyPrice', {
+        id: 'monthlyPrice',
+        header: 'Monthly',
+        cell: ({ getValue }) => getValue() ?? '—',
+      }),
+      columnHelper.accessor('yearlyPrice', {
+        id: 'yearlyPrice',
+        header: 'Yearly',
+        cell: ({ getValue }) => getValue() ?? '—',
+      }),
+      columnHelper.accessor('currency', {
+        id: 'currency',
+        header: 'Currency',
+        cell: ({ getValue }) => <span className="text-uppercase">{getValue()}</span>,
+      }),
+    ],
+    [],
+  )
+
+  const table = useReactTable({
+    data: plans,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    initialState: {
+      sorting: [{ id: 'name', desc: false }],
+    },
+  })
+
+  const openRow = (p: StripePlan) => {
+    navigate(ROUTE_PATHS.adminFinancePlanPath(p.id))
+  }
+
   if (isLoading) return <Spinner animation="border" />
   if (error) return <p className="text-danger">{error.message}</p>
 
-  const plans = data ?? []
-
   return (
-    <div className="table-responsive">
-      <Table hover size="sm" className="align-middle">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Monthly</th>
-            <th>Yearly</th>
-            <th>Currency</th>
-          </tr>
-        </thead>
-        <tbody>
-          {plans.map((p) => (
-            <tr
-              key={p.id}
-              role="button"
-              onClick={() => navigate(ROUTE_PATHS.adminFinancePlanPath(p.id))}
-            >
-              <td>{p.name}</td>
-              <td>
-                <Badge bg={p.status === 'active' ? 'success' : 'secondary'}>{p.status}</Badge>
-              </td>
-              <td>{p.monthlyPrice ?? '—'}</td>
-              <td>{p.yearlyPrice ?? '—'}</td>
-              <td className="text-uppercase">{p.currency}</td>
-            </tr>
-          ))}
-          {plans.length === 0 && (
-            <tr>
-              <td colSpan={5} className="text-center text-muted py-4">
-                No plans returned from Stripe.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </Table>
-    </div>
+    <DataTable
+      table={table}
+      onRowClick={openRow}
+      emptyMessage="No plans returned from Stripe."
+    />
   )
 }
 

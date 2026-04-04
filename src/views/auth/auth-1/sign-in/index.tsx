@@ -69,18 +69,25 @@ const SignInPage = () => {
     let cancelled = false
     setPickSecondLoading(true)
     ;(async () => {
+      const mfaSessionPending = pwdFlow.step === 'pick_second' && pwdFlow.mfaPending
       try {
         const lm = await fetchLoginMethods(em)
         let totp = lm.mfaFactorTotpRegistered
         let emailFactor = lm.mfaFactorEmailRegistered
         if (totp === null || emailFactor === null) {
-          try {
-            const factors = await account.listMfaFactors()
-            if (totp === null) totp = factors.totp
-            if (emailFactor === null) emailFactor = factors.email
-          } catch {
+          // MFA-pending sessions cannot call listMfaFactors — Appwrite returns 401 and pollutes the console.
+          if (mfaSessionPending) {
             if (totp === null) totp = true
             if (emailFactor === null) emailFactor = true
+          } else {
+            try {
+              const factors = await account.listMfaFactors()
+              if (totp === null) totp = factors.totp
+              if (emailFactor === null) emailFactor = factors.email
+            } catch {
+              if (totp === null) totp = true
+              if (emailFactor === null) emailFactor = true
+            }
           }
         }
         if (!cancelled) {
@@ -104,7 +111,7 @@ const SignInPage = () => {
     return () => {
       cancelled = true
     }
-  }, [pwdFlow.step, email])
+  }, [pwdFlow, email])
 
   const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault()

@@ -1,5 +1,6 @@
 const Stripe = require("stripe");
 const sdk = require("node-appwrite");
+const ensureAdmin = require("./lib/ensureAdmin");
 
 function parsePayload(req) {
   if (!req) return {};
@@ -80,19 +81,78 @@ async function handleListInvoices(req, res, log, error) {
   return res.json({ success: true, invoices: formattedInvoices });
 }
 
+async function resolveUserStripeCustomerId(req) {
+  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
+  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
+  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const userId =
+    req.variables?.APPWRITE_FUNCTION_USER_ID ||
+    req.variables?.APPWRITE_USER_ID ||
+    process.env.APPWRITE_FUNCTION_USER_ID ||
+    req.headers?.["x-appwrite-user-id"] ||
+    req.headers?.["X-Appwrite-User-Id"];
+
+  if (!userId || !APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) {
+    return { userId: userId || null, stripeCustomerId: null };
+  }
+
+  const DATABASE_ID =
+    process.env.DATABASE_ID || process.env.APPWRITE_DATABASE_ID || "platform_db";
+  const ACCOUNTS_COLLECTION_ID =
+    process.env.ACCOUNTS_COLLECTION_ID || process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || "accounts";
+
+  const client = new sdk.Client();
+  client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
+  const databases = new sdk.Databases(client);
+
+  const accountDocs = await databases.listDocuments(DATABASE_ID, ACCOUNTS_COLLECTION_ID, [
+    sdk.Query.equal("user_id", userId),
+    sdk.Query.limit(1),
+  ]);
+  const stripeCustomerId =
+    accountDocs.documents?.length > 0 ? accountDocs.documents[0].stripe_customer_id || null : null;
+  return { userId, stripeCustomerId };
+}
+
 async function handleListPaymentIntents(req, res, log, error) {
   const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
   if (!STRIPE_SECRET_KEY) {
     return res.json({ error: true, message: "Stripe configuration missing" }, 500);
   }
-  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
+
+  const { userId, stripeCustomerId } = await resolveUserStripeCustomerId(req);
+  if (!userId) {
+    return res.json({ error: true, message: "User not authenticated" }, 401);
+  }
+
+  const isAdmin = await ensureAdmin(req);
   const payload = parsePayload(req);
   const limit = Math.min(parseInt(payload.limit) || 100, 100);
-  const customer = payload.customer || undefined;
+  let customer = payload.customer || undefined;
+
+  if (!isAdmin) {
+    if (!stripeCustomerId) {
+      return res.json({ orders: [] });
+    }
+    if (customer && customer !== stripeCustomerId) {
+      return res.json({ error: true, message: "Forbidden" }, 403);
+    }
+    customer = stripeCustomerId;
+  } else if (!customer) {
+    return res.json(
+      {
+        error: true,
+        message: "Global payment intent listing requires admin. Use admin-list-payment-intents.",
+      },
+      403
+    );
+  }
+
+  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
 
   const paymentIntents = await stripe.paymentIntents.list({
     limit,
-    ...(customer ? { customer } : {}),
+    customer,
   });
 
   const orders = [];
@@ -123,6 +183,127 @@ async function handleListPaymentIntents(req, res, log, error) {
     });
   }
   return res.json({ orders });
+}
+
+async function handleAdminListPaymentIntents(req, res, log, error) {
+  const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+  if (!STRIPE_SECRET_KEY) {
+    return res.json({ success: false, message: "Stripe configuration missing", orders: [] }, 500);
+  }
+  if (!(await ensureAdmin(req))) {
+    return res.json({ success: false, message: "Admin access required", orders: [] }, 403);
+  }
+
+  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
+  const payload = parsePayload(req);
+  const limit = Math.min(parseInt(payload.limit) || 100, 100);
+  const customer = payload.customer || undefined;
+  const status = payload.status ? String(payload.status) : undefined;
+
+  const listParams = { limit, ...(customer ? { customer } : {}) };
+  if (status) listParams.status = status;
+
+  const paymentIntents = await stripe.paymentIntents.list(listParams);
+
+  const orders = [];
+  for (const pi of paymentIntents.data) {
+    let invoiceInfo = null;
+    try {
+      const charge = pi.charges?.data?.length ? pi.charges.data[0] : null;
+      if (charge?.invoice) {
+        const invoice = await stripe.invoices.retrieve(charge.invoice);
+        invoiceInfo = {
+          id: invoice.id,
+          hosted_invoice_url: invoice.hosted_invoice_url,
+          invoice_pdf: invoice.invoice_pdf,
+          number: invoice.number,
+        };
+      }
+    } catch (e) {}
+    orders.push({
+      id: pi.id,
+      amount: pi.amount,
+      currency: pi.currency,
+      status: pi.status,
+      customer: pi.customer || null,
+      email: pi.receipt_email || pi.charges?.data?.[0]?.billing_details?.email || null,
+      date: pi.created,
+      description: pi.description || null,
+      invoice: invoiceInfo,
+    });
+  }
+  return res.json({ success: true, orders });
+}
+
+async function handleAdminGetPaymentIntent(req, res, log, error) {
+  const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+  if (!STRIPE_SECRET_KEY) {
+    return res.json({ success: false, message: "Stripe configuration missing" }, 500);
+  }
+  if (!(await ensureAdmin(req))) {
+    return res.json({ success: false, message: "Admin access required" }, 403);
+  }
+
+  const payload = parsePayload(req);
+  const paymentIntentId = payload.paymentIntentId || payload.id;
+  if (!paymentIntentId) {
+    return res.json({ success: false, message: "paymentIntentId is required" }, 400);
+  }
+
+  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
+  try {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["customer", "latest_charge", "payment_method"],
+    });
+
+    let chargeDetail = null;
+    if (pi.latest_charge) {
+      const ch = typeof pi.latest_charge === "object" ? pi.latest_charge : await stripe.charges.retrieve(pi.latest_charge);
+      chargeDetail = {
+        id: ch.id,
+        amount: ch.amount,
+        currency: ch.currency,
+        status: ch.status,
+        paid: ch.paid,
+        receipt_url: ch.receipt_url,
+        failure_code: ch.failure_code,
+        failure_message: ch.failure_message,
+        billing_details: ch.billing_details,
+      };
+    }
+
+    const customerObj =
+      typeof pi.customer === "object" && pi.customer
+        ? {
+            id: pi.customer.id,
+            email: pi.customer.email,
+            name: pi.customer.name,
+          }
+        : pi.customer
+          ? { id: pi.customer }
+          : null;
+
+    return res.json({
+      success: true,
+      paymentIntent: {
+        id: pi.id,
+        amount: pi.amount,
+        amount_received: pi.amount_received,
+        currency: pi.currency,
+        status: pi.status,
+        created: pi.created,
+        description: pi.description,
+        receipt_email: pi.receipt_email,
+        customer: customerObj,
+        metadata: pi.metadata,
+        last_payment_error: pi.last_payment_error,
+      },
+      charge: chargeDetail,
+    });
+  } catch (e) {
+    error("admin-get-payment-intent: " + e.message);
+    return res.json({ success: false, message: e.message }, e.statusCode || 500);
+  }
 }
 
 async function handlePreparePayInvoice(req, res, log, error) {
@@ -271,6 +452,8 @@ module.exports = async ({ req, res, log, error }) => {
       orders: "list-payment-intents",
       "prepare-pay-invoice": "prepare-pay-invoice",
       "pay-invoice": "prepare-pay-invoice",
+      "admin-list-payment-intents": "admin-list-payment-intents",
+      "admin-get-payment-intent": "admin-get-payment-intent",
     };
     const action = actionMap[actionRaw] || actionRaw;
 
@@ -280,13 +463,19 @@ module.exports = async ({ req, res, log, error }) => {
     if (action === "list-payment-intents") {
       return await handleListPaymentIntents(req, res, log, error);
     }
+    if (action === "admin-list-payment-intents") {
+      return await handleAdminListPaymentIntents(req, res, log, error);
+    }
+    if (action === "admin-get-payment-intent") {
+      return await handleAdminGetPaymentIntent(req, res, log, error);
+    }
     if (action === "prepare-pay-invoice") {
       return await handlePreparePayInvoice(req, res, log, error);
     }
     return res.json({
       success: false,
       message:
-        'Invalid action. Use "list-invoices", "list-payment-intents", or "prepare-pay-invoice".',
+        'Invalid action. Use "list-invoices", "list-payment-intents", "admin-list-payment-intents", "admin-get-payment-intent", or "prepare-pay-invoice".',
     }, 400);
   } catch (err) {
     error("stripe-invoices failed: " + err.message);

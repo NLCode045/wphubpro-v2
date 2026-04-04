@@ -491,6 +491,23 @@ async function handleSetActive(req, res, log, error) {
   return res.json({ success: true, productId, active });
 }
 
+async function handleSetPriceActive(req, res, log, error) {
+  if (!(await ensureAdmin(req))) {
+    return res.json({ success: false, message: "Admin access required" }, 403);
+  }
+  const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+  const payload = parsePayload(req);
+  const priceId = payload.price_id || payload.priceId;
+  const active = payload.active !== false && payload.active !== "false";
+  if (!priceId) {
+    return res.json({ success: false, message: "price_id is required" }, 400);
+  }
+  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
+  await stripe.prices.update(priceId, { active });
+  log("Price " + priceId + " active=" + active);
+  return res.json({ success: true, priceId, active });
+}
+
 module.exports = async ({ req, res, log, error }) => {
   try {
     const payload = parsePayload(req);
@@ -502,6 +519,7 @@ module.exports = async ({ req, res, log, error }) => {
       update: "update",
       get: "get",
       "set-active": "set-active",
+      "set-price-active": "set-price-active",
       "create-price": "create-price",
     };
     const action = actionMap[actionRaw] || actionRaw;
@@ -521,11 +539,18 @@ module.exports = async ({ req, res, log, error }) => {
     if (action === "set-active") {
       return await handleSetActive(req, res, log, error);
     }
+    if (action === "set-price-active") {
+      return await handleSetPriceActive(req, res, log, error);
+    }
     if (action === "create-price") {
       return await handleCreatePrice(req, res, log, error);
     }
 
-    return res.json({ success: false, message: 'Invalid action. Use "list", "create", "update", "get", "set-active", or "create-price".' }, 400);
+    return res.json({
+      success: false,
+      message:
+        'Invalid action. Use "list", "create", "update", "get", "set-active", "set-price-active", or "create-price".',
+    }, 400);
   } catch (err) {
     error("stripe-products failed: " + err.message);
     return res.json({ success: false, message: err.message, plans: [] }, 500);

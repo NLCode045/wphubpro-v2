@@ -1,6 +1,7 @@
 /**
  * Consolidated Stripe subscriptions function.
- * Routes by action: get, get-details, cancel, cancel-schedule-update, preview-proration
+ * Routes by action: get, get-details, cancel, cancel-schedule-update, preview-proration,
+ * plus admin-* actions (admin only).
  */
 const handlers = {
   get: require("./handlers/get"),
@@ -8,7 +9,17 @@ const handlers = {
   cancel: require("./handlers/cancel"),
   "cancel-schedule-update": require("./handlers/cancel-schedule-update"),
   "preview-proration": require("./handlers/preview-proration"),
+  "admin-list-subscriptions": require("./handlers/admin-list-subscriptions"),
+  "admin-get-details": require("./handlers/admin-get-details"),
+  "admin-cancel-subscription": require("./handlers/admin-cancel-subscription"),
+  "admin-pause-subscription": require("./handlers/admin-pause-subscription"),
+  "admin-resume-subscription": require("./handlers/admin-resume-subscription"),
+  "admin-update-subscription-price": require("./handlers/admin-update-subscription-price"),
+  "admin-archive-subscription": require("./handlers/admin-archive-subscription"),
+  "admin-finance-summary": require("./handlers/admin-finance-summary"),
 };
+
+const valid = Object.keys(handlers);
 
 module.exports = async ({ req, res, log, error }) => {
   let action = null;
@@ -23,7 +34,6 @@ module.exports = async ({ req, res, log, error }) => {
     // ignore parse error
   }
 
-  const valid = ["get", "get-details", "cancel", "cancel-schedule-update", "preview-proration"];
   if (!action || !valid.includes(action)) {
     return res.json(
       { error: "Invalid or missing action. Use: " + valid.join(", ") },

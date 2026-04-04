@@ -607,6 +607,8 @@ export interface SubscriptionDetailsResponse {
     metadata: Record<string, string>;
     collection_method?: string;
     days_until_due?: number | null;
+    pause_collection?: { behavior?: string } | null;
+    cancel_at_period_end?: boolean;
   };
   customer: {
     id: string;

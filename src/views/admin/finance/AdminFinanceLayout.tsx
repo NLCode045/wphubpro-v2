@@ -11,7 +11,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 
 const AdminFinanceLayout = () => {
   const { isAdmin } = useAuth()
-  const { mode } = useDashboardNav()
+  const { setMode } = useDashboardNav()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -19,12 +19,10 @@ const AdminFinanceLayout = () => {
       navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
       return
     }
-    if (mode !== 'admin') {
-      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
-    }
-  }, [isAdmin, mode, navigate])
+    setMode('admin')
+  }, [isAdmin, navigate, setMode])
 
-  if (!isAdmin || mode !== 'admin') {
+  if (!isAdmin) {
     return null
   }
 

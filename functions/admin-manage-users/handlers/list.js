@@ -20,7 +20,8 @@ async function buildStripeMap(databases, log) {
   const map = new Map();
   let cursor = null;
   let pages = 0;
-  const maxPages = 500;
+  /** Cap account pages read per request (100 docs/page). Lower = faster; plan filter may be incomplete if huge. */
+  const maxPages = Number(process.env.ADMIN_LIST_STRIPE_MAP_MAX_PAGES || 120);
 
   while (pages < maxPages) {
     const queries = [sdk.Query.limit(100)];
@@ -90,10 +91,19 @@ module.exports = async function handleList({ req, res, log }, { client, database
 
   if (plan === "all") {
     const queries = [...userFilters, sdk.Query.limit(limit), sdk.Query.offset(offset)];
-    const response = await users.list({
-      queries,
-      search: search || undefined,
-    });
+    let response;
+    try {
+      response = await users.list({
+        queries,
+        search: search || undefined,
+      });
+    } catch (e) {
+      log(`admin list: users.list failed (${e.message})`);
+      return res.json(
+        { success: false, message: e.message || "Failed to list users", users: [], total: 0, limit, offset },
+        500,
+      );
+    }
     const rawUsers = response.users || response.documents || [];
     return res.json({
       success: true,
@@ -115,10 +125,26 @@ module.exports = async function handleList({ req, res, log }, { client, database
       sdk.Query.limit(USER_BATCH),
       sdk.Query.offset(scanOffset),
     ];
-    const response = await users.list({
-      queries,
-      search: search || undefined,
-    });
+    let response;
+    try {
+      response = await users.list({
+        queries,
+        search: search || undefined,
+      });
+    } catch (e) {
+      log(`admin list: users.list batch failed at offset ${scanOffset} (${e.message})`);
+      return res.json(
+        {
+          success: false,
+          message: e.message || "Failed to list users",
+          users: [],
+          total: 0,
+          limit,
+          offset,
+        },
+        500,
+      );
+    }
     const batch = response.users || response.documents || [];
     if (!batch.length) break;
     for (const u of batch) {

@@ -91,13 +91,27 @@ async function fetchFormattedAdminUsers(params: ListUsersParams): Promise<{
   const role = params.role ?? 'all';
   const plan = params.plan ?? 'all';
 
+  const heavyPlanFilter = plan === 'free' || plan === 'stripe';
+
   const res = await executeFunction<{
     success?: boolean;
     users: AppwriteUser[];
     total: number;
     limit?: number;
     offset?: number;
-  }>(APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS, { action: 'list', limit, offset, search, status, role, plan });
+  }>(
+    APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS,
+    { action: 'list', limit, offset, search, status, role, plan },
+    heavyPlanFilter
+      ? {
+          /**
+           * Free/Stripe filter loads stripe map + scans users; exceeds Appwrite ~30s sync wait → 503 without async poll.
+           */
+          longRunning: true,
+          maxAsyncWaitMs: 150_000,
+        }
+      : {},
+  );
 
   const rawUsers = res?.users ?? [];
   const total = res?.total ?? rawUsers.length;

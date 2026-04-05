@@ -261,7 +261,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 15,
+            "timeout": 120,
             "commands": "npm install",
             "scopes": [
                 "sessions.write",

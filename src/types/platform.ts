@@ -15,6 +15,8 @@ export type User = Models.User<Models.Preferences> & {
   isAdmin?: boolean;
   /** Appwrite account MFA flag when returned from `account.get()`. */
   mfa?: boolean;
+  /** Present on `account.get()` when an impersonator is acting as this user. */
+  impersonatorUserId?: string;
 };
 
 export type BillingInterval = 'monthly' | 'yearly';

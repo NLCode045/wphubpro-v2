@@ -42,7 +42,7 @@
         {
             "$id": "wp-proxy",
             "name": "wp-proxy",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/wp-proxy",
             "entrypoint": "index.js",
             "execute": [
@@ -136,7 +136,7 @@
         {
             "$id": "library-delete-version",
             "name": "library-delete-version",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/library-delete-version",
             "entrypoint": "index.js",
             "execute": [
@@ -159,7 +159,7 @@
         {
             "$id": "manage-settings",
             "name": "manage-settings",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/manage-settings",
             "entrypoint": "index.js",
             "execute": [
@@ -182,7 +182,7 @@
         {
             "$id": "public-auth-config",
             "name": "public-auth-config",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/public-auth-config",
             "entrypoint": "index.js",
             "execute": [
@@ -204,7 +204,7 @@
         {
             "$id": "stripe-portal-link",
             "name": "stripe-portal-link",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/stripe-portal-link",
             "entrypoint": "index.js",
             "execute": [
@@ -250,7 +250,7 @@
         {
             "$id": "admin-manage-users",
             "name": "admin-manage-users",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/admin-manage-users",
             "entrypoint": "index.js",
             "execute": [
@@ -321,7 +321,7 @@
         {
             "$id": "wphub-sites",
             "name": "wphub-sites",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/wphub-sites",
             "entrypoint": "index.js",
             "execute": [
@@ -998,7 +998,7 @@
         {
             "$id": "conversations",
             "name": "conversations",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/conversations",
             "entrypoint": "index.js",
             "execute": [
@@ -1099,7 +1099,7 @@
         {
             "$id": "broadcast-bridge-version",
             "name": "broadcast-bridge-version",
-            "runtime": "node-18.0",
+            "runtime": "node-20.0",
             "path": "functions/broadcast-bridge-version",
             "entrypoint": "index.js",
             "execute": [

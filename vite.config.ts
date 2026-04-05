@@ -11,7 +11,8 @@ export default defineConfig({
    * Expose client-safe env vars (no empty prefix — Vite rejects `''` and it over-exposes `.env`).
    * Matches `APPWRITE_*`, `STRIPE_*` (e.g. publishable key), and default `VITE_*`.
    */
-  envPrefix: ['VITE_', 'APPWRITE_', 'STRIPE_'],
+  /** `_FOO` matches `.env` keys like `_ENDPOINT` / `_DATABASE_ID` (see `src/services/appwrite.ts`). */
+  envPrefix: ['VITE_', 'APPWRITE_', 'STRIPE_', '_'],
   server: {
     allowedHosts: [
         '*.wearecode045s-projects.vercel.app',

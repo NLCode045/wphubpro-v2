@@ -181,14 +181,3 @@ export function useAdminUsersUpdate() {
   });
 }
 
-export function useAdminLoginAs() {
-  return useMutation({
-    mutationFn: async (userId: string) => {
-      const res = await executeFunction<{ token?: string }>(APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS, {
-        action: 'login-as',
-        userId,
-      });
-      return res?.token ?? null;
-    },
-  });
-}

@@ -3,11 +3,16 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { ROUTE_PATHS } from '@/config/routePaths';
 import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin';
 import { useAuth } from '@/domains/auth';
-import { useAdminUsersList } from '@/domains/admin/useAdminUsers';
-import { useSetTicketFollow, useTicket, useUpdateTicket, useUpdateTicketStatus } from '@/domains/tickets';
+import {
+  useSetTicketFollow,
+  useTicket,
+  useTicketAssignableAgents,
+  useUpdateTicket,
+  useUpdateTicketStatus,
+} from '@/domains/tickets';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import type { SupportTicketContext, Ticket, TicketActivity, TicketStatus } from '@/types';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Badge,
   Button,
@@ -174,10 +179,7 @@ export default function SupportTicketDetailPage() {
   const updateStatusOnly = useUpdateTicketStatus();
   const setFollow = useSetTicketFollow();
 
-  const { data: adminUsers } = useAdminUsersList(
-    { role: 'admin', limit: 100 },
-    { enabled: effectiveAdmin },
-  );
+  const { data: assignableAgents = [] } = useTicketAssignableAgents();
 
   const [admStatus, setAdmStatus] = useState<TicketStatus>('open');
   const [admPriority, setAdmPriority] = useState<Ticket['priority']>('medium');
@@ -190,6 +192,7 @@ export default function SupportTicketDetailPage() {
   const assignee = q.data?.assignee;
   const context = q.data?.context ?? null;
   const iFollow = q.data?.iFollow ?? false;
+  const recentFromReporter = q.data?.recentFromReporter ?? [];
 
   useEffect(() => {
     if (!ticket) return;
@@ -197,8 +200,6 @@ export default function SupportTicketDetailPage() {
     setAdmPriority(ticket.priority);
     setAdmAssignee(ticket.assignedToUserId ?? '');
   }, [ticket?.$id, ticket?.status, ticket?.priority, ticket?.assignedToUserId]);
-
-  const adminOptions = useMemo(() => (adminUsers?.users ?? []).filter((u) => u.isAdmin), [adminUsers?.users]);
 
   const applyAdminPatch = () => {
     if (!ticketId || !ticket) return;
@@ -337,7 +338,15 @@ export default function SupportTicketDetailPage() {
                     <h6 className="text-uppercase text-muted fs-xs">User</h6>
                     {reporter ? (
                       <div>
-                        <div className="fw-medium">{reporter.name || '—'}</div>
+                        <div className="fw-medium">
+                          {effectiveAdmin ? (
+                            <Link to={ROUTE_PATHS.adminUserPath(reporter.id)}>{reporter.name || '—'}</Link>
+                          ) : user.$id === reporter.id ? (
+                            <Link to={ROUTE_PATHS.PROFILE}>{reporter.name || '—'}</Link>
+                          ) : (
+                            reporter.name || '—'
+                          )}
+                        </div>
                         <div className="text-muted small">{reporter.email || reporter.id}</div>
                       </div>
                     ) : (
@@ -348,7 +357,13 @@ export default function SupportTicketDetailPage() {
                     <h6 className="text-uppercase text-muted fs-xs">Assigned to</h6>
                     {assignee ? (
                       <div>
-                        <div className="fw-medium">{assignee.name || '—'}</div>
+                        <div className="fw-medium">
+                          {effectiveAdmin ? (
+                            <Link to={ROUTE_PATHS.adminUserPath(assignee.id)}>{assignee.name || '—'}</Link>
+                          ) : (
+                            assignee.name || '—'
+                          )}
+                        </div>
                         <div className="text-muted small">{assignee.email || assignee.id}</div>
                       </div>
                     ) : (
@@ -419,9 +434,9 @@ export default function SupportTicketDetailPage() {
                             onChange={(e) => setAdmAssignee(e.target.value)}
                           >
                             <option value="">— Unassigned —</option>
-                            {adminOptions.map((u) => (
+                            {assignableAgents.map((u) => (
                               <option key={u.id} value={u.id}>
-                                {u.name} ({u.email})
+                                {u.name ? `${u.name} (${u.email || u.id})` : u.email || u.id}
                               </option>
                             ))}
                           </Form.Select>
@@ -455,7 +470,12 @@ export default function SupportTicketDetailPage() {
             </Card>
           </Col>
           <Col xxl={4}>
-            <SupportTicketChatCard ticketId={ticket.$id} messages={messages} />
+            <SupportTicketChatCard
+              ticketId={ticket.$id}
+              messages={messages}
+              recentFromReporter={recentFromReporter}
+              showRecentFromUser={effectiveAdmin}
+            />
           </Col>
         </Row>
       </Container>

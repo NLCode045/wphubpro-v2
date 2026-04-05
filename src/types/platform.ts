@@ -751,6 +751,15 @@ export interface Ticket {
   $updatedAt: string;
 }
 
+/** Other recent tickets from the same user (admin ticket detail `get` response). */
+export interface TicketRecentFromReporter {
+  $id: string;
+  subject: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  $updatedAt: string;
+}
+
 export interface TicketMessage {
   $id: string;
   ticketId: string;

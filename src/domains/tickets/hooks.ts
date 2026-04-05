@@ -9,6 +9,7 @@ import type {
   TicketActivity,
   TicketMessage,
   TicketNotifyChannel,
+  TicketRecentFromReporter,
   TicketUserSummary,
 } from '../../types';
 
@@ -140,6 +141,7 @@ export const useTicket = (ticketId: string | undefined) => {
         assignee: TicketUserSummary | null;
         context: SupportTicketContext | null;
         iFollow: boolean;
+        recentFromReporter?: TicketRecentFromReporter[];
       }>(TICKETS_FN, { action: 'get', ticketId });
       return {
         ticket: mapTicket(res!.ticket),
@@ -149,9 +151,25 @@ export const useTicket = (ticketId: string | undefined) => {
         assignee: res?.assignee ?? null,
         context: res?.context ?? null,
         iFollow: res?.iFollow ?? false,
+        recentFromReporter: res?.recentFromReporter ?? [],
       };
     },
     enabled: !!user && !!ticketId,
+  });
+};
+
+export const useTicketAssignableAgents = () => {
+  const { user } = useAuth();
+  const effectiveAdmin = useEffectiveIsAdmin();
+  return useQuery({
+    queryKey: ['ticketAssignableAgents'],
+    queryFn: async () => {
+      const res = await executeFunction<{ agents: TicketUserSummary[] }>(TICKETS_FN, {
+        action: 'listAgents',
+      });
+      return res?.agents ?? [];
+    },
+    enabled: !!user && effectiveAdmin,
   });
 };
 
@@ -182,7 +200,7 @@ export const useCreateTicket = () => {
 export const useAddTicketMessage = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { ticketId: string; body: string }) =>
+    mutationFn: (data: { ticketId: string; body: string; asStaff?: boolean }) =>
       executeFunction(TICKETS_FN, { action: 'addMessage', ...data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });

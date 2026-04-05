@@ -1,18 +1,31 @@
+import { ROUTE_PATHS } from '@/config/routePaths';
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin';
 import { useAuth } from '@/domains/auth';
 import { useAddTicketMessage } from '@/domains/tickets';
-import type { TicketMessage } from '@/types';
+import type { TicketMessage, TicketRecentFromReporter } from '@/types';
 import { useState, type FormEvent } from 'react';
-import { Button, Card, CardHeader, Spinner } from 'react-bootstrap';
+import { Badge, Button, Card, CardHeader, Spinner } from 'react-bootstrap';
 import SimpleBar from 'simplebar-react';
 import { TbClock, TbSend2 } from 'react-icons/tb';
+import { Link } from 'react-router';
+import { formatTicketStatus, statusBadgeClass } from '@/views/support/supportUi';
 
 type Props = {
   ticketId: string;
   messages: TicketMessage[];
+  /** Last tickets from the reporter (admin view); shown below the reply box. */
+  recentFromReporter?: TicketRecentFromReporter[];
+  showRecentFromUser?: boolean;
 };
 
-export function SupportTicketChatCard({ ticketId, messages }: Props) {
+export function SupportTicketChatCard({
+  ticketId,
+  messages,
+  recentFromReporter = [],
+  showRecentFromUser = false,
+}: Props) {
   const { user } = useAuth();
+  const effectiveAdmin = useEffectiveIsAdmin();
   const add = useAddTicketMessage();
   const [input, setInput] = useState('');
 
@@ -21,7 +34,7 @@ export function SupportTicketChatCard({ ticketId, messages }: Props) {
     const text = input.trim();
     if (!text || !user) return;
     add.mutate(
-      { ticketId, body: text },
+      { ticketId, body: text, asStaff: effectiveAdmin },
       {
         onSuccess: () => setInput(''),
       }
@@ -82,6 +95,33 @@ export function SupportTicketChatCard({ ticketId, messages }: Props) {
           </Button>
         </form>
       </div>
+
+      {showRecentFromUser && recentFromReporter.length > 0 ? (
+        <div className="card-footer bg-body-tertiary border-top pt-3 pb-3">
+          <h6 className="text-uppercase text-muted fs-xs mb-2">Recent tickets from this user</h6>
+          <ul className="list-unstyled mb-0 small">
+            {recentFromReporter.map((t, i) => (
+              <li
+                key={t.$id}
+                className={
+                  i < recentFromReporter.length - 1 ? 'mb-2 pb-2 border-bottom border-light-subtle' : ''
+                }
+              >
+                <Link
+                  to={ROUTE_PATHS.supportTicketPath(t.$id)}
+                  className="text-decoration-none text-body d-block"
+                >
+                  <span className="fw-medium text-truncate d-block">{t.subject}</span>
+                  <span className="d-inline-flex align-items-center gap-2 mt-1 text-muted">
+                    <Badge className={statusBadgeClass(t.status)}>{formatTicketStatus(t.status)}</Badge>
+                    <span>{new Date(t.$updatedAt).toLocaleString()}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </Card>
   );
 }

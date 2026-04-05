@@ -175,6 +175,60 @@ async function userIsAdmin(users, teams, uid) {
   return checkAdmin(teams, users, uid);
 }
 
+/**
+ * Users who may receive ticket assignment (same rules as userIsAdmin): confirmed members of team "admin"
+ * plus label-based admins not necessarily on that team.
+ */
+async function listAssignableAgents(teams, users, log) {
+  const byId = new Map();
+  try {
+    let cursor = null;
+    for (;;) {
+      const queries = [sdk.Query.limit(100)];
+      if (cursor) queries.push(sdk.Query.cursorAfter(cursor));
+      const res = await teams.listMemberships("admin", queries);
+      const list = res.memberships || [];
+      for (const m of list) {
+        const uid = m.userId;
+        if (!uid || m.confirm === false) continue;
+        if (byId.has(uid)) continue;
+        byId.set(uid, await safeUserSummary(users, uid));
+      }
+      if (list.length < 100) break;
+      cursor = list[list.length - 1].$id;
+    }
+  } catch (e) {
+    log?.("listAgents team: " + e.message);
+  }
+  try {
+    let ucursor = null;
+    for (;;) {
+      const uqueries = [
+        sdk.Query.containsAny("labels", ["admin", "Admin"]),
+        sdk.Query.limit(100),
+        sdk.Query.orderAsc("$id"),
+      ];
+      if (ucursor) uqueries.push(sdk.Query.cursorAfter(ucursor));
+      const ures = await users.list({ queries: uqueries });
+      const batch = ures.users || ures.documents || [];
+      for (const u of batch) {
+        if (byId.has(u.$id)) continue;
+        if (!(await userIsAdmin(users, teams, u.$id))) continue;
+        byId.set(u.$id, { id: u.$id, name: u.name || "", email: u.email || "" });
+      }
+      if (batch.length < 100) break;
+      ucursor = batch[batch.length - 1].$id;
+    }
+  } catch (e) {
+    log?.("listAgents labels: " + e.message);
+  }
+  return [...byId.values()].sort((a, b) =>
+    String(a.name || a.email || "").localeCompare(String(b.name || b.email || ""), undefined, {
+      sensitivity: "base",
+    }),
+  );
+}
+
 async function safeUserSummary(users, userId) {
   if (!userId) return null;
   try {
@@ -425,6 +479,29 @@ module.exports = async ({ req, res, log, error }) => {
 
       const iFollow = ticket.user_id === userId || ticketFollowers(ticket).includes(userId);
 
+      let recentFromReporter = [];
+      if (isAdmin && ticket.user_id) {
+        try {
+          const recent = await databases.listDocuments(DATABASE_ID, TICKETS_COLLECTION, [
+            sdk.Query.equal("user_id", ticket.user_id),
+            sdk.Query.orderDesc("$updatedAt"),
+            sdk.Query.limit(12),
+          ]);
+          recentFromReporter = recent.documents
+            .filter((d) => d.$id !== ticketId)
+            .slice(0, 5)
+            .map((d) => ({
+              $id: d.$id,
+              subject: d.subject,
+              status: d.status,
+              priority: d.priority,
+              $updatedAt: d.$updatedAt,
+            }));
+        } catch (e) {
+          log("recentFromReporter: " + e.message);
+        }
+      }
+
       return ok(res, {
         ticket,
         messages: messages.documents,
@@ -433,22 +510,32 @@ module.exports = async ({ req, res, log, error }) => {
         assignee,
         context: contextParsed,
         iFollow,
+        recentFromReporter,
       });
+    }
+
+    if (action === "listAgents") {
+      if (!isAdmin) return fail(res, "Admin required", 403);
+      const agents = await listAssignableAgents(teams, users, log);
+      return ok(res, { agents });
     }
 
     if (action === "addMessage") {
       if (!userId) return fail(res, "Unauthorized", 401);
-      const { ticketId, body } = payload;
+      const { ticketId, body, asStaff } = payload;
       if (!ticketId || !body || !String(body).trim()) return fail(res, "Missing ticketId or body", 400);
 
       let ticket = await databases.getDocument(DATABASE_ID, TICKETS_COLLECTION, ticketId);
       if (ticket.user_id !== userId && !isAdmin) return fail(res, "Forbidden", 403);
 
+      /** Staff badge only for admins; `asStaff: false` = user-mode reply (same session, /support UI). */
+      const markStaff = Boolean(isAdmin && asStaff !== false);
+
       await databases.createDocument(DATABASE_ID, MESSAGES_COLLECTION, sdk.ID.unique(), {
         ticket_id: ticketId,
         user_id: userId,
         body: String(body).trim(),
-        is_staff: isAdmin,
+        is_staff: markStaff,
       });
 
       ticket = normalizeTicketRow(ticket);
@@ -460,7 +547,7 @@ module.exports = async ({ req, res, log, error }) => {
           ticketId,
           actorUserId: userId,
           action: "message",
-          summary: isAdmin ? "Staff reply" : "Customer reply",
+          summary: markStaff ? "Staff reply" : "Customer reply",
         });
       } catch (e) {
         log("activity: " + e.message);

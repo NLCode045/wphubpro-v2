@@ -113,7 +113,7 @@ export const useAdminTickets = () => {
   const { user } = useAuth();
   const effectiveAdmin = useEffectiveIsAdmin();
   return useQuery({
-    queryKey: ['adminTickets'],
+    queryKey: ['adminTickets', effectiveAdmin],
     queryFn: async () => {
       const res = await executeFunction<{ tickets: TicketDoc[]; total: number }>(TICKETS_FN, {
         action: 'adminList',

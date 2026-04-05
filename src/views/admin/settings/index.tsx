@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
 import PageMetaData from '@/components/PageMetaData';
 import { ROUTE_PATHS } from '@/config/routePaths';
@@ -342,6 +343,7 @@ const AdminPlatformSettingsPage = () => {
         <PageBreadcrumb
           title="Platform settings"
           subtitle="Admin · platform_settings and integrations"
+          titleEnd={<DocHelpButton contextKey="admin:settings" />}
         />
 
         {isLoading && (

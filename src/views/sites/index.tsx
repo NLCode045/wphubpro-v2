@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
 import { useFetchSiteMetaIfNeeded, useSites, useSitesStatusPoll } from '@/domains/sites';
 import type { Site } from '@/types';
@@ -18,7 +19,11 @@ const SitesPage = () => {
 
   return (
     <Container fluid>
-      <PageBreadcrumb title="Sites" subtitle="All connected WordPress sites" />
+      <PageBreadcrumb
+        title="Sites"
+        subtitle="All connected WordPress sites"
+        titleEnd={<DocHelpButton contextKey="sites" />}
+      />
 
       {sitesLoading ? (
         <div className="d-flex justify-content-center py-5">

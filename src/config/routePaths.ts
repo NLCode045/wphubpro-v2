@@ -41,4 +41,9 @@ export const ROUTE_PATHS = {
   supportTicketPath: (ticketId: string) => `/support/${encodeURIComponent(ticketId)}`,
   /** Admin: all support tickets */
   ADMIN_SUPPORT: '/admin/support',
+  /** User knowledge base (help center) */
+  DOCS: '/docs',
+  docsArticlePath: (slug: string) => `/docs/a/${encodeURIComponent(slug)}`,
+  /** Admin: edit knowledge base articles (mock + localStorage in dev) */
+  ADMIN_DOCS: '/admin/docs',
 } as const;

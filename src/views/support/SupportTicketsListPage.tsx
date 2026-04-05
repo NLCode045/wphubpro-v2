@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { ROUTE_PATHS } from '@/config/routePaths';
 import { useAuth } from '@/domains/auth';
@@ -22,7 +23,11 @@ export default function SupportTicketsListPage({ adminMode = false }: Props) {
 
   return (
     <>
-      <PageBreadcrumb title={adminMode ? 'Support queue' : 'My tickets'} subtitle="Support" />
+      <PageBreadcrumb
+        title={adminMode ? 'Support queue' : 'My tickets'}
+        subtitle="Support"
+        titleEnd={<DocHelpButton contextKey={adminMode ? 'admin:support' : 'support'} />}
+      />
       <Container fluid>
         {q.isLoading ? (
           <div className="d-flex justify-content-center py-5">

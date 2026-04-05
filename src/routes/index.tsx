@@ -11,8 +11,11 @@ import FinancePlanDetailPage from '@/views/admin/finance/FinancePlanDetailPage'
 import FinancePlansPage from '@/views/admin/finance/FinancePlansPage'
 import FinanceSubscriptionDetailPage from '@/views/admin/finance/FinanceSubscriptionDetailPage'
 import FinanceSubscriptionsPage from '@/views/admin/finance/FinanceSubscriptionsPage'
+import AdminDocsManagerPage from '@/views/admin/docs/AdminDocsManagerPage'
 import AdminPlatformSettingsPage from '@/views/admin/settings'
 import AdminUsersOverviewPage from '@/views/admin/users'
+import DocsArticlePage from '@/views/docs/DocsArticlePage'
+import DocsHomePage from '@/views/docs/DocsHomePage'
 import DashboardPage from '@/views/dashboard'
 import LibraryPage from '@/views/library'
 import LibraryItemDetailPage from '@/views/library/detail/LibraryItemDetailPage'
@@ -83,6 +86,9 @@ export const routes: RouteObject[] = [
       { path: ROUTE_PATHS.ADMIN_DASHBOARD, element: <AdminDashboardPage /> },
       { path: ROUTE_PATHS.ADMIN_USERS, element: <AdminUsersOverviewPage /> },
       { path: ROUTE_PATHS.ADMIN_SETTINGS, element: <AdminPlatformSettingsPage /> },
+      { path: ROUTE_PATHS.ADMIN_DOCS, element: <AdminDocsManagerPage /> },
+      { path: ROUTE_PATHS.DOCS, element: <DocsHomePage /> },
+      { path: `${ROUTE_PATHS.DOCS}/a/:slug`, element: <DocsArticlePage /> },
       {
         path: ROUTE_PATHS.ADMIN_FINANCE,
         element: <AdminFinanceLayout />,

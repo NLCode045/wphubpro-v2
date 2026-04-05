@@ -2,6 +2,7 @@ import { ROUTE_PATHS } from '@/config/routePaths'
 import { type MenuItemType } from '@/types/layout'
 import { type IconType } from 'react-icons'
 import {
+  TbBook,
   TbCoin,
   TbLayoutDashboard,
   TbLibrary,
@@ -171,6 +172,12 @@ export const adminMenuItems: MenuItemType[] = [
     icon: TbLifebuoy,
     url: ROUTE_PATHS.ADMIN_SUPPORT,
   },
+  {
+    key: 'admin-docs',
+    label: 'Docs manager',
+    icon: TbBook,
+    url: ROUTE_PATHS.ADMIN_DOCS,
+  },
 ]
 
 export const horizontalAdminMenuItems: MenuItemType[] = [
@@ -228,5 +235,11 @@ export const horizontalAdminMenuItems: MenuItemType[] = [
     label: 'Support',
     icon: TbLifebuoy,
     url: ROUTE_PATHS.ADMIN_SUPPORT,
+  },
+  {
+    key: 'admin-docs',
+    label: 'Docs',
+    icon: TbBook,
+    url: ROUTE_PATHS.ADMIN_DOCS,
   },
 ]

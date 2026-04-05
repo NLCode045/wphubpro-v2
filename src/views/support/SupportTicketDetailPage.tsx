@@ -444,7 +444,7 @@ export default function SupportTicketDetailPage() {
                   <Link to={ROUTE_PATHS.SUPPORT} className="btn btn-outline-secondary">
                     <TbArrowLeft className="me-1" /> Back to list
                   </Link>
-                  {isAdmin ? (
+                  {effectiveAdmin ? (
                     <Link to={ROUTE_PATHS.ADMIN_SUPPORT} className="btn btn-outline-primary">
                       Admin queue
                     </Link>

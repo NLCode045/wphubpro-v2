@@ -142,7 +142,10 @@ export interface UpdateUserParams {
   };
 }
 
-export function useAdminUsersList(params: ListUsersParams = {}) {
+export function useAdminUsersList(
+  params: ListUsersParams = {},
+  options?: { enabled?: boolean },
+) {
   const limit = Math.max(1, Math.min(100, params.limit ?? 50));
   const offset = params.offset ?? 0;
   const search = params.search ?? '';
@@ -153,6 +156,7 @@ export function useAdminUsersList(params: ListUsersParams = {}) {
   return useQuery({
     queryKey: ['admin', 'users', limit, offset, search, status, role, plan],
     queryFn: () => fetchFormattedAdminUsers({ limit, offset, search, status, role, plan }),
+    enabled: options?.enabled ?? true,
   });
 }
 

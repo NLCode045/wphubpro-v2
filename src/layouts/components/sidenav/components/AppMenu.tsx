@@ -147,7 +147,7 @@ const AppMenu = () => {
 
   useEffect(() => {
     setTimeout(() => scrollToActiveLink(), 100)
-  }, [mode])
+  }, [mode, pathname])
 
   return (
     <ul className="side-nav">

@@ -20,14 +20,19 @@ function parsePayload(req, payloadFromIndex) {
  * Verifies the subscription belongs to the authenticated user before returning.
  */
 module.exports = async ({ req, res, log, error, payload: payloadFromIndex }) => {
-  const {
-    STRIPE_SECRET_KEY,
-    APPWRITE_ENDPOINT,
-    APPWRITE_PROJECT_ID,
-    APPWRITE_API_KEY,
-    APPWRITE_DATABASE_ID,
-    APPWRITE_ACCOUNTS_COLLECTION_ID,
-  } = process.env;
+  const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+  const APPWRITE_ENDPOINT =
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
+  const APPWRITE_DATABASE_ID = process.env.APPWRITE_DATABASE_ID;
+  const APPWRITE_ACCOUNTS_COLLECTION_ID = process.env.APPWRITE_ACCOUNTS_COLLECTION_ID;
 
   if (!STRIPE_SECRET_KEY) {
     error("Missing STRIPE_SECRET_KEY");

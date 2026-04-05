@@ -17,13 +17,24 @@ function parsePayload(req) {
 }
 
 module.exports = async ({ req, res, error, log }) => {
-  const env = req?.variables || process.env;
+  const env = {
+    ...process.env,
+    ...(req?.variables && typeof req.variables === 'object' ? req.variables : {}),
+  };
   const databaseId = env.APPWRITE_DATABASE_ID || env.DATABASE_ID;
 
+  const APPWRITE_ENDPOINT =
+    env.APPWRITE_ENDPOINT ||
+    env.APPWRITE_FUNCTION_ENDPOINT ||
+    env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID = env.APPWRITE_PROJECT_ID || env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    env.APPWRITE_API_KEY || env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_KEY;
+
   if (
-    !env.APPWRITE_ENDPOINT ||
-    !env.APPWRITE_PROJECT_ID ||
-    !env.APPWRITE_API_KEY ||
+    !APPWRITE_ENDPOINT ||
+    !APPWRITE_PROJECT_ID ||
+    !APPWRITE_API_KEY ||
     !env.STRIPE_SECRET_KEY ||
     !databaseId ||
     !env.ACCOUNTS_COLLECTION_ID
@@ -33,7 +44,7 @@ module.exports = async ({ req, res, error, log }) => {
   }
 
   const client = new sdk.Client();
-  client.setEndpoint(env.APPWRITE_ENDPOINT).setProject(env.APPWRITE_PROJECT_ID).setKey(env.APPWRITE_API_KEY);
+  client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
   const databases = new sdk.Databases(client);
   const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 

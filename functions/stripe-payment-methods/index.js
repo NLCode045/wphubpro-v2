@@ -37,10 +37,16 @@ async function getStripeCustomerId(databases, userId, log, error) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const env = req?.variables || process.env;
+  const env = {
+    ...process.env,
+    ...(req?.variables && typeof req.variables === 'object' ? req.variables : {}),
+  };
   const STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
   const APPWRITE_ENDPOINT =
-    env.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT;
+    env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
   const APPWRITE_PROJECT_ID =
     env.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
   const APPWRITE_API_KEY =

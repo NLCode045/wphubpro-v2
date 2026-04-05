@@ -1,9 +1,20 @@
 const sdk = require("node-appwrite");
 
 module.exports = async function ensureAdmin(req) {
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    req.variables?.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    req.variables?.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    req.variables?.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const userId =
     process.env.APPWRITE_FUNCTION_USER_ID ||
     req.variables?.APPWRITE_FUNCTION_USER_ID ||

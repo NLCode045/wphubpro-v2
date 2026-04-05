@@ -113,9 +113,20 @@ async function handleListProducts(req, res, log, error) {
 
 async function handleCreate(req, res, log, error) {
   const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    req.variables?.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    req.variables?.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    req.variables?.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
 
   if (!STRIPE_SECRET_KEY) {
     return res.json({ success: false, message: "Stripe configuration missing" }, 500);
@@ -209,9 +220,20 @@ async function handleCreate(req, res, log, error) {
 
 async function handleUpdate(req, res, log, error) {
   const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    req.variables?.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    req.variables?.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    req.variables?.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
 
   if (!STRIPE_SECRET_KEY) {
     return res.json({ success: false, message: "Stripe configuration missing" }, 500);
@@ -337,9 +359,20 @@ async function countActiveSubscriptionsForProduct(stripe, productId, { maxPagesP
 }
 
 async function ensureAdmin(req) {
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    req.variables?.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    req.variables?.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    req.variables?.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const userId = process.env.APPWRITE_FUNCTION_USER_ID || req.headers?.["x-appwrite-user-id"];
   if (!userId || !APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) return false;
   const client = new sdk.Client()
@@ -361,9 +394,20 @@ async function ensureAdmin(req) {
 
 async function handleGet(req, res, log, error) {
   const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    req.variables?.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    req.variables?.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    req.variables?.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const DATABASE_ID = req.variables?.DATABASE_ID || process.env.DATABASE_ID;
   const ACCOUNTS_COLLECTION_ID = req.variables?.ACCOUNTS_COLLECTION_ID || process.env.ACCOUNTS_COLLECTION_ID;
 

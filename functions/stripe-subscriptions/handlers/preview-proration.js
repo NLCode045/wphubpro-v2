@@ -15,9 +15,16 @@ function parsePayload(req) {
 
 module.exports = async ({ req, res, log, error }) => {
   const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-  const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || process.env.DATABASE_ID;
   const ACCOUNTS_COLLECTION_ID =
     process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || process.env.ACCOUNTS_COLLECTION_ID;

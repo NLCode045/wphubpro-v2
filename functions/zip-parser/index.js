@@ -130,7 +130,10 @@ module.exports = async ({ req, res, log, error }) => {
   const env =
     req && req.variables && Object.keys(req.variables).length > 0 ? req.variables : process.env;
 
-  const APPWRITE_FUNCTION_ENDPOINT = env.APPWRITE_FUNCTION_ENDPOINT || env.APPWRITE_ENDPOINT;
+  const APPWRITE_FUNCTION_ENDPOINT =
+    env.APPWRITE_FUNCTION_ENDPOINT ||
+    env.APPWRITE_ENDPOINT ||
+    env.APPWRITE_FUNCTION_API_ENDPOINT;
   const APPWRITE_FUNCTION_PROJECT_ID = env.APPWRITE_FUNCTION_PROJECT_ID || env.APPWRITE_PROJECT_ID;
   const APPWRITE_FUNCTION_API_KEY =
     env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_API_KEY || env.APPWRITE_KEY;

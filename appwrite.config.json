@@ -163,6 +163,7 @@
             "path": "functions/manage-settings",
             "entrypoint": "index.js",
             "execute": [
+                "users",
                 "team:admin"
             ],
             "enabled": true,
@@ -261,7 +262,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 15,
+            "timeout": 60,
             "commands": "npm install",
             "scopes": [
                 "sessions.write",
@@ -879,6 +880,7 @@
             "entrypoint": "index.js",
             "execute": [
                 "any",
+                "users",
                 "team:admin"
             ],
             "enabled": true,
@@ -901,6 +903,7 @@
             "path": "functions/stripe-dashboard",
             "entrypoint": "index.js",
             "execute": [
+                "users",
                 "team:admin"
             ],
             "enabled": true,
@@ -976,6 +979,8 @@
             "path": "functions/tickets",
             "entrypoint": "index.js",
             "execute": [
+                "any",
+                "guests",
                 "users",
                 "team:admin"
             ],

@@ -27,6 +27,107 @@ function parsePayload(req) {
   return {};
 }
 
+/** Normalize Appwrite / fetch-style headers (plain object, Headers, or [{ name, value }]). */
+function flattenHeaders(raw) {
+  const out = {};
+  if (!raw) return out;
+  if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      if (entry && typeof entry === "object" && entry.name != null) {
+        out[String(entry.name).toLowerCase()] = entry.value != null ? String(entry.value) : "";
+      }
+    }
+    return out;
+  }
+  if (typeof raw.forEach === "function") {
+    try {
+      raw.forEach((value, name) => {
+        out[String(name).toLowerCase()] = String(value);
+      });
+      return out;
+    } catch {
+      /* fall through */
+    }
+  }
+  if (typeof raw.get === "function") {
+    const tryKeys = [
+      "x-appwrite-user-id",
+      "x-appwrite-function-user-id",
+      "x-appwrite-user-jwt",
+      "x-appwrite-jwt",
+      "authorization",
+      "x-appwrite-impersonate-user-id",
+    ];
+    for (const k of tryKeys) {
+      try {
+        const v = raw.get(k) || raw.get(k.replace(/^x-/, "X-"));
+        if (v) out[k] = String(v);
+      } catch {
+        /* ignore */
+      }
+    }
+    return out;
+  }
+  if (typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw)) {
+      if (v != null) out[String(k).toLowerCase()] = String(v);
+    }
+  }
+  return out;
+}
+
+function userIdFromEnvAndVariables(req) {
+  const vars = req?.variables && typeof req.variables === "object" ? req.variables : {};
+  const v =
+    vars.APPWRITE_FUNCTION_USER_ID ||
+    vars.APPWRITE_USER_ID ||
+    process.env.APPWRITE_FUNCTION_USER_ID ||
+    process.env.APPWRITE_USER_ID ||
+    null;
+  return v && String(v).trim() ? String(v).trim() : null;
+}
+
+/** Sync: headers + env (no network). */
+function getExecutorUserIdSync(req) {
+  const flat = flattenHeaders(req?.headers);
+  const fromHeaders =
+    flat["x-appwrite-user-id"] ||
+    flat["x-appwrite-function-user-id"] ||
+    userIdFromEnvAndVariables(req) ||
+    flat["x-appwrite-impersonate-user-id"] ||
+    null;
+  return fromHeaders && String(fromHeaders).trim() ? String(fromHeaders).trim() : null;
+}
+
+function pickJwtFromFlatHeaders(flat) {
+  const auth = flat["authorization"] || "";
+  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : auth.trim();
+  const direct = flat["x-appwrite-user-jwt"] || flat["x-appwrite-jwt"] || "";
+  const token = (direct && direct.trim()) || bearer || "";
+  const parts = token ? token.split(".") : [];
+  return parts.length === 3 && parts.every((p) => p && p.length >= 10) ? token : null;
+}
+
+/**
+ * Resolves the signed-in user id for this execution (headers, env, then JWT → account.get).
+ * Mirrors fetch-site-meta: some runtimes omit x-appwrite-user-id but still pass the session JWT.
+ */
+async function resolveExecutorUserId(req, endpoint, projectId) {
+  const syncId = getExecutorUserIdSync(req);
+  if (syncId) return syncId;
+  const flat = flattenHeaders(req?.headers);
+  const jwt = pickJwtFromFlatHeaders(flat);
+  if (!jwt) return null;
+  try {
+    const jwtClient = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setJWT(jwt);
+    const account = new sdk.Account(jwtClient);
+    const me = await account.get();
+    return me.$id && String(me.$id).trim() ? String(me.$id).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 function createClient(sdkLib, { endpoint, projectId, apiKey }) {
   const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
   if (apiKey) client.setKey(apiKey);
@@ -161,7 +262,7 @@ module.exports = async ({ req, res, log, error }) => {
   const databases = new sdk.Databases(client);
   const teams = new sdk.Teams(client);
   const users = new sdk.Users(client);
-  const userId = req.headers["x-appwrite-user-id"] || process.env.APPWRITE_FUNCTION_USER_ID;
+  const userId = await resolveExecutorUserId(req, endpoint, projectId);
 
   const payload = parsePayload(req);
   const action = payload.action || "list";

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,13 +6,25 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const fileEnv = loadEnv(mode, __dirname, '');
+  const stripePublishable = (
+    fileEnv.STRIPE_PUBLISHABLE_KEY ||
+    fileEnv._STRIPE_PUBLISHABLE_KEY ||
+    ''
+  ).trim();
+
+  return {
   /**
    * Expose client-safe env vars (no empty prefix — Vite rejects `''` and it over-exposes `.env`).
    * Matches `APPWRITE_*`, `STRIPE_*` (e.g. publishable key), and default `VITE_*`.
    */
   /** `_FOO` matches `.env` keys like `_ENDPOINT` / `_DATABASE_ID` (see `src/services/appwrite.ts`). */
   envPrefix: ['VITE_', 'APPWRITE_', 'STRIPE_', '_'],
+  /** Stripe Elements use `STRIPE_PUBLISHABLE_KEY`; allow `_STRIPE_PUBLISHABLE_KEY` in .env only. */
+  define: {
+    'import.meta.env.STRIPE_PUBLISHABLE_KEY': JSON.stringify(stripePublishable),
+  },
   server: {
     allowedHosts: [
         '*.wearecode045s-projects.vercel.app',
@@ -51,4 +63,5 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+};
 });

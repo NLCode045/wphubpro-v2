@@ -30,9 +30,14 @@ function parsePayload(req) {
 
 module.exports = async ({ req, res, log, error }) => {
   try {
-    const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-    const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-    const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
+    const env = {
+      ...process.env,
+      ...(req?.variables && typeof req.variables === "object" ? req.variables : {}),
+    };
+    const endpoint =
+      env.APPWRITE_ENDPOINT || env.APPWRITE_FUNCTION_ENDPOINT || env.APPWRITE_FUNCTION_API_ENDPOINT;
+    const projectId = env.APPWRITE_PROJECT_ID || env.APPWRITE_FUNCTION_PROJECT_ID;
+    const apiKey = env.APPWRITE_API_KEY || env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_KEY;
 
     if (!endpoint || !projectId || !apiKey) {
       error("Appwrite configuration missing");
@@ -66,7 +71,7 @@ module.exports = async ({ req, res, log, error }) => {
 
     const client = createClient(sdk, { endpoint, projectId, apiKey });
     const databases = new sdk.Databases(client);
-    const stripeInstance = process.env.STRIPE_SECRET_KEY ? stripe(process.env.STRIPE_SECRET_KEY) : null;
+    const stripeInstance = env.STRIPE_SECRET_KEY ? stripe(env.STRIPE_SECRET_KEY) : null;
 
     const ctx = {
       client,

@@ -17,6 +17,7 @@ const handlers = {
   "admin-update-subscription-price": require("./handlers/admin-update-subscription-price"),
   "admin-archive-subscription": require("./handlers/admin-archive-subscription"),
   "admin-finance-summary": require("./handlers/admin-finance-summary"),
+  "admin-finance-dashboard": require("./handlers/admin-finance-dashboard"),
 };
 
 const valid = Object.keys(handlers);

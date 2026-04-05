@@ -1,10 +1,20 @@
 import { ROUTE_PATHS } from '@/config/routePaths';
 import { clearPagespeedSessionStorage } from '@/domains/sites/pagespeedSessionCache';
-import { createContext, useContext, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { Models } from 'appwrite';
 import { AppwriteException, AuthenticationFactor } from 'appwrite';
-import { account, teams, ID, OAuthProvider } from '../../services/appwrite';
+import {
+  account,
+  applyStoredImpersonationHeaders,
+  clearImpersonationClientAndStorage,
+  persistImpersonationUserId,
+  setImpersonationTargetOnClient,
+  teams,
+  ID,
+  OAuthProvider,
+} from '../../services/appwrite';
 import type { User } from '../../types';
 
 /** GitHub OAuth scopes — see https://appwrite.io/docs/products/auth/oauth2 */
@@ -84,6 +94,11 @@ interface AuthContextType {
   completePasswordRecovery: (userId: string, secret: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** True when Appwrite returns `impersonatorUserId` on the effective account (native impersonation). */
+  isImpersonating: boolean;
+  /** Requires an admin session and Appwrite “impersonator” capability on the operator. */
+  startImpersonation: (userId: string) => Promise<void>;
+  stopImpersonation: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -113,15 +128,45 @@ async function resolveAdminStatus(currentUser: User): Promise<boolean> {
   return adminStatus;
 }
 
+function impersonatorUserIdFromAccount(raw: Models.User<Models.Preferences>): string | undefined {
+  const r = raw as Record<string, unknown>;
+  const camel = r.impersonatorUserId;
+  const snake = r.impersonator_user_id;
+  if (typeof camel === 'string' && camel.trim()) return camel.trim();
+  if (typeof snake === 'string' && snake.trim()) return snake.trim();
+  return undefined;
+}
+
+function withImpersonationFields(u: Models.User<Models.Preferences>): User {
+  const impersonatorUserId = impersonatorUserIdFromAccount(u);
+  return { ...u, impersonatorUserId };
+}
+
+/** Align client headers + sessionStorage with the server: drop stale impersonation after a new login, etc. */
+function syncImpersonationStateAfterGet(currentUser: Models.User<Models.Preferences>): void {
+  if (!impersonatorUserIdFromAccount(currentUser)) {
+    setImpersonationTargetOnClient(null);
+    persistImpersonationUserId(null);
+  } else {
+    setImpersonationTargetOnClient(currentUser.$id);
+    persistImpersonationUserId(currentUser.$id);
+  }
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const isImpersonating = useMemo(() => Boolean(user?.impersonatorUserId), [user?.impersonatorUserId]);
+
   const commitSessionUser = async () => {
+    applyStoredImpersonationHeaders();
     const currentUser = await account.get();
+    syncImpersonationStateAfterGet(currentUser);
     const adminStatus = await resolveAdminStatus(currentUser);
-    setUser({ ...currentUser, isAdmin: adminStatus });
+    setUser({ ...withImpersonationFields(currentUser), isAdmin: adminStatus });
     setIsAdmin(adminStatus);
     await new Promise((resolve) => setTimeout(resolve, 100));
   };
@@ -130,10 +175,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let mounted = true;
 
     const hydrateUser = async () => {
+      applyStoredImpersonationHeaders();
       const currentUser = await withTimeout(account.get(), AUTH_TIMEOUT_MS);
+      syncImpersonationStateAfterGet(currentUser);
       const adminStatus = await resolveAdminStatus(currentUser);
       if (!mounted) return;
-      setUser({ ...currentUser, isAdmin: adminStatus });
+      setUser({ ...withImpersonationFields(currentUser), isAdmin: adminStatus });
       setIsAdmin(adminStatus);
     };
 
@@ -151,6 +198,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // even "guest" function executions with 401. Keep MFA-pending sessions (same 401 type).
         if (code === 401 && !isMfaFactorsRequiredError(err)) {
           clearPagespeedSessionStorage();
+          clearImpersonationClientAndStorage();
           try {
             await account.deleteSession('current');
           } catch {
@@ -229,6 +277,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch {
         /* ignore */
       }
+      clearImpersonationClientAndStorage();
       setUser(null);
       setIsAdmin(false);
       throw err;
@@ -239,6 +288,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch {
       /* ignore */
     }
+    clearImpersonationClientAndStorage();
     setUser(null);
     setIsAdmin(false);
     const uid = token.userId;
@@ -272,7 +322,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     await account.createEmailPasswordSession(trimmedEmail, pass);
     try {
-      await account.get();
+      applyStoredImpersonationHeaders();
+      const u = await account.get();
+      syncImpersonationStateAfterGet(u);
       return { mfaPending: false };
     } catch (err: unknown) {
       if (isMfaFactorsRequiredError(err)) {
@@ -310,6 +362,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const cancelMfaLogin = async () => {
     clearPagespeedSessionStorage();
+    clearImpersonationClientAndStorage();
     try {
       await account.deleteSession('current');
     } catch {
@@ -324,10 +377,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await account.create(userId, email, pass, name);
     await account.createEmailPasswordSession(email, pass);
 
+    applyStoredImpersonationHeaders();
     const currentUser = await account.get();
+    syncImpersonationStateAfterGet(currentUser);
     const adminStatus = (currentUser.labels as string[] | undefined)?.includes('admin') || false;
 
-    setUser({ ...currentUser, isAdmin: adminStatus });
+    setUser({ ...withImpersonationFields(currentUser), isAdmin: adminStatus });
     setIsAdmin(adminStatus);
   };
 
@@ -344,16 +399,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     clearPagespeedSessionStorage();
+    clearImpersonationClientAndStorage();
     await account.deleteSession('current');
     setUser(null);
     setIsAdmin(false);
   };
 
   const refreshUser = async () => {
+    applyStoredImpersonationHeaders();
     const currentUser = await account.get();
+    syncImpersonationStateAfterGet(currentUser);
     const adminStatus = await resolveAdminStatus(currentUser);
-    setUser({ ...currentUser, isAdmin: adminStatus });
+    setUser({ ...withImpersonationFields(currentUser), isAdmin: adminStatus });
     setIsAdmin(adminStatus);
+  };
+
+  const startImpersonation = async (userId: string) => {
+    if (!isAdmin) {
+      throw new Error('Only administrators can impersonate a user.');
+    }
+    const id = userId.trim();
+    if (!id) {
+      throw new Error('Invalid user.');
+    }
+    setImpersonationTargetOnClient(id);
+    persistImpersonationUserId(id);
+    try {
+      applyStoredImpersonationHeaders();
+      const currentUser = await account.get();
+      syncImpersonationStateAfterGet(currentUser);
+      const adminStatus = await resolveAdminStatus(currentUser);
+      setUser({ ...withImpersonationFields(currentUser), isAdmin: adminStatus });
+      setIsAdmin(adminStatus);
+      await queryClient.invalidateQueries();
+    } catch (err) {
+      clearImpersonationClientAndStorage();
+      throw err;
+    }
+  };
+
+  const stopImpersonation = async () => {
+    clearImpersonationClientAndStorage();
+    applyStoredImpersonationHeaders();
+    const currentUser = await account.get();
+    syncImpersonationStateAfterGet(currentUser);
+    const adminStatus = await resolveAdminStatus(currentUser);
+    setUser({ ...withImpersonationFields(currentUser), isAdmin: adminStatus });
+    setIsAdmin(adminStatus);
+    await queryClient.invalidateQueries();
   };
 
   return (
@@ -379,6 +472,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         completePasswordRecovery,
         logout,
         refreshUser,
+        isImpersonating,
+        startImpersonation,
+        stopImpersonation,
         isLoading,
       }}
     >

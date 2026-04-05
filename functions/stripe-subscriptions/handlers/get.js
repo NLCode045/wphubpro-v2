@@ -1,21 +1,25 @@
 const sdk = require("node-appwrite");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { mergedEnv, createStripeFromReq } = require("../lib/stripeClient");
 
 module.exports = async ({ req, res, log, error }) => {
+  const env = mergedEnv(req);
+  const stripe = createStripeFromReq(req);
   const client = new sdk.Client();
   const databases = new sdk.Databases(client);
 
-  const {
-    APPWRITE_ENDPOINT,
-    APPWRITE_PROJECT_ID,
-    APPWRITE_API_KEY,
-    STRIPE_SECRET_KEY,
-    APPWRITE_DATABASE_ID,
-    APPWRITE_ACCOUNTS_COLLECTION_ID,
-  } = process.env;
+  const STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
+  const APPWRITE_ENDPOINT =
+    env.APPWRITE_ENDPOINT ||
+    env.APPWRITE_FUNCTION_ENDPOINT ||
+    env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID = env.APPWRITE_PROJECT_ID || env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    env.APPWRITE_API_KEY || env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_KEY;
+  const APPWRITE_DATABASE_ID = env.APPWRITE_DATABASE_ID;
+  const APPWRITE_ACCOUNTS_COLLECTION_ID = env.APPWRITE_ACCOUNTS_COLLECTION_ID;
 
-  const DATABASE_ID = APPWRITE_DATABASE_ID || process.env.DATABASE_ID;
-  const ACCOUNTS_COLLECTION_ID = APPWRITE_ACCOUNTS_COLLECTION_ID || process.env.ACCOUNTS_COLLECTION_ID;
+  const DATABASE_ID = APPWRITE_DATABASE_ID || env.DATABASE_ID;
+  const ACCOUNTS_COLLECTION_ID = APPWRITE_ACCOUNTS_COLLECTION_ID || env.ACCOUNTS_COLLECTION_ID;
 
   const missingVars = [];
   if (!APPWRITE_ENDPOINT) missingVars.push("APPWRITE_ENDPOINT");
@@ -33,14 +37,22 @@ module.exports = async ({ req, res, log, error }) => {
     return res.json({ error: errorMsg }, 500);
   }
 
+  if (!stripe) {
+    error("Missing STRIPE_SECRET_KEY");
+    return res.json({ error: "Missing STRIPE_SECRET_KEY" }, 500);
+  }
+
   client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
 
   try {
     // Get user ID from environment (set by Appwrite when called from authenticated context)
-    let userId = process.env.APPWRITE_FUNCTION_USER_ID || req.headers["x-appwrite-user-id"];
+    let userId =
+      env.APPWRITE_FUNCTION_USER_ID ||
+      req.headers?.["x-appwrite-user-id"] ||
+      req.headers?.["X-Appwrite-User-Id"];
 
-    log("User ID from env: " + process.env.APPWRITE_FUNCTION_USER_ID);
-    log("User ID from headers: " + req.headers["x-appwrite-user-id"]);
+    log("User ID from env: " + env.APPWRITE_FUNCTION_USER_ID);
+    log("User ID from headers: " + (req.headers?.["x-appwrite-user-id"] || ""));
     log("Final userId: " + userId);
 
     if (!userId) {
@@ -83,7 +95,7 @@ module.exports = async ({ req, res, log, error }) => {
     try {
       const settingsDocs = await databases.listDocuments(
         DATABASE_ID,
-        process.env.SETTINGS_COLLECTION_ID || "platform_settings",
+        env.SETTINGS_COLLECTION_ID || "platform_settings",
         [sdk.Query.equal("key", "stripe_signup_plan"), sdk.Query.limit(1)]
       );
       if (settingsDocs.documents?.length > 0 && settingsDocs.documents[0].value) {

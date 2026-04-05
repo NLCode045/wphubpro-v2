@@ -25,7 +25,7 @@ const FinanceSubscriptionDetailPage = () => {
   const navigate = useNavigate()
   const { showNotification } = useNotificationContext()
   const { data, isLoading, error, refetch } = useAdminSubscriptionDetails(subscriptionId)
-  const { data: plans } = useAdminStripePlansList()
+  const { data: plansList } = useAdminStripePlansList()
 
   const [newPriceId, setNewPriceId] = useState('')
 
@@ -37,10 +37,11 @@ const FinanceSubscriptionDetailPage = () => {
 
   const priceOptions = useMemo(() => {
     const pid = data?.plan?.product_id
+    const plans = plansList?.plans
     if (!pid || !plans) return []
     const p = plans.find((x) => x.id === pid)
     return p?.allPrices ?? []
-  }, [data?.plan?.product_id, plans])
+  }, [data?.plan?.product_id, plansList?.plans])
 
   const notifyOk = (title: string, message: string) =>
     showNotification({ title, message, variant: 'success', delay: 3000 })

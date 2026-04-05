@@ -1,15 +1,24 @@
 
 
+import { useDashboardNav } from '@/context/DashboardNavContext'
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { useLayoutContext } from '@/context/useLayoutContext'
 import { scrollToElement } from '@/helpers/layout'
-import { useDashboardNav } from '@/context/DashboardNavContext'
-import { useAuth } from '@/domains/auth'
 import { adminMenuItems, menuItems } from '@/layouts/components/data'
 import type { MenuItemType } from '@/types/layout'
-import {Link, useLocation} from "react-router";
+import { ROUTE_PATHS } from '@/config/routePaths'
+import { Link, useLocation } from 'react-router'
 import { useEffect, useState } from 'react'
 import { Collapse } from 'react-bootstrap'
 import { TbChevronDown } from 'react-icons/tb'
+
+/** Active when exact match or on a nested path (e.g. finance subscription detail). `/admin` stays exact-only. */
+function menuPathActive(url: string | undefined, pathname: string): boolean {
+  if (!url) return false
+  if (pathname === url) return true
+  if (url === ROUTE_PATHS.ADMIN_DASHBOARD) return false
+  return pathname.startsWith(`${url}/`)
+}
 
 const MenuItemWithChildren = ({
   item,
@@ -29,7 +38,9 @@ const MenuItemWithChildren = ({
   const [didAutoOpen, setDidAutoOpen] = useState(false)
 
   const isChildActive = (children: MenuItemType[]): boolean =>
-    children.some((child) => (child.url && pathname.endsWith(child.url)) || (child.children && isChildActive(child.children)))
+    children.some(
+      (child) => (child.url && menuPathActive(child.url, pathname)) || (child.children && isChildActive(child.children)),
+    )
 
   const isActive = isChildActive(item.children || [])
 
@@ -87,8 +98,8 @@ const MenuItemWithChildren = ({
 }
 
 const MenuItem = ({ item }: { item: MenuItemType }) => {
-  const {pathname} = useLocation()
-  const isActive = item.url && pathname.endsWith(item.url)
+  const { pathname } = useLocation()
+  const isActive = item.url ? menuPathActive(item.url, pathname) : false
 
   const { sidenav, hideBackdrop } = useLayoutContext()
 
@@ -117,12 +128,10 @@ const MenuItem = ({ item }: { item: MenuItemType }) => {
 }
 
 const AppMenu = () => {
-  const { isAdmin } = useAuth()
   const { pathname } = useLocation()
   const { mode } = useDashboardNav()
-  const onAdminRoute = pathname.startsWith('/admin')
-  const items =
-    isAdmin && (mode === 'admin' || onAdminRoute) ? adminMenuItems : menuItems
+  const effectiveAdmin = useEffectiveIsAdmin()
+  const items = effectiveAdmin ? adminMenuItems : menuItems
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null)
 
   const scrollToActiveLink = () => {
@@ -138,7 +147,7 @@ const AppMenu = () => {
 
   useEffect(() => {
     setTimeout(() => scrollToActiveLink(), 100)
-  }, [mode])
+  }, [mode, pathname])
 
   return (
     <ul className="side-nav">

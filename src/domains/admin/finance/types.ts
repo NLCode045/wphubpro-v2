@@ -53,6 +53,64 @@ export type AdminPaymentIntentRow = {
   } | null
 }
 
+export type FinanceDashboardPeriod = 'day' | 'week' | 'month' | 'year'
+
+export type AdminFinanceDashboardResponse = {
+  success: boolean
+  period: FinanceDashboardPeriod
+  rangeLabel: string
+  windowStart: number
+  windowEnd: number
+  recentPaidInvoices: Array<{
+    id: string
+    number: string | null
+    amount_paid: number
+    currency: string
+    created: number
+    customerId: string | null
+    customerDisplayName: string
+    subscriptionId: string | null
+  }>
+  recentSubscriptionChanges: Array<{
+    id: string
+    created: number
+    subscriptionId: string
+    customerId: string | null
+    userDisplayName: string
+    planName: string
+    amountCents: number
+    currency: string
+    action: string
+  }>
+  stats: {
+    buckets: Array<{
+      label: string
+      start: number
+      end: number
+      revenueCents: number
+      newSubscriptions: number
+      cancellations: number
+      upgrades: number
+      downgrades: number
+      cumulativeNetSubscriptions: number
+    }>
+    kpis: {
+      activeSubscriptionsNow: number
+      newInPeriod: number
+      canceledInPeriod: number
+      revenueInPeriodCents: number
+      revenueAllTimeCents: number
+      revenueAllTimeTruncated: boolean
+      upgradesInPeriod: number
+      downgradesInPeriod: number
+    }
+    byPlan: Array<{ productId: string; name: string; count: number }>
+    truncated?: boolean
+    upgradeDowngradeNote?: string
+    rangeLabel?: string
+  }
+}
+
 export type AdminPaymentIntentDetail = {
   success: boolean
   paymentIntent: {

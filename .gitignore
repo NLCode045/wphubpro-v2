@@ -4,6 +4,7 @@ node_modules
 .env
 .env.local
 .env.*.local
+.env.migration
 functions/.env
 functions/.env.local
 !*.env.example

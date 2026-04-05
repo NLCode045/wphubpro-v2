@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router'
 /** Placeholder until the full admin dashboard is implemented. */
 const AdminDashboardPage = () => {
   const { isAdmin } = useAuth()
-  const { setMode } = useDashboardNav()
+  const { mode } = useDashboardNav()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -17,10 +17,12 @@ const AdminDashboardPage = () => {
       navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
       return
     }
-    setMode('admin')
-  }, [isAdmin, navigate, setMode])
+    if (mode !== 'admin') {
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+    }
+  }, [isAdmin, mode, navigate])
 
-  if (!isAdmin) {
+  if (!isAdmin || mode !== 'admin') {
     return null
   }
 

@@ -1,14 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useAuth } from '@/domains/auth'
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { executeFunction } from '@/integrations/appwrite/executeFunction'
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite'
-import type { StripePlan } from '@/types'
+import type { StripePlan, SubscriptionDetailsResponse } from '@/types'
 import type {
+  AdminFinanceDashboardResponse,
   AdminFinanceSummary,
   AdminPaymentIntentDetail,
   AdminPaymentIntentRow,
   AdminSubscriptionRow,
-  SubscriptionDetailsResponse,
+  FinanceDashboardPeriod,
 } from './types'
 
 const SUBS_FN = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS
@@ -16,8 +17,7 @@ const PRODUCTS_FN = APPWRITE_FUNCTION_IDS.STRIPE_PRODUCTS
 const INVOICES_FN = APPWRITE_FUNCTION_IDS.STRIPE_INVOICES
 
 export function useFinanceAdminEnabled() {
-  const { isAdmin } = useAuth()
-  return Boolean(isAdmin)
+  return useEffectiveIsAdmin()
 }
 
 export function useFinanceSummary() {
@@ -29,6 +29,29 @@ export function useFinanceSummary() {
         action: 'admin-finance-summary',
       })
       if (!res?.success) throw new Error((res as { error?: string })?.error || 'Summary failed')
+      return res
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useFinanceDashboard(period: FinanceDashboardPeriod) {
+  const enabled = useFinanceAdminEnabled()
+  return useQuery<AdminFinanceDashboardResponse, Error>({
+    queryKey: ['admin', 'finance', 'dashboard', period],
+    queryFn: async () => {
+      // Do not use longRunning: async executions often return no responseBody on Appwrite when polling,
+      // so `success` is missing and the UI shows "Dashboard failed". Sync execution waits for the full
+      // response (function timeout is 180s in appwrite.config.json).
+      const res = await executeFunction<AdminFinanceDashboardResponse>(SUBS_FN, {
+        action: 'admin-finance-dashboard',
+        period,
+      })
+      if (!res?.success) {
+        const msg = (res as { error?: string } | null)?.error
+        throw new Error(msg || 'Dashboard failed')
+      }
       return res
     },
     enabled,
@@ -86,18 +109,30 @@ export function useAdminSubscriptionDetails(subscriptionId: string | undefined) 
   })
 }
 
+export type AdminStripePlansListData = {
+  plans: StripePlan[]
+  subscriptionCountsTruncated: boolean
+}
+
 export function useAdminStripePlansList() {
   const enabled = useFinanceAdminEnabled()
-  return useQuery<StripePlan[], Error>({
+  return useQuery<AdminStripePlansListData, Error>({
     queryKey: ['admin', 'finance', 'plans'],
     queryFn: async () => {
-      const res = await executeFunction<{ plans?: StripePlan[] }>(PRODUCTS_FN, {
+      const res = await executeFunction<{
+        plans?: StripePlan[]
+        subscriptionCountsTruncated?: boolean
+      }>(PRODUCTS_FN, {
         action: 'list',
         active_only: false,
         exclude_hidden: false,
         exclude_non_sellable: false,
+        include_active_subscription_counts: true,
       })
-      return res.plans ?? []
+      return {
+        plans: res.plans ?? [],
+        subscriptionCountsTruncated: res.subscriptionCountsTruncated === true,
+      }
     },
     enabled,
     staleTime: 120_000,
@@ -267,6 +302,49 @@ export function useAdminSetPriceActive() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'finance', 'plans'] })
       void qc.invalidateQueries({ queryKey: ['admin', 'finance', 'plan'] })
+    },
+  })
+}
+
+export type AdminDeletePlanResponse = {
+  success: boolean
+  mode?: 'deleted' | 'archived' | 'retired'
+  message?: string
+  migratedCount?: number
+  failedMigrations?: { subscriptionId: string; error: string }[]
+  subscriptionCount?: number
+  remainingCount?: number
+}
+
+export function useAdminDeletePlan() {
+  const qc = useQueryClient()
+  return useMutation<
+    AdminDeletePlanResponse,
+    Error,
+    {
+      productId: string
+      migrateSubscribers: boolean
+      targetPriceId?: string
+      proration_behavior?: 'always_invoice' | 'none'
+    }
+  >({
+    mutationFn: async (body) => {
+      const res = await executeFunction<AdminDeletePlanResponse>(
+        PRODUCTS_FN,
+        {
+          action: 'delete-plan',
+          productId: body.productId,
+          migrateSubscribers: body.migrateSubscribers,
+          targetPriceId: body.targetPriceId,
+          proration_behavior: body.proration_behavior,
+        },
+        { longRunning: true, maxAsyncWaitMs: 180_000 },
+      )
+      if (!res?.success) throw new Error(res?.message || 'Delete plan failed')
+      return res
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'finance'] })
     },
   })
 }

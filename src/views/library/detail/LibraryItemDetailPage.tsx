@@ -1,4 +1,5 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { ContactSupportButton } from '@/components/support/ContactSupportButton';
 import { TabNavLabel } from '@/components/TabNavLabel';
 import { ROUTE_PATHS } from '@/config/routePaths';
 import {
@@ -498,10 +499,20 @@ const LibraryItemDetailPage = () => {
     <Container fluid>
       <PageBreadcrumb title={displayName} subtitle="Library" />
 
-      <div className="mb-3">
+      <div className="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
         <Link to={ROUTE_PATHS.LIBRARY} className="btn btn-link p-0 text-decoration-none">
           ← Back to library
         </Link>
+        {itemKind && slug ? (
+          <ContactSupportButton
+            category="library"
+            context={{
+              libraryItemKind: itemKind,
+              libraryItemSlug: slug,
+              sourceLabel: `Library: ${displayName}`,
+            }}
+          />
+        ) : null}
       </div>
 
       <Row className="justify-content-center">

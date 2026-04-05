@@ -1,5 +1,5 @@
 const sdk = require("node-appwrite");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const StripeLib = require("stripe");
 
 /**
  * After subscription create/update, return Payment Element payload when user must confirm.
@@ -50,21 +50,27 @@ async function buildPaymentFromSubscriptionId(stripeClient, subscriptionId) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
+  const env = {
+    ...process.env,
+    ...(req?.variables && typeof req.variables === "object" ? req.variables : {}),
+  };
   const client = new sdk.Client();
   const databases = new sdk.Databases(client);
 
-  const {
-    APPWRITE_ENDPOINT,
-    APPWRITE_PROJECT_ID,
-    APPWRITE_API_KEY,
-    STRIPE_SECRET_KEY,
-    DATABASE_ID: DATABASE_ID_RAW,
-    ACCOUNTS_COLLECTION_ID: ACCOUNTS_COLLECTION_ID_RAW,
-  } = process.env;
+  const STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
+  const APPWRITE_ENDPOINT =
+    env.APPWRITE_ENDPOINT ||
+    env.APPWRITE_FUNCTION_ENDPOINT ||
+    env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID = env.APPWRITE_PROJECT_ID || env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    env.APPWRITE_API_KEY || env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_KEY;
+  const DATABASE_ID_RAW = env.DATABASE_ID;
+  const ACCOUNTS_COLLECTION_ID_RAW = env.ACCOUNTS_COLLECTION_ID;
 
-  const DATABASE_ID = DATABASE_ID_RAW || process.env.APPWRITE_DATABASE_ID || "platform_db";
+  const DATABASE_ID = DATABASE_ID_RAW || env.APPWRITE_DATABASE_ID || "platform_db";
   const ACCOUNTS_COLLECTION_ID =
-    ACCOUNTS_COLLECTION_ID_RAW || process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || "accounts";
+    ACCOUNTS_COLLECTION_ID_RAW || env.APPWRITE_ACCOUNTS_COLLECTION_ID || "accounts";
 
   const missingVars = [];
   if (!APPWRITE_ENDPOINT) missingVars.push("APPWRITE_ENDPOINT");
@@ -79,6 +85,8 @@ module.exports = async ({ req, res, log, error }) => {
     error(errorMsg);
     return res.json({ error: errorMsg }, 500);
   }
+
+  const stripe = new StripeLib(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
 
   client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
 
@@ -97,7 +105,10 @@ module.exports = async ({ req, res, log, error }) => {
 
     log("Parsed payload: " + JSON.stringify(payload));
 
-    let userId = process.env.APPWRITE_FUNCTION_USER_ID || req.headers["x-appwrite-user-id"];
+    let userId =
+      env.APPWRITE_FUNCTION_USER_ID ||
+      req.headers?.["x-appwrite-user-id"] ||
+      req.headers?.["X-Appwrite-User-Id"];
 
     if (!userId) {
       error("No user ID found. User must be authenticated.");
@@ -113,10 +124,17 @@ module.exports = async ({ req, res, log, error }) => {
     const user = { $id: userId };
     log("Processing checkout for user: " + user.$id);
 
-    const { priceId, returnUrl, updateType } = payload;
+    const { priceId, returnUrl, updateType, paymentMethodId } = payload;
     if (!priceId) {
       error("Missing priceId in request payload");
       return res.json({ error: "priceId is required" }, 400);
+    }
+
+    async function assertPaymentMethodBelongsToCustomer(pmId) {
+      const pm = await stripe.paymentMethods.retrieve(pmId);
+      if (pm.customer !== stripeCustomerId) {
+        throw new Error("Payment method does not belong to this customer");
+      }
     }
 
     if (returnUrl) {
@@ -140,6 +158,18 @@ module.exports = async ({ req, res, log, error }) => {
     }
 
     log("Found Stripe customer: " + stripeCustomerId);
+
+    if (paymentMethodId) {
+      try {
+        await assertPaymentMethodBelongsToCustomer(paymentMethodId);
+      } catch (pmErr) {
+        error("Invalid paymentMethodId: " + (pmErr.message || pmErr));
+        return res.json(
+          { error: pmErr.message || "Invalid payment method", code: "invalid_payment_method" },
+          400
+        );
+      }
+    }
 
     const subscriptionsList = await stripe.subscriptions.list({
       customer: stripeCustomerId,
@@ -259,7 +289,7 @@ module.exports = async ({ req, res, log, error }) => {
         }
 
         log("Processing upgrade (immediate with proration)...");
-        updated = await stripe.subscriptions.update(activeSubscription.id, {
+        const upgradeParams = {
           proration_behavior: "always_invoice",
           items: [
             {
@@ -272,7 +302,11 @@ module.exports = async ({ req, res, log, error }) => {
             product_label: productLabel,
             appwrite_user_id: user.$id,
           }),
-        });
+        };
+        if (paymentMethodId) {
+          upgradeParams.default_payment_method = paymentMethodId;
+        }
+        updated = await stripe.subscriptions.update(activeSubscription.id, upgradeParams);
         log("Subscription updated in-place: " + updated.id);
 
         const { payment } = await buildPaymentFromSubscriptionId(stripe, updated.id);
@@ -296,7 +330,7 @@ module.exports = async ({ req, res, log, error }) => {
     }
 
     log("No active subscription — creating subscription (in-app payment flow)...");
-    const created = await stripe.subscriptions.create({
+    const createParams = {
       customer: stripeCustomerId,
       items: [{ price: priceId, quantity: 1 }],
       payment_behavior: "default_incomplete",
@@ -306,7 +340,11 @@ module.exports = async ({ req, res, log, error }) => {
         appwrite_user_id: user.$id,
         product_label: productLabel,
       },
-    });
+    };
+    if (paymentMethodId) {
+      createParams.default_payment_method = paymentMethodId;
+    }
+    const created = await stripe.subscriptions.create(createParams);
 
     const { payment } = await buildPaymentFromSubscriptionId(stripe, created.id);
 

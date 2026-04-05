@@ -1,6 +1,11 @@
 const sdk = require("node-appwrite");
 const stripe = require("stripe");
 const handleList = require("./handlers/list");
+const handleGetDetail = require("./handlers/get-detail");
+const handleSendPasswordRecovery = require("./handlers/send-password-recovery");
+const handleDeleteUser = require("./handlers/delete-user");
+const handleUpdateAccount = require("./handlers/update-account");
+const handleEnsureStripeCustomer = require("./handlers/ensure-stripe-customer");
 
 function createClient(sdkLib, { endpoint, projectId, apiKey }) {
   const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
@@ -25,9 +30,14 @@ function parsePayload(req) {
 
 module.exports = async ({ req, res, log, error }) => {
   try {
-    const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT;
-    const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-    const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
+    const env = {
+      ...process.env,
+      ...(req?.variables && typeof req.variables === "object" ? req.variables : {}),
+    };
+    const endpoint =
+      env.APPWRITE_ENDPOINT || env.APPWRITE_FUNCTION_ENDPOINT || env.APPWRITE_FUNCTION_API_ENDPOINT;
+    const projectId = env.APPWRITE_PROJECT_ID || env.APPWRITE_FUNCTION_PROJECT_ID;
+    const apiKey = env.APPWRITE_API_KEY || env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_KEY;
 
     if (!endpoint || !projectId || !apiKey) {
       error("Appwrite configuration missing");
@@ -46,12 +56,22 @@ module.exports = async ({ req, res, log, error }) => {
       "login-as": "login-as",
       loginas: "login-as",
       impersonate: "login-as",
+      "get-detail": "get-detail",
+      getdetail: "get-detail",
+      "send-password-recovery": "send-password-recovery",
+      "password-recovery": "send-password-recovery",
+      "delete-user": "delete-user",
+      deleteuser: "delete-user",
+      "update-account": "update-account",
+      updateaccount: "update-account",
+      "ensure-stripe-customer": "ensure-stripe-customer",
+      ensurestripecustomer: "ensure-stripe-customer",
     };
     const action = actionMap[actionRaw] || actionRaw;
 
     const client = createClient(sdk, { endpoint, projectId, apiKey });
     const databases = new sdk.Databases(client);
-    const stripeInstance = process.env.STRIPE_SECRET_KEY ? stripe(process.env.STRIPE_SECRET_KEY) : null;
+    const stripeInstance = env.STRIPE_SECRET_KEY ? stripe(env.STRIPE_SECRET_KEY) : null;
 
     const ctx = {
       client,
@@ -71,10 +91,29 @@ module.exports = async ({ req, res, log, error }) => {
     if (action === "login-as") {
       return await handleLoginAs({ req, res, log, error }, ctx);
     }
+    if (action === "get-detail") {
+      return await handleGetDetail({ req, res, log, error }, ctx);
+    }
+    if (action === "send-password-recovery") {
+      return await handleSendPasswordRecovery({ req, res, log, error }, ctx);
+    }
+    if (action === "delete-user") {
+      return await handleDeleteUser({ req, res, log, error }, ctx);
+    }
+    if (action === "update-account") {
+      return await handleUpdateAccount({ req, res, log, error }, ctx);
+    }
+    if (action === "ensure-stripe-customer") {
+      return await handleEnsureStripeCustomer({ req, res, log, error }, ctx);
+    }
 
     return res.json(
-      { success: false, message: 'Invalid or missing action. Use action: "list", "update", or "login-as".' },
-      400
+      {
+        success: false,
+        message:
+          'Invalid or missing action. Use: "list", "update", "login-as", "get-detail", "send-password-recovery", "delete-user", "update-account", "ensure-stripe-customer".',
+      },
+      400,
     );
   } catch (err) {
     error(`admin-manage-users failed: ${err.message}`);

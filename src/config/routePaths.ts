@@ -21,6 +21,8 @@ export const ROUTE_PATHS = {
   /** Admin area default route (full admin UI to be implemented later). */
   ADMIN_DASHBOARD: '/admin',
   ADMIN_USERS: '/admin/users',
+  /** Path pattern: `/admin/users/:userId` */
+  adminUserPath: (userId: string) => `/admin/users/${encodeURIComponent(userId)}`,
   ADMIN_SETTINGS: '/admin/settings',
   ADMIN_FINANCE: '/admin/finance',
   ADMIN_FINANCE_DASHBOARD: '/admin/finance/dashboard',
@@ -33,4 +35,10 @@ export const ROUTE_PATHS = {
     `/admin/finance/plans/${encodeURIComponent(productId)}`,
   adminFinancePaymentPath: (paymentIntentId: string) =>
     `/admin/finance/payments/${encodeURIComponent(paymentIntentId)}`,
+  /** Member support hub */
+  SUPPORT: '/support',
+  SUPPORT_NEW: '/support/new',
+  supportTicketPath: (ticketId: string) => `/support/${encodeURIComponent(ticketId)}`,
+  /** Admin: all support tickets */
+  ADMIN_SUPPORT: '/admin/support',
 } as const;

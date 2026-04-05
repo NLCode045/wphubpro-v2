@@ -25,7 +25,9 @@ out/
 .vercel
 .env*.local
 
-.cursor
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**
 .cursorignore
 .cursor/agents/
 .cursor/rules/

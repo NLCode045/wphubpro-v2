@@ -1,9 +1,11 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
 import { ContactSupportButton } from '@/components/support/ContactSupportButton';
 import { TabNavLabel } from '@/components/TabNavLabel';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import { useFetchSiteMetaIfNeeded, useSite, useRequestSiteHealthRefresh, useSitesStatusPoll } from '@/domains/sites';
 import { hasUpdate, parsePluginsMeta, parseThemesMeta } from '@/domains/sites/installedMeta';
+import type { DocsHelpContextKey } from '@/domains/docs/docsHelpMap'
 import type { Site, WordPressPlugin, WordPressTheme } from '@/types';
 import ViewModeToggle, { type LibraryViewMode } from '@/views/library/components/ViewModeToggle';
 import SiteDetailSidebarCard from '@/views/sites/detail/SiteDetailSidebarCard';
@@ -25,6 +27,15 @@ function indexFromTabKey(k: string | null): number {
   if (!k) return 0;
   const idx = TAB_KEYS.indexOf(k as TabKey);
   return idx >= 0 ? idx : 0;
+}
+
+function siteDetailHelpContext(tabIndex: number): DocsHelpContextKey {
+  const key = TAB_KEYS[tabIndex] ?? 'overview';
+  if (key === 'overview') return 'sites:detail:overview';
+  if (key === 'plugins') return 'sites:detail:plugins';
+  if (key === 'themes') return 'sites:detail:themes';
+  if (key === 'health') return 'sites:detail:health';
+  return 'sites:detail:logs';
 }
 
 function formatAvailableUpdate(update: string | { new_version?: string } | null | undefined): string {
@@ -240,7 +251,7 @@ const SiteDetailPage = () => {
   if (isLoading) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Site" subtitle="Sites" />
+        <PageBreadcrumb title="Site" subtitle="Sites" titleEnd={<DocHelpButton contextKey="sites" />} />
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" role="status" variant="primary">
             <span className="visually-hidden">Loading…</span>
@@ -253,7 +264,7 @@ const SiteDetailPage = () => {
   if (isError || !site) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Site" subtitle="Sites" />
+        <PageBreadcrumb title="Site" subtitle="Sites" titleEnd={<DocHelpButton contextKey="sites" />} />
         <Card className="mt-3">
           <CardBody className="text-center py-5">
             <p className="text-danger mb-2">{error?.message ?? 'Site not found.'}</p>
@@ -270,7 +281,11 @@ const SiteDetailPage = () => {
 
   return (
     <Container fluid>
-      <PageBreadcrumb title={title} subtitle="Sites" />
+      <PageBreadcrumb
+        title={title}
+        subtitle="Sites"
+        titleEnd={<DocHelpButton contextKey={siteDetailHelpContext(tab)} />}
+      />
 
       <Row className="justify-content-center">
         <Col xxl={12}>

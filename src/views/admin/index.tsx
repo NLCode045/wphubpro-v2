@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton'
 import PageMetaData from '@/components/PageMetaData'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useDashboardNav } from '@/context/DashboardNavContext'
@@ -33,7 +34,12 @@ const AdminDashboardPage = () => {
         <Col>
           <Card>
             <Card.Body>
-              <Card.Title as="h4">Admin dashboard</Card.Title>
+              <div className="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
+                <Card.Title as="h4" className="mb-0">
+                  Admin dashboard
+                </Card.Title>
+                <DocHelpButton contextKey="admin:dashboard" />
+              </div>
               <Card.Text className="text-muted mb-3">
                 This area is for admin team members. Use the sidebar to open Users, Platform settings, or Finance.
               </Card.Text>

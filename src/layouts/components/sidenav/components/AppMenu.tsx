@@ -17,6 +17,7 @@ function menuPathActive(url: string | undefined, pathname: string): boolean {
   if (!url) return false
   if (pathname === url) return true
   if (url === ROUTE_PATHS.ADMIN_DASHBOARD) return false
+  if (url === ROUTE_PATHS.DOCS) return pathname.startsWith(`${ROUTE_PATHS.DOCS}/`) || pathname === ROUTE_PATHS.DOCS
   return pathname.startsWith(`${url}/`)
 }
 

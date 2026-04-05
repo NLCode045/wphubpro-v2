@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton'
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx'
 import { buildLibraryDashboardRows } from '@/domains/library'
 import { useFetchSiteMetaIfNeeded, useSites, useSitesStatusPoll } from '@/domains/sites'
@@ -83,7 +84,7 @@ const DashboardPage = () => {
 
   return (
     <Container fluid>
-      <PageBreadcrumb title="Dashboard" />
+      <PageBreadcrumb title="Dashboard" titleEnd={<DocHelpButton contextKey="dashboard" />} />
 
       {sitesLoading ? (
         <div className="d-flex justify-content-center py-5">

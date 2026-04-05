@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { ROUTE_PATHS } from '@/config/routePaths';
 import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin';
@@ -266,7 +267,7 @@ export default function SupportTicketDetailPage() {
   if (q.isLoading) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Ticket" subtitle="Support" />
+        <PageBreadcrumb title="Ticket" subtitle="Support" titleEnd={<DocHelpButton contextKey="support:ticket" />} />
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
@@ -277,7 +278,7 @@ export default function SupportTicketDetailPage() {
   if (q.isError || !ticket) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Ticket" subtitle="Support" />
+        <PageBreadcrumb title="Ticket" subtitle="Support" titleEnd={<DocHelpButton contextKey="support:ticket" />} />
         <Card className="mt-3">
           <CardBody>Could not load this ticket.</CardBody>
         </Card>
@@ -291,7 +292,7 @@ export default function SupportTicketDetailPage() {
   return (
     <>
       <Container fluid>
-        <PageBreadcrumb title={ticket.subject} subtitle="Support" />
+        <PageBreadcrumb title={ticket.subject} subtitle="Support" titleEnd={<DocHelpButton contextKey="support:ticket" />} />
         <Row>
           <Col xxl={8}>
             <Card className="mb-3">

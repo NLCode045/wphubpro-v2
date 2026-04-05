@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import {
   buildCategoryPathById,
   buildLibraryDashboardRows,
@@ -352,6 +353,7 @@ const LibraryPage = () => {
                 }
               />
             </div>
+            <DocHelpButton contextKey="library" className="flex-shrink-0" />
           </CardHeader>
 
           <SimpleBar className="card-body pt-0" style={{ minHeight: '420px' }} data-simplebar-md>

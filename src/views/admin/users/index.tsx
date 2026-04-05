@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
 import PageMetaData from '@/components/PageMetaData';
 import { ROUTE_PATHS } from '@/config/routePaths';
@@ -127,7 +128,11 @@ const AdminUsersOverviewPage = () => {
     <>
       <PageMetaData title="Users · Admin" />
       <Container fluid>
-        <PageBreadcrumb title="Users" subtitle="Admin · accounts overview" />
+        <PageBreadcrumb
+          title="Users"
+          subtitle="Admin · members overview"
+          titleEnd={<DocHelpButton contextKey="admin:users" />}
+        />
 
         <EditAdminUserModal
           user={editUser}

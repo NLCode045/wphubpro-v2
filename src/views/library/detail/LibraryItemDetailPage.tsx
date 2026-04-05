@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { ContactSupportButton } from '@/components/support/ContactSupportButton';
 import { TabNavLabel } from '@/components/TabNavLabel';
@@ -449,7 +450,7 @@ const LibraryItemDetailPage = () => {
   if (!itemKind || !slug) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Library item" subtitle="Library" />
+        <PageBreadcrumb title="Library item" subtitle="Library" titleEnd={<DocHelpButton contextKey="library:item" />} />
         <Card className="mt-3">
           <CardBody className="text-center py-5">
             <p className="text-danger mb-2">Invalid item link.</p>
@@ -465,7 +466,7 @@ const LibraryItemDetailPage = () => {
   if (itemsLoading) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Library item" subtitle="Library" />
+        <PageBreadcrumb title="Library item" subtitle="Library" titleEnd={<DocHelpButton contextKey="library:item" />} />
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" role="status" variant="primary">
             <span className="visually-hidden">Loading…</span>
@@ -478,7 +479,7 @@ const LibraryItemDetailPage = () => {
   if (itemsError || groupItems.length === 0) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Library item" subtitle="Library" />
+        <PageBreadcrumb title="Library item" subtitle="Library" titleEnd={<DocHelpButton contextKey="library:item" />} />
         <Card className="mt-3">
           <CardBody className="text-center py-5">
             <p className="text-danger mb-2">
@@ -497,7 +498,7 @@ const LibraryItemDetailPage = () => {
 
   return (
     <Container fluid>
-      <PageBreadcrumb title={displayName} subtitle="Library" />
+      <PageBreadcrumb title={displayName} subtitle="Library" titleEnd={<DocHelpButton contextKey="library:item" />} />
 
       <div className="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
         <Link to={ROUTE_PATHS.LIBRARY} className="btn btn-link p-0 text-decoration-none">

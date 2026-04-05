@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import type { SupportTicketCreateLocationState } from '@/config/supportTicketNavigation';
 import { ROUTE_PATHS } from '@/config/routePaths';
@@ -91,7 +92,7 @@ export default function SupportTicketCreatePage() {
   return (
     <>
       <Container fluid>
-        <PageBreadcrumb title="New ticket" subtitle="Support" />
+        <PageBreadcrumb title="New ticket" subtitle="Support" titleEnd={<DocHelpButton contextKey="support:new" />} />
         <Row className="justify-content-center">
           <Col xxl={10}>
             <Card>

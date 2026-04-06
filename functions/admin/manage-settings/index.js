@@ -37,6 +37,18 @@ function parseStoredValue(str) {
   }
 }
 
+function callerUserIdFromReq(req) {
+  const fromEnv = process.env.APPWRITE_FUNCTION_USER_ID;
+  if (fromEnv && String(fromEnv).trim()) return String(fromEnv).trim();
+  const h = req.headers || {};
+  const v =
+    h["x-appwrite-user-id"] ||
+    h["X-Appwrite-User-Id"] ||
+    h["x-appwrite-function-user-id"] ||
+    h["X-Appwrite-Function-User-Id"];
+  return v ? String(v).trim() : "";
+}
+
 async function userIsAdmin(users, teams, userId, log) {
   try {
     const adminTeamId = "admin";
@@ -81,19 +93,28 @@ module.exports = async ({ req, res, log, error }) => {
   const actionRaw = String(payload.action || "")
     .toLowerCase()
     .trim();
-  const { category, settings, userId } = payload;
+  const { category, settings, userId: bodyUserId } = payload;
 
-  if (!userId) {
+  const actorUserId = callerUserIdFromReq(req);
+  if (!actorUserId) {
+    return fail(res, "Unauthorized: could not resolve caller user", 401);
+  }
+
+  if (!bodyUserId) {
     error("Missing userId in request body");
     return fail(res, "Missing userId in request body", 400);
   }
 
+  if (String(bodyUserId) !== actorUserId) {
+    return fail(res, "userId must match the authenticated session user", 400);
+  }
+
   try {
-    const isAdmin = await userIsAdmin(users, teams, userId, log);
-    log("User admin check for " + userId + ": " + isAdmin);
+    const isAdmin = await userIsAdmin(users, teams, actorUserId, log);
+    log("User admin check for " + actorUserId + ": " + isAdmin);
 
     if (!isAdmin) {
-      log("User " + userId + " is not an admin");
+      log("User " + actorUserId + " is not an admin");
       return fail(res, "Forbidden: Admin access required", 403);
     }
 

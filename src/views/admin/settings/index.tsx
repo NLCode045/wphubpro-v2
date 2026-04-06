@@ -142,14 +142,12 @@ function boolFromAuthRecord(v: Record<string, string>, key: string, defaultVal: 
 }
 
 const AdminPlatformSettingsPage = () => {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin } = useAuth();
   const { mode } = useDashboardNav();
   const navigate = useNavigate();
   const { showNotification } = useNotificationContext();
-  const userId = user?.$id;
-
-  const { data: items = [], isLoading, isError, error, refetch } = usePlatformSettingsList(userId);
-  const upsert = usePlatformSettingsUpsert(userId);
+  const { data: items = [], isLoading, isError, error, refetch } = usePlatformSettingsList();
+  const upsert = usePlatformSettingsUpsert();
   const {
     data: stripePlans = [],
     isLoading: plansLoading,
@@ -637,7 +635,7 @@ const AdminPlatformSettingsPage = () => {
               </Tab.Pane>
 
               <Tab.Pane eventKey="providers">
-                {userId ? <VaultProvidersTab userId={userId} /> : null}
+                <VaultProvidersTab />
               </Tab.Pane>
             </Tab.Content>
           </Tab.Container>

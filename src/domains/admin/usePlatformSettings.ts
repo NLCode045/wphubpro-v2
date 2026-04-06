@@ -1,3 +1,4 @@
+import { useAuth } from '@/domains/auth';
 import { executeFunction } from '@/integrations/appwrite/executeFunction';
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,20 +12,23 @@ async function fetchPlatformSettings(userId: string): Promise<PlatformSettingIte
   const res = await executeFunction<{ success?: boolean; items?: PlatformSettingItem[] }>(
     APPWRITE_FUNCTION_IDS.MANAGE_SETTINGS,
     { action: 'list', userId },
+    { omitImpersonationHeaders: true },
   );
   return Array.isArray(res?.items) ? res.items : [];
 }
 
-export function usePlatformSettingsList(userId: string | undefined) {
+export function usePlatformSettingsList() {
+  const { privilegedActorUserId } = useAuth();
   return useQuery({
-    queryKey: ['admin', 'platform-settings', userId],
-    queryFn: () => fetchPlatformSettings(userId as string),
-    enabled: typeof userId === 'string' && userId.length > 0,
+    queryKey: ['admin', 'platform-settings', privilegedActorUserId],
+    queryFn: () => fetchPlatformSettings(privilegedActorUserId as string),
+    enabled: typeof privilegedActorUserId === 'string' && privilegedActorUserId.length > 0,
   });
 }
 
-export function usePlatformSettingsUpsert(userId: string | undefined) {
+export function usePlatformSettingsUpsert() {
   const queryClient = useQueryClient();
+  const { privilegedActorUserId } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -34,10 +38,14 @@ export function usePlatformSettingsUpsert(userId: string | undefined) {
       category: string;
       settings: Record<string, unknown>;
     }) => {
-      if (!userId) {
+      if (!privilegedActorUserId) {
         throw new Error('You must be signed in to save platform settings.');
       }
-      await executeFunction(APPWRITE_FUNCTION_IDS.MANAGE_SETTINGS, { category, settings, userId });
+      await executeFunction(
+        APPWRITE_FUNCTION_IDS.MANAGE_SETTINGS,
+        { category, settings, userId: privilegedActorUserId },
+        { omitImpersonationHeaders: true },
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'platform-settings'] });

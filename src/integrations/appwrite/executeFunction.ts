@@ -1,4 +1,9 @@
-import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, functions } from '../../services/appwrite';
+import {
+  APPWRITE_ENDPOINT,
+  APPWRITE_PROJECT_ID,
+  client,
+  functions,
+} from '../../services/appwrite';
 import { AppwriteFunctionError } from './errors';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -13,6 +18,32 @@ type ExecutionRecord = {
 };
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+const HDR_IMPERSONATE_ID = 'X-Appwrite-Impersonate-User-Id';
+const HDR_IMPERSONATE_EMAIL = 'X-Appwrite-Impersonate-User-Email';
+const HDR_IMPERSONATE_PHONE = 'X-Appwrite-Impersonate-User-Phone';
+
+async function withImpersonationHeadersStripped<T>(fn: () => Promise<T>): Promise<T> {
+  const h = client.headers as Record<string, string>;
+  const saved = {
+    id: h[HDR_IMPERSONATE_ID],
+    email: h[HDR_IMPERSONATE_EMAIL],
+    phone: h[HDR_IMPERSONATE_PHONE],
+  };
+  try {
+    delete h[HDR_IMPERSONATE_ID];
+    delete h[HDR_IMPERSONATE_EMAIL];
+    delete h[HDR_IMPERSONATE_PHONE];
+    return await fn();
+  } finally {
+    if (saved.id) h[HDR_IMPERSONATE_ID] = saved.id;
+    else delete h[HDR_IMPERSONATE_ID];
+    if (saved.email) h[HDR_IMPERSONATE_EMAIL] = saved.email;
+    else delete h[HDR_IMPERSONATE_EMAIL];
+    if (saved.phone) h[HDR_IMPERSONATE_PHONE] = saved.phone;
+    else delete h[HDR_IMPERSONATE_PHONE];
+  }
+}
 
 function isTerminalExecutionStatus(status: string | undefined): boolean {
   const s = (status || '').toLowerCase();
@@ -159,6 +190,11 @@ export interface ExecuteFunctionOptions {
    * MFA-incomplete JWT would make Appwrite reject the request.
    */
   guestExecution?: boolean;
+  /**
+   * Temporarily remove REST impersonation headers for this execution so Appwrite attributes the
+   * call to the real session user (needed for admin-only functions while impersonating).
+   */
+  omitImpersonationHeaders?: boolean;
 }
 
 export interface ExecuteFunctionResult<T> {
@@ -200,6 +236,7 @@ export async function executeFunctionWithMeta<TResponse = unknown, TPayload = un
     parseJson = true,
     throwOnHttpError = true,
     guestExecution = false,
+    omitImpersonationHeaders = false,
   } = options;
 
   const body =
@@ -211,32 +248,39 @@ export async function executeFunctionWithMeta<TResponse = unknown, TPayload = un
 
   const runAsync = longRunning ? true : isAsync;
 
-  let execution: ExecutionRecord;
-  if (guestExecution) {
-    execution = await guestCreateExecution(functionId, body, {
-      async: runAsync,
-      path,
-      method,
-    });
-  } else {
-    execution = (await functions.createExecution(
+  const runCreateExecution = async (): Promise<ExecutionRecord> => {
+    if (guestExecution) {
+      return guestCreateExecution(functionId, body, {
+        async: runAsync,
+        path,
+        method,
+      });
+    }
+    return (await functions.createExecution(
       functionId,
       body,
       runAsync,
       path,
       method as any,
     )) as ExecutionRecord;
+  };
+
+  let execution: ExecutionRecord;
+  if (omitImpersonationHeaders && !guestExecution) {
+    execution = await withImpersonationHeadersStripped(runCreateExecution);
+  } else {
+    execution = await runCreateExecution();
   }
 
   if (longRunning) {
     if (!isTerminalExecutionStatus(execution.status)) {
-      execution = await waitForExecutionResult(
-        functionId,
-        execution.$id,
-        maxAsyncWaitMs,
-        600,
-        guestExecution,
-      );
+      const execId = execution.$id;
+      const poll = () =>
+        waitForExecutionResult(functionId, execId, maxAsyncWaitMs, 600, guestExecution);
+      execution =
+        omitImpersonationHeaders && !guestExecution
+          ? await withImpersonationHeadersStripped(poll)
+          : await poll();
     }
   }
 

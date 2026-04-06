@@ -1,6 +1,9 @@
+import { useAuth } from '@/domains/auth';
 import { executeFunction } from '@/integrations/appwrite/executeFunction';
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+const fnOpts = { omitImpersonationHeaders: true as const };
 
 export type VaultProviderListItem = {
   id: string;
@@ -24,20 +27,28 @@ function assertFnOk<T extends { success?: boolean; message?: string }>(res: T, f
 }
 
 async function listVaultProviders(userId: string): Promise<VaultProviderListItem[]> {
-  const res = await executeFunction<ListResponse>(APPWRITE_FUNCTION_IDS.MANAGE_VAULT_PROVIDERS, {
-    action: 'list',
-    userId,
-  });
+  const res = await executeFunction<ListResponse>(
+    APPWRITE_FUNCTION_IDS.MANAGE_VAULT_PROVIDERS,
+    {
+      action: 'list',
+      userId,
+    },
+    fnOpts,
+  );
   assertFnOk(res, 'Could not list vault providers');
   return Array.isArray(res?.items) ? res.items : [];
 }
 
 async function getVaultProvider(userId: string, provider: string): Promise<Record<string, unknown>> {
-  const res = await executeFunction<GetResponse>(APPWRITE_FUNCTION_IDS.MANAGE_VAULT_PROVIDERS, {
-    action: 'get',
-    userId,
-    provider,
-  });
+  const res = await executeFunction<GetResponse>(
+    APPWRITE_FUNCTION_IDS.MANAGE_VAULT_PROVIDERS,
+    {
+      action: 'get',
+      userId,
+      provider,
+    },
+    fnOpts,
+  );
   assertFnOk(res, 'Could not load provider credentials');
   const c = res?.credentials;
   if (c && typeof c === 'object' && !Array.isArray(c)) {
@@ -46,29 +57,32 @@ async function getVaultProvider(userId: string, provider: string): Promise<Recor
   return {};
 }
 
-export function useVaultProvidersList(userId: string | undefined) {
+export function useVaultProvidersList() {
+  const { privilegedActorUserId } = useAuth();
   return useQuery({
-    queryKey: ['admin', 'vault-providers', userId],
-    queryFn: () => listVaultProviders(userId as string),
-    enabled: typeof userId === 'string' && userId.length > 0,
+    queryKey: ['admin', 'vault-providers', privilegedActorUserId],
+    queryFn: () => listVaultProviders(privilegedActorUserId as string),
+    enabled: typeof privilegedActorUserId === 'string' && privilegedActorUserId.length > 0,
   });
 }
 
-export function useVaultProviderCredentials(userId: string | undefined, provider: string | null, enabled: boolean) {
+export function useVaultProviderCredentials(provider: string | null, enabled: boolean) {
+  const { privilegedActorUserId } = useAuth();
   return useQuery({
-    queryKey: ['admin', 'vault-provider', userId, provider],
-    queryFn: () => getVaultProvider(userId as string, provider as string),
+    queryKey: ['admin', 'vault-provider', privilegedActorUserId, provider],
+    queryFn: () => getVaultProvider(privilegedActorUserId as string, provider as string),
     enabled:
-      typeof userId === 'string' &&
-      userId.length > 0 &&
+      typeof privilegedActorUserId === 'string' &&
+      privilegedActorUserId.length > 0 &&
       typeof provider === 'string' &&
       provider.length > 0 &&
       enabled,
   });
 }
 
-export function useVaultProviderUpsert(userId: string | undefined) {
+export function useVaultProviderUpsert() {
   const queryClient = useQueryClient();
+  const { privilegedActorUserId } = useAuth();
   return useMutation({
     mutationFn: async ({
       provider,
@@ -77,15 +91,19 @@ export function useVaultProviderUpsert(userId: string | undefined) {
       provider: string;
       credentials: Record<string, unknown>;
     }) => {
-      if (!userId) {
+      if (!privilegedActorUserId) {
         throw new Error('You must be signed in.');
       }
-      const res = await executeFunction<OkResponse>(APPWRITE_FUNCTION_IDS.MANAGE_VAULT_PROVIDERS, {
-        action: 'upsert',
-        userId,
-        provider,
-        credentials,
-      });
+      const res = await executeFunction<OkResponse>(
+        APPWRITE_FUNCTION_IDS.MANAGE_VAULT_PROVIDERS,
+        {
+          action: 'upsert',
+          userId: privilegedActorUserId,
+          provider,
+          credentials,
+        },
+        fnOpts,
+      );
       assertFnOk(res, 'Could not save provider');
     },
     onSuccess: () => {
@@ -95,18 +113,23 @@ export function useVaultProviderUpsert(userId: string | undefined) {
   });
 }
 
-export function useVaultProviderDelete(userId: string | undefined) {
+export function useVaultProviderDelete() {
   const queryClient = useQueryClient();
+  const { privilegedActorUserId } = useAuth();
   return useMutation({
     mutationFn: async (provider: string) => {
-      if (!userId) {
+      if (!privilegedActorUserId) {
         throw new Error('You must be signed in.');
       }
-      const res = await executeFunction<OkResponse>(APPWRITE_FUNCTION_IDS.MANAGE_VAULT_PROVIDERS, {
-        action: 'delete',
-        userId,
-        provider,
-      });
+      const res = await executeFunction<OkResponse>(
+        APPWRITE_FUNCTION_IDS.MANAGE_VAULT_PROVIDERS,
+        {
+          action: 'delete',
+          userId: privilegedActorUserId,
+          provider,
+        },
+        fnOpts,
+      );
       assertFnOk(res, 'Could not delete provider');
     },
     onSuccess: () => {

@@ -48,6 +48,8 @@ const client = new Client()
 
 /** sessionStorage key — reapplied on load so impersonation survives refresh. */
 export const WPHUB_IMPERSONATE_USER_ID_STORAGE_KEY = 'wphub_impersonate_user_id';
+/** Who started custom REST impersonation (admin id); used for privileged API calls. */
+export const WPHUB_IMPERSONATE_OPERATOR_ID_STORAGE_KEY = 'wphub_impersonate_operator_id';
 
 const HEADER_IMPERSONATE_USER_ID = 'X-Appwrite-Impersonate-User-Id';
 const HEADER_IMPERSONATE_USER_EMAIL = 'X-Appwrite-Impersonate-User-Email';
@@ -67,9 +69,51 @@ function clearImpersonationFromStorage(): void {
   if (typeof sessionStorage === 'undefined') return;
   try {
     sessionStorage.removeItem(WPHUB_IMPERSONATE_USER_ID_STORAGE_KEY);
+    sessionStorage.removeItem(WPHUB_IMPERSONATE_OPERATOR_ID_STORAGE_KEY);
   } catch {
     /* ignore */
   }
+}
+
+export function getStoredImpersonationOperatorId(): string | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const v = sessionStorage.getItem(WPHUB_IMPERSONATE_OPERATOR_ID_STORAGE_KEY);
+    return v && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistImpersonationOperatorId(userId: string | null): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    if (userId && userId.trim()) {
+      sessionStorage.setItem(WPHUB_IMPERSONATE_OPERATOR_ID_STORAGE_KEY, userId.trim());
+    } else {
+      sessionStorage.removeItem(WPHUB_IMPERSONATE_OPERATOR_ID_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * User id to send for admin-only function payloads when the UI acts as another user:
+ * native impersonation → impersonator; custom header impersonation → stored operator; else current user.
+ */
+export function getPrivilegedActorUserId(user: {
+  $id: string;
+  impersonatorUserId?: string;
+} | null): string | null {
+  if (!user) return null;
+  if (user.impersonatorUserId?.trim()) return user.impersonatorUserId.trim();
+  const target = getStoredImpersonationUserId();
+  if (target) {
+    const op = getStoredImpersonationOperatorId();
+    if (op?.trim()) return op.trim();
+  }
+  return user.$id;
 }
 
 /**

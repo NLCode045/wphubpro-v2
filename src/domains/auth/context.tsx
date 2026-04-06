@@ -9,6 +9,8 @@ import {
   account,
   applyStoredImpersonationHeaders,
   clearImpersonationClientAndStorage,
+  getPrivilegedActorUserId,
+  persistImpersonationOperatorId,
   persistImpersonationUserId,
   setImpersonationTargetOnClient,
   teams,
@@ -100,6 +102,10 @@ interface AuthContextType {
   startImpersonation: (userId: string) => Promise<void>;
   stopImpersonation: () => Promise<void>;
   isLoading: boolean;
+  /**
+   * Appwrite user id to use for admin-only function payloads (real operator while impersonating).
+   */
+  privilegedActorUserId: string | null;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -147,9 +153,11 @@ function syncImpersonationStateAfterGet(currentUser: Models.User<Models.Preferen
   if (!impersonatorUserIdFromAccount(currentUser)) {
     setImpersonationTargetOnClient(null);
     persistImpersonationUserId(null);
+    persistImpersonationOperatorId(null);
   } else {
     setImpersonationTargetOnClient(currentUser.$id);
     persistImpersonationUserId(currentUser.$id);
+    persistImpersonationOperatorId(null);
   }
 }
 
@@ -160,6 +168,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const isImpersonating = useMemo(() => Boolean(user?.impersonatorUserId), [user?.impersonatorUserId]);
+
+  const privilegedActorUserId = useMemo(() => getPrivilegedActorUserId(user), [user]);
 
   const commitSessionUser = async () => {
     applyStoredImpersonationHeaders();
@@ -415,13 +425,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const startImpersonation = async (userId: string) => {
-    if (!isAdmin) {
+    if (!isAdmin || !user) {
       throw new Error('Only administrators can impersonate a user.');
     }
     const id = userId.trim();
     if (!id) {
       throw new Error('Invalid user.');
     }
+    persistImpersonationOperatorId(user.$id);
     setImpersonationTargetOnClient(id);
     persistImpersonationUserId(id);
     try {
@@ -476,6 +487,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         startImpersonation,
         stopImpersonation,
         isLoading,
+        privilegedActorUserId,
       }}
     >
       {children}

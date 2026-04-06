@@ -1028,6 +1028,232 @@
             "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
+            "$id": "gateway-utils",
+            "name": "gateway-utils",
+            "runtime": "node-20.0",
+            "path": "functions/utils/gateway-utils",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 60,
+            "commands": "npm install",
+            "env": [
+                {
+                    "key": "ENCRYPTION_KEY",
+                    "value": "$ENCRYPTION_KEY"
+                },
+                {
+                    "key": "APPWRITE_ENDPOINT",
+                    "value": "https://api.wphub.pro/v1"
+                },
+                {
+                    "key": "APPWRITE_PROJECT_ID",
+                    "value": "698a55ce00010497b136"
+                },
+                {
+                    "key": "APPWRITE_API_KEY",
+                    "value": "$APPWRITE_API_KEY"
+                },
+                {
+                    "key": "VAULT_DB_ID",
+                    "value": "69d2ecf3000f449c752f"
+                }
+            ],
+            "scopes": [
+                "databases.read",
+                "documents.read",
+                "functions.read",
+                "execution.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "stripe-gateway",
+            "name": "stripe-gateway",
+            "runtime": "node-20.0",
+            "path": "functions/gateways/stripe-gateway",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 60,
+            "commands": "npm install",
+            "env": [
+                {
+                    "key": "ENCRYPTION_KEY",
+                    "value": "$ENCRYPTION_KEY"
+                },
+                {
+                    "key": "APPWRITE_ENDPOINT",
+                    "value": "https://api.wphub.pro/v1"
+                },
+                {
+                    "key": "APPWRITE_PROJECT_ID",
+                    "value": "698a55ce00010497b136"
+                },
+                {
+                    "key": "APPWRITE_API_KEY",
+                    "value": "$APPWRITE_API_KEY"
+                },
+                {
+                    "key": "VAULT_DB_ID",
+                    "value": "69d2ecf3000f449c752f"
+                }
+            ],
+            "scopes": [
+                "databases.read",
+                "documents.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "s3-gateway",
+            "name": "s3-gateway",
+            "runtime": "node-20.0",
+            "path": "functions/gateways/s3-gateway",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 120,
+            "commands": "npm install",
+            "env": [
+                {
+                    "key": "ENCRYPTION_KEY",
+                    "value": "$ENCRYPTION_KEY"
+                },
+                {
+                    "key": "APPWRITE_ENDPOINT",
+                    "value": "https://api.wphub.pro/v1"
+                },
+                {
+                    "key": "APPWRITE_PROJECT_ID",
+                    "value": "698a55ce00010497b136"
+                },
+                {
+                    "key": "APPWRITE_API_KEY",
+                    "value": "$APPWRITE_API_KEY"
+                },
+                {
+                    "key": "VAULT_DB_ID",
+                    "value": "69d2ecf3000f449c752f"
+                }
+            ],
+            "scopes": [
+                "databases.read",
+                "documents.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "openai-gateway",
+            "name": "openai-gateway",
+            "runtime": "node-20.0",
+            "path": "functions/gateways/openai-gateway",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 120,
+            "commands": "npm install",
+            "env": [
+                {
+                    "key": "ENCRYPTION_KEY",
+                    "value": "$ENCRYPTION_KEY"
+                },
+                {
+                    "key": "APPWRITE_ENDPOINT",
+                    "value": "https://api.wphub.pro/v1"
+                },
+                {
+                    "key": "APPWRITE_PROJECT_ID",
+                    "value": "698a55ce00010497b136"
+                },
+                {
+                    "key": "APPWRITE_API_KEY",
+                    "value": "$APPWRITE_API_KEY"
+                },
+                {
+                    "key": "VAULT_DB_ID",
+                    "value": "69d2ecf3000f449c752f"
+                }
+            ],
+            "scopes": [
+                "databases.read",
+                "documents.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "appwrite-gateway",
+            "name": "appwrite-gateway",
+            "runtime": "node-20.0",
+            "path": "functions/gateways/appwrite-gateway",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 120,
+            "commands": "npm install",
+            "env": [
+                {
+                    "key": "ENCRYPTION_KEY",
+                    "value": "$ENCRYPTION_KEY"
+                },
+                {
+                    "key": "APPWRITE_ENDPOINT",
+                    "value": "https://api.wphub.pro/v1"
+                },
+                {
+                    "key": "APPWRITE_PROJECT_ID",
+                    "value": "698a55ce00010497b136"
+                },
+                {
+                    "key": "APPWRITE_API_KEY",
+                    "value": "$APPWRITE_API_KEY"
+                },
+                {
+                    "key": "VAULT_DB_ID",
+                    "value": "69d2ecf3000f449c752f"
+                }
+            ],
+            "scopes": [
+                "databases.read",
+                "databases.write",
+                "documents.read",
+                "documents.write",
+                "users.read",
+                "users.write"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
             "$id": "admin-billing",
             "name": "admin-billing",
             "runtime": "node-20.0",

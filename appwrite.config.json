@@ -181,6 +181,30 @@
             "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
+            "$id": "manage-vault-providers",
+            "name": "manage-vault-providers",
+            "runtime": "node-20.0",
+            "path": "functions/admin/manage-vault-providers",
+            "entrypoint": "index.js",
+            "execute": [
+                "users",
+                "team:admin"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 30,
+            "commands": "npm install",
+            "scopes": [
+                "users.read",
+                "documents.read",
+                "documents.write"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
             "$id": "public-auth-config",
             "name": "public-auth-config",
             "runtime": "node-20.0",

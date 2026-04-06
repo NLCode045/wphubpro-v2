@@ -20,6 +20,7 @@ import Select, {
 } from 'react-select';
 import type { StripePlan, StripePlanAllPrice } from '@/types';
 import { useNavigate } from 'react-router';
+import { VaultProvidersTab } from '@/views/admin/settings/VaultProvidersTab';
 
 function recordFromValue(v: unknown): Record<string, string> {
   if (v && typeof v === 'object' && !Array.isArray(v)) {
@@ -390,6 +391,9 @@ const AdminPlatformSettingsPage = () => {
               <Nav.Item>
                 <Nav.Link eventKey="communication">Communication</Nav.Link>
               </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="providers">Providers</Nav.Link>
+              </Nav.Item>
             </Nav>
             <Tab.Content>
               <Tab.Pane eventKey="general">
@@ -630,6 +634,10 @@ const AdminPlatformSettingsPage = () => {
                     </Card>
                   </Col>
                 </Row>
+              </Tab.Pane>
+
+              <Tab.Pane eventKey="providers">
+                {userId ? <VaultProvidersTab userId={userId} /> : null}
               </Tab.Pane>
             </Tab.Content>
           </Tab.Container>

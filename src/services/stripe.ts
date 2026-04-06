@@ -15,10 +15,11 @@ export async function getStripeConfig(): Promise<{ stripe_publishable_key: strin
   }
 
   try {
-    const result = await executeFunction<{ stripe_publishable_key: string }>(
-      APPWRITE_FUNCTION_IDS.STRIPE_CONFIG,
-      {}
-    );
+    const result = await executeFunction<{
+      success?: boolean;
+      stripe_publishable_key?: string;
+      message?: string;
+    }>(APPWRITE_FUNCTION_IDS.STRIPE_CONFIG, {});
 
     if (!result?.success || !result?.stripe_publishable_key) {
       throw new Error('Invalid Stripe configuration response');

@@ -137,7 +137,7 @@
             "$id": "library-delete-version",
             "name": "library-delete-version",
             "runtime": "node-20.0",
-            "path": "functions/library-delete-version",
+            "path": "functions/library/library-delete-version",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -160,7 +160,7 @@
             "$id": "manage-settings",
             "name": "manage-settings",
             "runtime": "node-20.0",
-            "path": "functions/utils/manage-settings",
+            "path": "functions/admin/manage-settings",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -412,7 +412,7 @@
             "$id": "recovery-manager",
             "name": "recovery-manager",
             "runtime": "node-20.0",
-            "path": "functions/other/recovery-manager",
+            "path": "functions/recovery-manager",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -652,7 +652,7 @@
             "$id": "bridge-site-log-action",
             "name": "bridge-site-log-action",
             "runtime": "node-20.0",
-            "path": "functions/wordpress/bridge-site-log-action",
+            "path": "functions/bridge/bridge-site-log-action",
             "entrypoint": "index.js",
             "execute": [
                 "any"
@@ -702,7 +702,7 @@
             "$id": "site-pagespeed",
             "name": "site-pagespeed",
             "runtime": "node-20.0",
-            "path": "functions/other/site-pagespeed",
+            "path": "functions/site-monitoring/site-pagespeed",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -917,7 +917,7 @@
             "$id": "stripe-order-payments",
             "name": "stripe-order-payments",
             "runtime": "node-20.0",
-            "path": "functions/stripe-order-payments",
+            "path": "functions/stripe/stripe-order-payments",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -938,7 +938,7 @@
             "$id": "stripe-products",
             "name": "stripe-products",
             "runtime": "node-20.0",
-            "path": "functions/stripe-products",
+            "path": "functions/stripe/stripe-products",
             "entrypoint": "index.js",
             "execute": [
                 "any",
@@ -984,7 +984,7 @@
             "$id": "stripe-dashboard",
             "name": "stripe-dashboard",
             "runtime": "node-20.0",
-            "path": "functions/stripe-dashboard",
+            "path": "functions/stripe/stripe-dashboard",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -1007,7 +1007,7 @@
             "$id": "admin-billing",
             "name": "admin-billing",
             "runtime": "node-20.0",
-            "path": "functions/admin-billing",
+            "path": "functions/admin/admin-billing",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -1034,7 +1034,7 @@
             "$id": "notifications",
             "name": "notifications",
             "runtime": "node-20.0",
-            "path": "functions/notifications",
+            "path": "functions/other/notifications",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -1060,7 +1060,7 @@
             "$id": "tickets",
             "name": "tickets",
             "runtime": "node-20.0",
-            "path": "functions/tickets",
+            "path": "functions/other/tickets",
             "entrypoint": "index.js",
             "execute": [
                 "any",
@@ -1088,7 +1088,7 @@
             "$id": "conversations",
             "name": "conversations",
             "runtime": "node-20.0",
-            "path": "functions/conversations",
+            "path": "functions/other/conversations",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -1116,7 +1116,7 @@
             "$id": "forum",
             "name": "forum",
             "runtime": "node-20.0",
-            "path": "functions/forum",
+            "path": "functions/other/forum",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -1142,7 +1142,7 @@
             "$id": "bridge-download-url",
             "name": "bridge-download-url",
             "runtime": "node-20.0",
-            "path": "functions/bridge-download-url",
+            "path": "functions/bridge/bridge-download-url",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -1165,7 +1165,7 @@
             "$id": "bridge-latest-version",
             "name": "bridge-latest-version",
             "runtime": "node-20.0",
-            "path": "functions/bridge-latest-version",
+            "path": "functions/bridge/bridge-latest-version",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -1189,7 +1189,7 @@
             "$id": "broadcast-bridge-version",
             "name": "broadcast-bridge-version",
             "runtime": "node-20.0",
-            "path": "functions/broadcast-bridge-version",
+            "path": "functions/bridge/broadcast-bridge-version",
             "entrypoint": "index.js",
             "execute": [
                 "users",

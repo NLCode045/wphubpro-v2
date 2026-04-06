@@ -1,0 +1,9 @@
+{
+  "name": "bridge-site-log-action",
+  "version": "1.0.0",
+  "description": "Append bridge audit log entries to sites.action_log",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0"
+  }
+}

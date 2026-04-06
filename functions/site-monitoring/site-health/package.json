@@ -1,0 +1,9 @@
+{
+  "name": "site-health",
+  "version": "1.0.0",
+  "description": "Stores bridge site health snapshot (Health::get_health_status) on sites.health_meta",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0"
+  }
+}

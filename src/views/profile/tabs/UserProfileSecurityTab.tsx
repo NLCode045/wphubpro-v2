@@ -1,13 +1,21 @@
-import { useAuth } from '@/domains/auth';
-import { account } from '@/services/appwrite';
+import { useAuth, usePublicAuthConfig } from '@/domains/auth';
+import { mergeProfilePrefs, parseProfilePrefs, type PrefsRecord, type ProfilePrefs } from '@/domains/profile/profilePrefs';
+import { account, OAuthProvider } from '@/services/appwrite';
 import { AuthenticatorType } from 'appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { FaGithub } from 'react-icons/fa6';
+import { useSearchParams } from 'react-router';
+import { QRCodeSVG } from 'qrcode.react';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 
+type ConfigurePanel = 'totp' | null;
+
 const UserProfileSecurityTab = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, linkGitHubIdentity, listOAuthIdentities, unlinkOAuthIdentity } = useAuth();
+  const { data: publicAuth } = usePublicAuthConfig();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -18,10 +26,99 @@ const UserProfileSecurityTab = () => {
   const [mfaOtp, setMfaOtp] = useState('');
   const [mfaMessage, setMfaMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
 
+  const [wantsMfaSetup, setWantsMfaSetup] = useState(false);
+  const [openConfigure, setOpenConfigure] = useState<ConfigurePanel>(null);
+
+  const forceMfa = Boolean(publicAuth?.forceMfaForAllUsers);
+  const platformMail = publicAuth?.mfaOtpMailEnabled !== false;
+  const platformTotp = publicAuth?.mfaAuthenticatorEnabled !== false;
+
+  const [prefEmailMfa, setPrefEmailMfa] = useState(true);
+  const [prefAuthenticatorMfa, setPrefAuthenticatorMfa] = useState(true);
+
   const factorsQuery = useQuery({
     queryKey: ['mfa-factors'],
     queryFn: () => account.listMfaFactors(),
     enabled: Boolean(user),
+  });
+
+  const identitiesQuery = useQuery({
+    queryKey: ['oauth-identities'],
+    queryFn: () => listOAuthIdentities(),
+    enabled: Boolean(user),
+  });
+
+  const [oauthFlash, setOauthFlash] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
+
+  useEffect(() => {
+    const o = searchParams.get('oauth');
+    if (o === 'github_linked') {
+      setOauthFlash({ variant: 'success', text: 'GitHub was linked to your account. You can sign in with GitHub next time.' });
+      void queryClient.invalidateQueries({ queryKey: ['oauth-identities'] });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('oauth');
+          return next;
+        },
+        { replace: true },
+      );
+    } else if (o === 'github_error') {
+      setOauthFlash({ variant: 'danger', text: 'GitHub could not be linked. Try again or use another account.' });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('oauth');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [searchParams, queryClient, setSearchParams]);
+
+  const unlinkIdentityMutation = useMutation({
+    mutationFn: (identityId: string) => unlinkOAuthIdentity(identityId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['oauth-identities'] });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Could not remove the linked account.';
+      setOauthFlash({ variant: 'danger', text: msg });
+    },
+  });
+
+  const githubIdentity = identitiesQuery.data?.find(
+    (i) => i.provider === OAuthProvider.Github || i.provider === 'github',
+  );
+
+  const p = parseProfilePrefs((user?.prefs ?? null) as PrefsRecord | null);
+  const mfaEnabledOnAccount = Boolean(user && typeof user.mfa === 'boolean' && user.mfa);
+  /** Shown in UI: on when the account has MFA or the platform mandates it for everyone. */
+  const mfaShownAsOn = mfaEnabledOnAccount || forceMfa;
+
+  useEffect(() => {
+    if (mfaEnabledOnAccount) setWantsMfaSetup(false);
+  }, [mfaEnabledOnAccount]);
+
+  useEffect(() => {
+    setPrefEmailMfa(p.mfaFactorEmailEnabled !== false);
+    setPrefAuthenticatorMfa(p.mfaFactorAuthenticatorEnabled !== false);
+  }, [user?.prefs, p.mfaFactorEmailEnabled, p.mfaFactorAuthenticatorEnabled]);
+
+  const factorPrefMutation = useMutation({
+    mutationFn: async (patch: { mfaFactorEmailEnabled?: boolean; mfaFactorAuthenticatorEnabled?: boolean }) => {
+      if (!user) throw new Error('Not signed in.');
+      const base = mergeProfilePrefs(user.prefs as PrefsRecord | null, patch);
+      await account.updatePrefs(base);
+    },
+    onSuccess: async () => {
+      await refreshUser();
+    },
+    onError: async (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Could not save preference.';
+      setMfaMessage({ variant: 'danger', text: msg });
+      await refreshUser();
+    },
   });
 
   const passwordMutation = useMutation({
@@ -40,6 +137,29 @@ const UserProfileSecurityTab = () => {
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Could not update password.';
       setPwMessage({ variant: 'danger', text: msg });
+    },
+  });
+
+  const tryEnableMfaMutation = useMutation({
+    mutationFn: async () => {
+      await account.updateMFA(true);
+      const u = await account.get();
+      const base = mergeProfilePrefs(u.prefs as PrefsRecord | null, {
+        mfaFactorEmailEnabled: true,
+      } satisfies Partial<ProfilePrefs>);
+      await account.updatePrefs(base);
+    },
+    onSuccess: async () => {
+      setMfaMessage({ variant: 'success', text: 'MFA is enabled. OTP mail is on by default for sign-in.' });
+      await refreshUser();
+      await queryClient.invalidateQueries({ queryKey: ['mfa-factors'] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Could not enable MFA yet. Turn on the methods below and complete configuration.';
+      setMfaMessage({ variant: 'danger', text: msg });
     },
   });
 
@@ -66,6 +186,16 @@ const UserProfileSecurityTab = () => {
       setMfaUri(null);
       setMfaSecret(null);
       setMfaOtp('');
+      try {
+        const u = await account.get();
+        const base = mergeProfilePrefs(u.prefs as PrefsRecord | null, {
+          mfaFactorEmailEnabled: true,
+          mfaFactorAuthenticatorEnabled: true,
+        } satisfies Partial<ProfilePrefs>);
+        await account.updatePrefs(base);
+      } catch {
+        /* optional */
+      }
       await refreshUser();
       await queryClient.invalidateQueries({ queryKey: ['mfa-factors'] });
     },
@@ -75,12 +205,29 @@ const UserProfileSecurityTab = () => {
     },
   });
 
+  const removeTotpMutation = useMutation({
+    mutationFn: () => account.deleteMfaAuthenticator(AuthenticatorType.Totp),
+    onSuccess: async () => {
+      setMfaMessage({ variant: 'success', text: 'Authenticator app removed from this account.' });
+      setMfaUri(null);
+      setMfaSecret(null);
+      await refreshUser();
+      await queryClient.invalidateQueries({ queryKey: ['mfa-factors'] });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Could not remove authenticator.';
+      setMfaMessage({ variant: 'danger', text: msg });
+    },
+  });
+
   const disableMfaMutation = useMutation({
     mutationFn: async () => {
-      try {
-        await account.deleteMfaAuthenticator(AuthenticatorType.Totp);
-      } catch {
-        /* factor may already be removed */
+      if (platformTotp) {
+        try {
+          await account.deleteMfaAuthenticator(AuthenticatorType.Totp);
+        } catch {
+          /* factor may already be removed */
+        }
       }
       await account.updateMFA(false);
     },
@@ -89,6 +236,8 @@ const UserProfileSecurityTab = () => {
       setMfaUri(null);
       setMfaSecret(null);
       setMfaOtp('');
+      setOpenConfigure(null);
+      setWantsMfaSetup(false);
       await refreshUser();
       await queryClient.invalidateQueries({ queryKey: ['mfa-factors'] });
     },
@@ -98,8 +247,54 @@ const UserProfileSecurityTab = () => {
     },
   });
 
-  const mfaEnabled = Boolean(user && typeof user.mfa === 'boolean' && user.mfa);
   const totpReady = factorsQuery.data?.totp === true;
+  const emailReady = factorsQuery.data?.email === true;
+
+  const emailSignInActive = platformMail && emailReady && prefEmailMfa;
+  const authenticatorSignInActive = platformTotp && totpReady && prefAuthenticatorMfa;
+  const otpMailOnlyMethod = mfaShownAsOn && emailSignInActive && !authenticatorSignInActive;
+  const authenticatorOnlyMethod = mfaShownAsOn && authenticatorSignInActive && !emailSignInActive;
+
+  const revealMfaOptions = mfaShownAsOn || wantsMfaSetup;
+  const canTurnOffMfa = mfaEnabledOnAccount && !forceMfa;
+
+  const persistFactorPrefs = (patch: { mfaFactorEmailEnabled?: boolean; mfaFactorAuthenticatorEnabled?: boolean }) => {
+    const nextEmail =
+      patch.mfaFactorEmailEnabled !== undefined ? patch.mfaFactorEmailEnabled : prefEmailMfa;
+    const nextAuth =
+      patch.mfaFactorAuthenticatorEnabled !== undefined ? patch.mfaFactorAuthenticatorEnabled : prefAuthenticatorMfa;
+    const nextEmailActive = platformMail && emailReady && nextEmail;
+    const nextAuthActive = platformTotp && totpReady && nextAuth;
+    if (mfaShownAsOn && !nextEmailActive && !nextAuthActive) {
+      setMfaMessage({
+        variant: 'danger',
+        text: 'With MFA on, keep at least one sign-in method enabled (OTP mail or authenticator).',
+      });
+      return;
+    }
+    if (patch.mfaFactorEmailEnabled !== undefined) setPrefEmailMfa(patch.mfaFactorEmailEnabled);
+    if (patch.mfaFactorAuthenticatorEnabled !== undefined) setPrefAuthenticatorMfa(patch.mfaFactorAuthenticatorEnabled);
+    setMfaMessage(null);
+    factorPrefMutation.mutate(patch);
+  };
+
+  const toggleConfigure = (panel: Exclude<ConfigurePanel, null>) => {
+    setOpenConfigure((prev) => (prev === panel ? null : panel));
+  };
+
+  const onMasterMfaChange = (checked: boolean) => {
+    setMfaMessage(null);
+    if (checked) {
+      setWantsMfaSetup(true);
+      tryEnableMfaMutation.mutate();
+      return;
+    }
+    setWantsMfaSetup(false);
+    setOpenConfigure(null);
+    if (mfaEnabledOnAccount && !forceMfa) {
+      disableMfaMutation.mutate();
+    }
+  };
 
   return (
     <div className="d-flex flex-column gap-4">
@@ -170,13 +365,98 @@ const UserProfileSecurityTab = () => {
       <hr className="my-0 border-light" />
 
       <section>
+        <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Connected accounts</p>
+        <p className="text-muted fs-sm mb-3">
+          Link GitHub to sign in with OAuth2. Appwrite stores this as an{' '}
+          <a
+            href="https://appwrite.io/docs/products/auth/identities"
+            target="_blank"
+            rel="noreferrer"
+            className="link-offset-2">
+            identity
+          </a>{' '}
+          on your user.
+        </p>
+        {oauthFlash ? (
+          <Alert
+            variant={oauthFlash.variant}
+            className="py-2 fs-sm mb-3"
+            dismissible
+            onClose={() => setOauthFlash(null)}>
+            {oauthFlash.text}
+          </Alert>
+        ) : null}
+        <div className="border rounded p-3 mb-0">
+          <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div className="d-flex align-items-center gap-3 min-w-0">
+              <div className="rounded-3 bg-dark bg-opacity-10 text-body flex-shrink-0 d-flex align-items-center justify-content-center p-3">
+                <FaGithub size={22} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <p className="fw-semibold mb-0 fs-sm">GitHub</p>
+                {identitiesQuery.isLoading ? (
+                  <Spinner animation="border" size="sm" className="mt-2" />
+                ) : githubIdentity ? (
+                  <p className="text-muted small mb-0 text-break">
+                    Linked
+                    {githubIdentity.providerEmail
+                      ? ` as ${githubIdentity.providerEmail}`
+                      : githubIdentity.providerUid
+                        ? ` (ID ${githubIdentity.providerUid})`
+                        : ''}
+                  </p>
+                ) : (
+                  <p className="text-muted small mb-0">Not connected</p>
+                )}
+              </div>
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              {githubIdentity ? (
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  disabled={unlinkIdentityMutation.isPending}
+                  onClick={() => {
+                    if (!window.confirm('Disconnect GitHub from this account? You can link it again later.')) return;
+                    unlinkIdentityMutation.mutate(githubIdentity.$id);
+                  }}>
+                  {unlinkIdentityMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Disconnect'}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  disabled={identitiesQuery.isLoading}
+                  onClick={() => {
+                    setOauthFlash(null);
+                    linkGitHubIdentity();
+                  }}>
+                  <FaGithub className="me-2" size={16} aria-hidden />
+                  Link GitHub
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <hr className="my-0 border-light" />
+
+      <section>
         <p className="text-muted fs-xs text-uppercase fw-semibold mb-2">Multi-factor authentication (MFA)</p>
         <p className="text-muted fs-sm mb-3">
-          Add a time-based one-time password (TOTP) app such as Google Authenticator or 1Password for an extra sign-in step.
+          Your administrator chooses which methods are available. Turn MFA on to configure OTP mail
+          {platformTotp ? ' and/or an authenticator app' : ''}.
         </p>
 
+        {forceMfa ? (
+          <Alert variant="info" className="py-2 fs-sm mb-3">
+            Your organization requires MFA. You cannot turn it off while this policy is active.
+          </Alert>
+        ) : null}
+
         {factorsQuery.isLoading ? (
-          <Spinner animation="border" size="sm" />
+          <Spinner animation="border" size="sm" className="mb-3" />
         ) : null}
 
         {mfaMessage ? (
@@ -186,103 +466,247 @@ const UserProfileSecurityTab = () => {
         ) : null}
 
         <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-          <span className={`badge ${mfaEnabled ? 'badge-soft-success' : 'badge-soft-secondary'} fs-xs`}>
-            {mfaEnabled ? 'MFA on' : 'MFA off'}
+          <span className={`badge ${mfaShownAsOn ? 'badge-soft-success' : 'badge-soft-secondary'} fs-xs`}>
+            {mfaShownAsOn ? 'MFA on' : 'MFA off'}
           </span>
-          {totpReady ? (
-            <span className="badge badge-soft-info fs-xs">TOTP configured</span>
-          ) : (
-            <span className="text-muted fs-xs">TOTP not configured</span>
-          )}
+          {platformMail && emailReady ? (
+            <span className="badge badge-soft-info fs-xs">Email OTP available</span>
+          ) : null}
+          {platformTotp && totpReady ? (
+            <span className="badge badge-soft-info fs-xs">Authenticator configured</span>
+          ) : null}
         </div>
 
-        {!mfaEnabled && !mfaUri ? (
-          <Button
-            variant="outline-primary"
-            size="sm"
-            disabled={startTotpMutation.isPending}
-            onClick={() => {
-              setMfaMessage(null);
-              startTotpMutation.mutate();
-            }}
-          >
-            {startTotpMutation.isPending ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Preparing…
-              </>
-            ) : (
-              'Set up authenticator app'
-            )}
-          </Button>
-        ) : null}
+        <Form.Group className="mb-3">
+          <Form.Check
+            type="switch"
+            id="profile-mfa-master"
+            label="Enable multi-factor authentication"
+            checked={mfaShownAsOn}
+            disabled={
+              tryEnableMfaMutation.isPending ||
+              disableMfaMutation.isPending ||
+              (forceMfa && mfaEnabledOnAccount)
+            }
+            onChange={(e) => onMasterMfaChange(e.target.checked)}
+          />
+          <Form.Text className="d-block">
+            When enabled, sign-in can require a second step. If turning on fails, use the options below to finish setup.
+          </Form.Text>
+        </Form.Group>
 
-        {mfaUri && mfaSecret ? (
-          <div className="border rounded p-3 bg-light">
-            <p className="fs-sm fw-semibold mb-2">Scan or enter the secret</p>
-            <p className="fs-xs text-muted mb-2">
-              In your authenticator app, add an account and scan the QR code if your app supports it, or enter the secret manually.
+        {revealMfaOptions ? (
+          <>
+            <p className="text-muted fs-xs text-uppercase fw-semibold mb-2 mt-2">MFA methods</p>
+            <p className="text-muted fs-sm mb-3">
+              Choose which methods we may offer after your password. Email OTP codes are always sent to your primary
+              account email. Use <strong>Configure</strong> for the authenticator app. With MFA active, at least one
+              method must stay enabled.
             </p>
-            <p className="fs-xxs text-break mb-2">
-              <span className="text-muted">otpauth URI · </span>
-              <code>{mfaUri}</code>
-            </p>
-            <p className="fs-xxs text-break mb-3">
-              <span className="text-muted">Secret · </span>
-              <code>{mfaSecret}</code>
-            </p>
-            <Form
-              className="d-flex flex-wrap align-items-end gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setMfaMessage(null);
-                verifyTotpMutation.mutate(mfaOtp.trim());
-              }}
-            >
-              <Form.Group controlId="mfa-otp" className="flex-grow-1" style={{ minWidth: '12rem' }}>
-                <Form.Label className="fs-sm">6-digit code</Form.Label>
-                <Form.Control
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  value={mfaOtp}
-                  onChange={(e) => setMfaOtp(e.target.value)}
-                  placeholder="000000"
-                  required
+
+            {!platformMail && !platformTotp ? (
+              <Alert variant="warning" className="py-2 fs-sm mb-3">
+                No MFA methods are enabled in platform settings. Contact your administrator.
+              </Alert>
+            ) : null}
+
+            {platformMail ? (
+              <div className="border rounded p-3 mb-3">
+                <Form.Check
+                  type="switch"
+                  id="profile-mfa-pref-email"
+                  className="mb-2"
+                  label="OTP mail"
+                  checked={prefEmailMfa}
+                  disabled={
+                    factorPrefMutation.isPending ||
+                    !emailReady ||
+                    (otpMailOnlyMethod && prefEmailMfa)
+                  }
+                  onChange={(e) => persistFactorPrefs({ mfaFactorEmailEnabled: e.target.checked })}
                 />
-              </Form.Group>
-              <Button type="submit" variant="primary" size="sm" disabled={verifyTotpMutation.isPending}>
-                {verifyTotpMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Verify & enable'}
-              </Button>
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="text-muted"
-                onClick={() => {
-                  setMfaUri(null);
-                  setMfaSecret(null);
-                  setMfaOtp('');
-                }}
-              >
-                Cancel
-              </Button>
-            </Form>
-          </div>
+                {!emailReady ? (
+                  <Form.Text className="d-block mb-0">Confirm your account email to use OTP mail.</Form.Text>
+                ) : otpMailOnlyMethod ? (
+                  <Form.Text className="d-block mb-0">Required — your only enabled sign-in method right now.</Form.Text>
+                ) : (
+                  <Form.Text className="d-block mb-0 text-muted">
+                    One-time codes are sent to your primary email:{' '}
+                    <span className="text-break fw-medium text-body">{user?.email ?? '—'}</span>
+                  </Form.Text>
+                )}
+              </div>
+            ) : null}
+
+            {platformTotp ? (
+              <div className="border rounded p-3 mb-3">
+                <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                  <Form.Check
+                    type="switch"
+                    id="profile-mfa-pref-totp"
+                    className="mb-0"
+                    label="Authenticator app (TOTP)"
+                    checked={prefAuthenticatorMfa}
+                    disabled={
+                      factorPrefMutation.isPending ||
+                      !totpReady ||
+                      (authenticatorOnlyMethod && prefAuthenticatorMfa)
+                    }
+                    onChange={(e) => persistFactorPrefs({ mfaFactorAuthenticatorEnabled: e.target.checked })}
+                  />
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    disabled={!prefAuthenticatorMfa}
+                    onClick={() => toggleConfigure('totp')}
+                  >
+                    {openConfigure === 'totp' ? 'Close' : 'Configure'}
+                  </Button>
+                </div>
+                {!totpReady ? (
+                  <Form.Text className="d-block mb-0">
+                    Open Configure to scan a QR code and register your authenticator app.
+                  </Form.Text>
+                ) : !prefAuthenticatorMfa ? (
+                  <Form.Text className="d-block mb-0 text-muted">
+                    App stays registered; sign-in offers are off while the switch is off.
+                  </Form.Text>
+                ) : authenticatorOnlyMethod ? (
+                  <Form.Text className="d-block mb-0">Required — your only enabled sign-in method right now.</Form.Text>
+                ) : null}
+
+                {openConfigure === 'totp' && prefAuthenticatorMfa ? (
+                  <div className="mt-3 pt-3 border-top">
+                    {mfaUri ? (
+                      <div className="bg-light rounded p-3">
+                        <p className="fs-sm fw-semibold mb-2">Scan this QR code</p>
+                        <p className="fs-xs text-muted mb-3">
+                          Open your authenticator app, scan the code, then enter the 6-digit code to confirm.
+                        </p>
+                        <div
+                          className="d-inline-flex p-3 rounded-3 bg-white border mb-3"
+                          role="img"
+                          aria-label="QR code for authenticator app"
+                        >
+                          <QRCodeSVG
+                            value={mfaUri}
+                            size={200}
+                            level="M"
+                            includeMargin
+                            marginSize={2}
+                            bgColor="#ffffff"
+                            fgColor="#000000"
+                          />
+                        </div>
+                        {mfaSecret ? (
+                          <details className="mb-3 fs-xs">
+                            <summary className="text-muted user-select-none" style={{ cursor: 'pointer' }}>
+                              Can&apos;t scan? Enter the secret manually
+                            </summary>
+                            <p className="text-muted mt-2 mb-1">Copy this key into your app:</p>
+                            <code className="d-block text-break p-2 bg-white border rounded small">{mfaSecret}</code>
+                          </details>
+                        ) : null}
+                        <Form
+                          className="d-flex flex-wrap align-items-end gap-2"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            setMfaMessage(null);
+                            verifyTotpMutation.mutate(mfaOtp.trim());
+                          }}
+                        >
+                          <Form.Group controlId="mfa-otp-verify" className="flex-grow-1" style={{ minWidth: '12rem' }}>
+                            <Form.Label className="fs-sm">6-digit code</Form.Label>
+                            <Form.Control
+                              inputMode="numeric"
+                              autoComplete="one-time-code"
+                              value={mfaOtp}
+                              onChange={(e) => setMfaOtp(e.target.value)}
+                              placeholder="000000"
+                              required
+                            />
+                          </Form.Group>
+                          <Button type="submit" variant="primary" size="sm" disabled={verifyTotpMutation.isPending}>
+                            {verifyTotpMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Verify'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            className="text-muted"
+                            onClick={() => {
+                              setMfaUri(null);
+                              setMfaSecret(null);
+                              setMfaOtp('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </Form>
+                      </div>
+                    ) : totpReady ? (
+                      <div>
+                        <p className="fs-sm text-muted mb-2">Authenticator is registered for this account.</p>
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          disabled={removeTotpMutation.isPending || (forceMfa && !emailReady)}
+                          onClick={() => {
+                            if (!window.confirm('Remove the authenticator app from this account?')) return;
+                            setMfaMessage(null);
+                            removeTotpMutation.mutate();
+                          }}
+                        >
+                          {removeTotpMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Remove authenticator'}
+                        </Button>
+                        {forceMfa && !emailReady ? (
+                          <p className="text-muted fs-xs mt-2 mb-0">
+                            Enable email OTP before removing your only other method.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={startTotpMutation.isPending}
+                          onClick={() => {
+                            setMfaMessage(null);
+                            startTotpMutation.mutate();
+                          }}
+                        >
+                          {startTotpMutation.isPending ? (
+                            <>
+                              <Spinner animation="border" size="sm" className="me-2" />
+                              Preparing…
+                            </>
+                          ) : (
+                            'Start authenticator setup'
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </>
         ) : null}
 
-        {mfaEnabled ? (
-          <div className="mt-3">
+        {canTurnOffMfa ? (
+          <div className="mt-2">
             <Button
               variant="outline-danger"
               size="sm"
               disabled={disableMfaMutation.isPending}
               onClick={() => {
-                if (!window.confirm('Turn off MFA for this account? You can enable it again later.')) return;
+                if (!window.confirm('Turn off MFA for this account?')) return;
                 setMfaMessage(null);
                 disableMfaMutation.mutate();
               }}
             >
-              {disableMfaMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Disable MFA'}
+              {disableMfaMutation.isPending ? <Spinner animation="border" size="sm" /> : 'Turn off MFA completely'}
             </Button>
           </div>
         ) : null}

@@ -23,5 +23,29 @@ export const ROUTE_PATHS = {
   /** Admin area default route (full admin UI to be implemented later). */
   ADMIN_DASHBOARD: '/admin',
   ADMIN_USERS: '/admin/users',
+  /** Path pattern: `/admin/users/:userId` */
+  adminUserPath: (userId: string) => `/admin/users/${encodeURIComponent(userId)}`,
   ADMIN_SETTINGS: '/admin/settings',
+  ADMIN_FINANCE: '/admin/finance',
+  ADMIN_FINANCE_DASHBOARD: '/admin/finance/dashboard',
+  ADMIN_FINANCE_SUBSCRIPTIONS: '/admin/finance/subscriptions',
+  ADMIN_FINANCE_PLANS: '/admin/finance/plans',
+  ADMIN_FINANCE_PAYMENTS: '/admin/finance/payments',
+  adminFinanceSubscriptionPath: (subscriptionId: string) =>
+    `/admin/finance/subscriptions/${encodeURIComponent(subscriptionId)}`,
+  adminFinancePlanPath: (productId: string) =>
+    `/admin/finance/plans/${encodeURIComponent(productId)}`,
+  adminFinancePaymentPath: (paymentIntentId: string) =>
+    `/admin/finance/payments/${encodeURIComponent(paymentIntentId)}`,
+  /** Member support hub */
+  SUPPORT: '/support',
+  SUPPORT_NEW: '/support/new',
+  supportTicketPath: (ticketId: string) => `/support/${encodeURIComponent(ticketId)}`,
+  /** Admin: all support tickets */
+  ADMIN_SUPPORT: '/admin/support',
+  /** User knowledge base (help center) */
+  DOCS: '/docs',
+  docsArticlePath: (slug: string) => `/docs/a/${encodeURIComponent(slug)}`,
+  /** Admin: edit knowledge base articles (mock + localStorage in dev) */
+  ADMIN_DOCS: '/admin/docs',
 } as const;

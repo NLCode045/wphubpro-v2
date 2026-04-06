@@ -1,3 +1,4 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
 import PageMetaData from '@/components/PageMetaData';
 import { ROUTE_PATHS } from '@/config/routePaths';
@@ -5,7 +6,6 @@ import { useDashboardNav } from '@/context/DashboardNavContext';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import { useAuth } from '@/domains/auth';
 import {
-  useAdminLoginAs,
   useAdminUsersList,
   type AdminUser,
   type AdminUserPlanFilter,
@@ -36,8 +36,8 @@ import { useNavigate } from 'react-router';
 const PER_PAGE_OPTIONS = [12, 24, 48] as const;
 
 const AdminUsersOverviewPage = () => {
-  const { isAdmin } = useAuth();
-  const { setMode } = useDashboardNav();
+  const { isAdmin, user: sessionUser, startImpersonation } = useAuth();
+  const { mode, setMode } = useDashboardNav();
   const navigate = useNavigate();
   const { showNotification } = useNotificationContext();
 
@@ -58,8 +58,10 @@ const AdminUsersOverviewPage = () => {
       navigate(ROUTE_PATHS.DASHBOARD, { replace: true });
       return;
     }
-    setMode('admin');
-  }, [isAdmin, navigate, setMode]);
+    if (mode !== 'admin') {
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true });
+    }
+  }, [isAdmin, mode, navigate]);
 
   const { data, isLoading, isError, error, refetch } = useAdminUsersList({
     limit,
@@ -70,7 +72,7 @@ const AdminUsersOverviewPage = () => {
     plan: planFilter,
   });
 
-  const loginAsMutation = useAdminLoginAs();
+  const [impersonateBusyId, setImpersonateBusyId] = useState<string | null>(null);
 
   const handleSearch = useCallback(() => {
     setSearch(searchInput.trim());
@@ -85,33 +87,40 @@ const AdminUsersOverviewPage = () => {
     setPage((p) => Math.min(p, Math.max(0, totalPages - 1)));
   }, [totalPages]);
 
-  const handleLoginAs = async (userId: string) => {
+  const handleImpersonate = async (userId: string) => {
+    if (sessionUser?.$id === userId) {
+      showNotification({
+        title: 'Already this user',
+        message: 'You are already signed in as this account.',
+        variant: 'primary',
+      });
+      return;
+    }
     try {
-      const token = await loginAsMutation.mutateAsync(userId);
-      if (token && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(token);
-        showNotification({
-          title: 'Token copied',
-          message: 'Login-as token is on the clipboard.',
-          variant: 'success',
-        });
-      } else if (token) {
-        showNotification({
-          title: 'Login-as token',
-          message: 'Copy the token from the function response (clipboard unavailable).',
-          variant: 'primary',
-        });
-      }
+      setImpersonateBusyId(userId);
+      await startImpersonation(userId);
+      setMode('user');
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true });
+      showNotification({
+        title: 'Viewing as user',
+        message: 'You are browsing the platform as this account. Use the top bar to stop.',
+        variant: 'success',
+      });
     } catch (err) {
       showNotification({
-        title: 'Error',
-        message: err instanceof Error ? err.message : 'Could not generate login-as token',
+        title: 'Impersonation failed',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Could not start impersonation. Ensure your Appwrite account has the impersonator capability enabled.',
         variant: 'danger',
       });
+    } finally {
+      setImpersonateBusyId(null);
     }
   };
 
-  if (!isAdmin) {
+  if (!isAdmin || mode !== 'admin') {
     return null;
   }
 
@@ -119,7 +128,11 @@ const AdminUsersOverviewPage = () => {
     <>
       <PageMetaData title="Users · Admin" />
       <Container fluid>
-        <PageBreadcrumb title="Users" subtitle="Admin · accounts overview" />
+        <PageBreadcrumb
+          title="Users"
+          subtitle="Admin · members overview"
+          titleEnd={<DocHelpButton contextKey="admin:users" />}
+        />
 
         <EditAdminUserModal
           user={editUser}
@@ -254,8 +267,8 @@ const AdminUsersOverviewPage = () => {
                           setEditUser(user);
                           setEditOpen(true);
                         }}
-                        onLoginAs={handleLoginAs}
-                        loginAsPending={loginAsMutation.isPending}
+                        onImpersonate={handleImpersonate}
+                        impersonateBusyId={impersonateBusyId}
                       />
                     ) : (
                       <Row>
@@ -267,8 +280,8 @@ const AdminUsersOverviewPage = () => {
                                 setEditUser(user);
                                 setEditOpen(true);
                               }}
-                              onLoginAs={handleLoginAs}
-                              loginAsPending={loginAsMutation.isPending}
+                              onImpersonate={handleImpersonate}
+                              impersonateBusyId={impersonateBusyId}
                             />
                           </Col>
                         ))}

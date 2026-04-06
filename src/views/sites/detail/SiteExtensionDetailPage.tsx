@@ -1,6 +1,9 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
+import { ContactSupportButton } from '@/components/support/ContactSupportButton';
 import { TabNavLabel } from '@/components/TabNavLabel';
 import { ROUTE_PATHS } from '@/config/routePaths';
+import type { DocsHelpContextKey } from '@/domains/docs/docsHelpMap';
 import {
   hasUpdate,
   parseActionLogForExtensionAudit,
@@ -28,6 +31,13 @@ function indexFromExtTabKey(k: string | null): number {
   if (!k) return 0;
   const idx = EXT_TAB_KEYS.indexOf(k as ExtTabKey);
   return idx >= 0 ? idx : 0;
+}
+
+function extensionHelpContext(tabIndex: number): DocsHelpContextKey {
+  const key = EXT_TAB_KEYS[tabIndex] ?? 'overview';
+  if (key === 'overview') return 'sites:extension:overview';
+  if (key === 'health') return 'sites:extension:health';
+  return 'sites:extension:logs';
 }
 
 function formatAvailableUpdate(update: string | { new_version?: string } | null | undefined): string {
@@ -190,7 +200,7 @@ const SiteExtensionDetailPage = () => {
   if (!siteId || !kind || !rawKey) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Extension" subtitle="Sites" />
+        <PageBreadcrumb title="Extension" subtitle="Sites" titleEnd={<DocHelpButton contextKey="sites:extension" />} />
         <Card className="mt-3">
           <CardBody className="text-center py-5">
             <p className="text-danger mb-2">Invalid extension URL.</p>
@@ -206,7 +216,7 @@ const SiteExtensionDetailPage = () => {
   if (isLoading) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Extension" subtitle="Sites" />
+        <PageBreadcrumb title="Extension" subtitle="Sites" titleEnd={<DocHelpButton contextKey="sites:extension" />} />
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" role="status" variant="primary">
             <span className="visually-hidden">Loading…</span>
@@ -219,7 +229,7 @@ const SiteExtensionDetailPage = () => {
   if (isError || !site) {
     return (
       <Container fluid>
-        <PageBreadcrumb title="Extension" subtitle="Sites" />
+        <PageBreadcrumb title="Extension" subtitle="Sites" titleEnd={<DocHelpButton contextKey="sites:extension" />} />
         <Card className="mt-3">
           <CardBody className="text-center py-5">
             <p className="text-danger mb-2">{error?.message ?? 'Site not found.'}</p>
@@ -236,7 +246,7 @@ const SiteExtensionDetailPage = () => {
     const listTab = kind === 'plugin' ? 'plugins' : 'themes';
     return (
       <Container fluid>
-        <PageBreadcrumb title="Extension" subtitle="Sites" />
+        <PageBreadcrumb title="Extension" subtitle="Sites" titleEnd={<DocHelpButton contextKey="sites:extension" />} />
         <Card className="mt-3">
           <CardBody className="text-center py-5">
             <p className="text-muted mb-3">
@@ -258,15 +268,28 @@ const SiteExtensionDetailPage = () => {
 
   return (
     <Container fluid>
-      <PageBreadcrumb title={displayName} subtitle="Sites" />
+      <PageBreadcrumb
+        title={displayName}
+        subtitle="Sites"
+        titleEnd={<DocHelpButton contextKey={extensionHelpContext(tab)} />}
+      />
 
-      <div className="mb-3">
+      <div className="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
         <Link
           to={`${ROUTE_PATHS.siteDetailPath(site.$id)}?tab=${backListTab}`}
           className="btn btn-link p-0 text-decoration-none"
         >
           ← Back to site · {site.siteName?.trim() || 'Site'}
         </Link>
+        <ContactSupportButton
+          category="site_manager"
+          context={{
+            siteId: site.$id,
+            siteName: site.siteName ?? undefined,
+            sourceLabel: `${kind === 'plugin' ? 'Plugin' : 'Theme'} on site`,
+            ...(kind === 'plugin' ? { pluginId: extensionKey } : { themeId: extensionKey }),
+          }}
+        />
       </div>
 
       <Row className="justify-content-center">

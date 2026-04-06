@@ -2,12 +2,14 @@ export {
   checkoutUpdateTypeForPlanChange,
   findPlanSelectionByPriceId,
   selectedPlanAmountCents,
+  subscriptionStatusAllowsInPlacePlanChange,
 } from './planCheckout';
 export type {
   BillingAccountContext,
   CancelSubscriptionResult,
   CheckoutSessionResult,
   EnsureStripeCustomerResult,
+  PaymentMethodsData,
   StripeCustomerBilling,
   UpdateBillingDetailsPayload,
   UseStripePlansOptions,

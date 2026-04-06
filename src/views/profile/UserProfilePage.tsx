@@ -1,6 +1,9 @@
+import { DocHelpButton } from '@/components/docs/DocHelpButton';
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
+import { ContactSupportButton } from '@/components/support/ContactSupportButton';
 import { TabNavLabel } from '@/components/TabNavLabel';
 import { useAuth } from '@/domains/auth';
+import type { DocsHelpContextKey } from '@/domains/docs/docsHelpMap';
 import { USER_PROFILE_TAB_CONFIG } from '@/views/profile/userProfileNavTabs';
 import UserProfileSidebarCard from '@/views/profile/UserProfileSidebarCard';
 import UserProfileAccountSettingsTab from '@/views/profile/tabs/UserProfileAccountSettingsTab';
@@ -18,6 +21,14 @@ function indexFromTabKey(k: string | null): number {
   if (!k) return 0;
   const idx = TAB_KEYS.indexOf(k as TabKey);
   return idx >= 0 ? idx : 0;
+}
+
+function profileHelpContext(tabIndex: number): DocsHelpContextKey {
+  const key = TAB_KEYS[tabIndex] ?? 'subscription';
+  if (key === 'subscription') return 'profile:subscription';
+  if (key === 'security') return 'profile:security';
+  if (key === 'account') return 'profile:account';
+  return 'profile:notifications';
 }
 
 const UserProfilePage = () => {
@@ -73,7 +84,10 @@ const UserProfilePage = () => {
 
   return (
     <Container fluid>
-      <PageBreadcrumb title={title} subtitle="Account" />
+      <PageBreadcrumb title={title} subtitle="Account" titleEnd={<DocHelpButton contextKey={profileHelpContext(tab)} />} />
+      <div className="d-flex justify-content-end align-items-center gap-2 mb-2">
+        <ContactSupportButton category="account" context={{ sourceLabel: 'Profile' }} />
+      </div>
 
       <Row className="justify-content-center">
         <Col xxl={12}>

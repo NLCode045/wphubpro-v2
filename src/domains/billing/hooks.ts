@@ -99,13 +99,24 @@ export const useCreateCheckoutSession = () => {
   return useMutation<
     CheckoutSessionResult,
     Error,
-    { priceId: string; returnUrl?: string; updateType?: 'upgrade' | 'downgrade' }
+    {
+      priceId: string;
+      returnUrl?: string;
+      updateType?: 'upgrade' | 'downgrade';
+      /** Attached card to use when the customer has no default payment method */
+      paymentMethodId?: string;
+    }
   >({
-    mutationFn: async ({ priceId, returnUrl, updateType }) => {
+    mutationFn: async ({ priceId, returnUrl, updateType, paymentMethodId }) => {
       const baseUrl = returnUrl ?? window.location.origin;
       const result = await executeFunction<CheckoutSessionResult>(
         STRIPE_CREATE_CHECKOUT_SESSION_FUNCTION_ID,
-        { priceId, returnUrl: baseUrl, updateType }
+        {
+          priceId,
+          returnUrl: baseUrl,
+          updateType,
+          ...(paymentMethodId ? { paymentMethodId } : {}),
+        }
       );
       return result ?? {};
     },
@@ -249,17 +260,28 @@ export const useStripeCustomerProfile = (
   });
 };
 
+export type PaymentMethodsData = {
+  paymentMethods: StripePaymentMethod[];
+  /** Stripe customer `invoice_settings.default_payment_method` */
+  defaultPaymentMethodId: string | null;
+};
+
 export const usePaymentMethods = (ctx?: BillingAccountContext) => {
   const { user } = useAuth();
-  return useQuery<StripePaymentMethod[], Error>({
+  return useQuery<PaymentMethodsData, Error>({
     queryKey: ['paymentMethods', user?.$id, ctx?.stripeCustomerId],
     queryFn: async () => {
-      if (!user) return [];
-      const result = await executeFunction<{ paymentMethods: StripePaymentMethod[] }>(
-        STRIPE_PAYMENT_METHODS_FUNCTION_ID,
-        { action: 'list' }
-      );
-      return result?.paymentMethods ?? [];
+      if (!user) {
+        return { paymentMethods: [], defaultPaymentMethodId: null };
+      }
+      const result = await executeFunction<{
+        paymentMethods: StripePaymentMethod[];
+        defaultPaymentMethodId?: string | null;
+      }>(STRIPE_PAYMENT_METHODS_FUNCTION_ID, { action: 'list' });
+      return {
+        paymentMethods: result?.paymentMethods ?? [],
+        defaultPaymentMethodId: result?.defaultPaymentMethodId ?? null,
+      };
     },
     enabled: stripeBillingEnabled(user?.$id, ctx),
     staleTime: 1000 * 60 * 2,

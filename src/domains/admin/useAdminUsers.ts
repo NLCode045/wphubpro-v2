@@ -23,6 +23,7 @@ export interface AccountDoc {
   current_plan_id?: string | null;
   stripe_customer_id?: string | null;
   avatar?: string | null;
+  admin_notes?: string | null;
   [key: string]: unknown;
 }
 
@@ -141,7 +142,10 @@ export interface UpdateUserParams {
   };
 }
 
-export function useAdminUsersList(params: ListUsersParams = {}) {
+export function useAdminUsersList(
+  params: ListUsersParams = {},
+  options?: { enabled?: boolean },
+) {
   const limit = Math.max(1, Math.min(100, params.limit ?? 50));
   const offset = params.offset ?? 0;
   const search = params.search ?? '';
@@ -152,6 +156,7 @@ export function useAdminUsersList(params: ListUsersParams = {}) {
   return useQuery({
     queryKey: ['admin', 'users', limit, offset, search, status, role, plan],
     queryFn: () => fetchFormattedAdminUsers({ limit, offset, search, status, role, plan }),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -180,14 +185,3 @@ export function useAdminUsersUpdate() {
   });
 }
 
-export function useAdminLoginAs() {
-  return useMutation({
-    mutationFn: async (userId: string) => {
-      const res = await executeFunction<{ token?: string }>(APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS, {
-        action: 'login-as',
-        userId,
-      });
-      return res?.token ?? null;
-    },
-  });
-}

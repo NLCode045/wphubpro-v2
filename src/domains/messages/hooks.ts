@@ -20,6 +20,7 @@ import {
 import { executeFunction } from '../../integrations/appwrite/executeFunction';
 import { APPWRITE_FUNCTION_IDS } from '../../services/appwrite';
 import { useAuth } from '../auth';
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin';
 
 const CONVERSATIONS_FN = APPWRITE_FUNCTION_IDS.CONVERSATIONS;
 
@@ -31,6 +32,7 @@ function mapRowToMessage(
     userMailboxId: string;
     teamMailboxId?: string;
     mode: 'member' | 'admin';
+    effectiveIsAdmin: boolean;
     clientUserId?: string | null;
   }
 ): Message {
@@ -101,12 +103,13 @@ export function useMailboxContext(options?: { enabled?: boolean }) {
 
 /** All message types in a thread (contact + ticket-linked), plus the `conversations` row (subject lives there). */
 export function useContactThreadMessages(threadId: string | null, options?: { enabled?: boolean }) {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
+  const effectiveIsAdmin = useEffectiveIsAdmin();
   const { data: ctx } = useMailboxContext({ enabled: Boolean(user && threadId && options?.enabled !== false) });
   const allow = options?.enabled !== false;
 
   return useQuery({
-    queryKey: ['conversations', 'thread', threadId, user?.$id, ctx?.userMailboxId, ctx?.teamMailboxId],
+    queryKey: ['conversations', 'thread', threadId, user?.$id, ctx?.userMailboxId, ctx?.teamMailboxId, effectiveIsAdmin],
     enabled: Boolean(user && threadId && ctx && allow),
     refetchInterval: 60_000,
     queryFn: async (): Promise<ContactThreadData> => {
@@ -123,7 +126,7 @@ export function useContactThreadMessages(threadId: string | null, options?: { en
       const clientId = clientUserIdFromThread(threadKey);
       // Admins viewing another member's thread use admin mapping; own support thread → same as members (you ↔ Support).
       const mode: 'member' | 'admin' =
-        !isAdmin || !clientId || clientId === user!.$id ? 'member' : 'admin';
+        !effectiveIsAdmin || !clientId || clientId === user!.$id ? 'member' : 'admin';
 
       const messages = res.thread.map((row) =>
         mapRowToMessage(row, {
@@ -132,6 +135,7 @@ export function useContactThreadMessages(threadId: string | null, options?: { en
           userMailboxId: ctx!.userMailboxId,
           teamMailboxId: ctx!.teamMailboxId,
           mode,
+          effectiveIsAdmin,
           clientUserId: clientId,
         })
       );
@@ -178,14 +182,15 @@ function conversationToTeaserMessage(conv: Conversation, clientUserId: string): 
 }
 
 export function useAdminContactInboxThreads(options?: { enabled?: boolean; limit?: number }) {
-  const { user, isAdmin } = useAuth();
-  const { data: ctx } = useMailboxContext({ enabled: Boolean(user && isAdmin && options?.enabled !== false) });
+  const { user } = useAuth();
+  const effectiveIsAdmin = useEffectiveIsAdmin();
+  const { data: ctx } = useMailboxContext({ enabled: Boolean(user && effectiveIsAdmin && options?.enabled !== false) });
   const allow = options?.enabled !== false;
   const limit = Math.min(Math.max(Number(options?.limit) || 100, 1), 100);
 
   return useQuery({
-    queryKey: ['conversations', 'adminInbox', user?.$id, ctx?.teamMailboxId, limit],
-    enabled: Boolean(user && isAdmin && ctx && allow),
+    queryKey: ['conversations', 'adminInbox', user?.$id, ctx?.teamMailboxId, limit, effectiveIsAdmin],
+    enabled: Boolean(user && effectiveIsAdmin && ctx && allow),
     refetchInterval: 60_000,
     queryFn: async () => {
       const res = await executeFunction<ListConversationsForMailboxResponse>(CONVERSATIONS_FN, {
@@ -270,14 +275,15 @@ async function fetchFolderThreads(mailboxId: string, folder: MailFolderKind, lim
 
 /** Admin team mailbox: threads appearing in a folder (inbox / sent). */
 export function useTeamMailboxFolderThreads(folder: MailFolderKind, options?: { enabled?: boolean; limit?: number }) {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
+  const effectiveIsAdmin = useEffectiveIsAdmin();
   const { data: ctx } = useMailboxContext({
-    enabled: Boolean(user && isAdmin && options?.enabled !== false),
+    enabled: Boolean(user && effectiveIsAdmin && options?.enabled !== false),
   });
   const limit = Math.min(Math.max(options?.limit ?? 50, 1), 80);
   return useQuery({
-    queryKey: ['conversations', 'teamFolderThreads', folder, ctx?.teamMailboxId, limit],
-    enabled: Boolean(user && isAdmin && ctx?.teamMailboxId && options?.enabled !== false),
+    queryKey: ['conversations', 'teamFolderThreads', folder, ctx?.teamMailboxId, limit, effectiveIsAdmin],
+    enabled: Boolean(user && effectiveIsAdmin && ctx?.teamMailboxId && options?.enabled !== false),
     refetchInterval: 60_000,
     queryFn: () => fetchFolderThreads(ctx!.teamMailboxId, folder, limit),
   });
@@ -319,7 +325,8 @@ export function useRemoveConversationFromMailboxMutation() {
 
 export function useSendContactMessage() {
   const queryClient = useQueryClient();
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
+  const effectiveIsAdmin = useEffectiveIsAdmin();
 
   return useMutation({
     mutationFn: async (vars: SendMessageVars) => {
@@ -332,7 +339,7 @@ export function useSendContactMessage() {
         throw new Error('Subject is required for a ticket message');
       }
 
-      if (!isAdmin) {
+      if (!effectiveIsAdmin) {
         const ownTk = contactThreadIdForUser(user.$id);
         const explicit = vars.compose === true ? undefined : vars.threadId?.trim();
         let threadKey: string;

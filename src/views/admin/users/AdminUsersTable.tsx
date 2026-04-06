@@ -6,7 +6,7 @@ import {
   DropdownToggle,
   Table,
 } from 'react-bootstrap';
-import { TbDotsVertical } from 'react-icons/tb';
+import { TbDotsVertical, TbUserShare } from 'react-icons/tb';
 
 function initials(name: string, email: string): string {
   const s = name.trim() || email;
@@ -18,15 +18,15 @@ function initials(name: string, email: string): string {
 type AdminUsersTableProps = {
   users: AdminUser[];
   onEdit: (user: AdminUser) => void;
-  onLoginAs: (userId: string) => void;
-  loginAsPending: boolean;
+  onImpersonate: (userId: string) => void;
+  impersonateBusyId: string | null;
 };
 
 const AdminUsersTable = ({
   users,
   onEdit,
-  onLoginAs,
-  loginAsPending,
+  onImpersonate,
+  impersonateBusyId,
 }: AdminUsersTableProps) => {
   return (
     <div className="table-responsive border rounded">
@@ -79,24 +79,32 @@ const AdminUsersTable = ({
                 </td>
                 <td className="text-muted fs-xs text-nowrap">{user.joined}</td>
                 <td className="text-end">
-                  <Dropdown align="end">
-                    <DropdownToggle variant="link" className="p-1 text-muted link-reset" aria-label="User actions">
-                      <TbDotsVertical className="fs-lg" />
-                    </DropdownToggle>
-                    <DropdownMenu>
-                      <DropdownItem as="button" type="button" onClick={() => onEdit(user)}>
-                        Edit
-                      </DropdownItem>
-                      <DropdownItem
-                        as="button"
-                        type="button"
-                        disabled={loginAsPending}
-                        onClick={() => onLoginAs(user.id)}
-                      >
-                        Login as…
-                      </DropdownItem>
-                    </DropdownMenu>
-                  </Dropdown>
+                  <div className="d-inline-flex align-items-center gap-1">
+                    <button
+                      type="button"
+                      className="btn btn-default btn-icon btn-sm text-muted"
+                      aria-label="Log in as user"
+                      title="Log in as user"
+                      disabled={impersonateBusyId !== null}
+                      onClick={() => onImpersonate(user.id)}
+                    >
+                      {impersonateBusyId === user.id ? (
+                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden />
+                      ) : (
+                        <TbUserShare className="fs-lg" />
+                      )}
+                    </button>
+                    <Dropdown align="end">
+                      <DropdownToggle variant="link" className="p-1 text-muted link-reset" aria-label="User actions">
+                        <TbDotsVertical className="fs-lg" />
+                      </DropdownToggle>
+                      <DropdownMenu>
+                        <DropdownItem as="button" type="button" onClick={() => onEdit(user)}>
+                          Edit
+                        </DropdownItem>
+                      </DropdownMenu>
+                    </Dropdown>
+                  </div>
                 </td>
               </tr>
             );

@@ -41,6 +41,7 @@ export function usePlatformSettingsUpsert(userId: string | undefined) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'platform-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['public-auth-config'] });
     },
   });
 }

@@ -1,8 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin';
 import { useAuth } from '../auth';
 import { executeFunction } from '../../integrations/appwrite/executeFunction';
 import { APPWRITE_FUNCTION_IDS } from '../../services/appwrite';
-import type { Ticket, TicketMessage } from '../../types';
+import type {
+  SupportTicketContext,
+  Ticket,
+  TicketActivity,
+  TicketMessage,
+  TicketNotifyChannel,
+  TicketRecentFromReporter,
+  TicketUserSummary,
+} from '../../types';
 
 const TICKETS_FN = APPWRITE_FUNCTION_IDS.TICKETS;
 
@@ -14,6 +23,11 @@ interface TicketDoc {
   priority: string;
   category?: string;
   site_id?: string;
+  assigned_to_user_id?: string | null;
+  context_json?: string | null;
+  notify_channel?: string;
+  follower_ids?: string[];
+  reporter?: TicketUserSummary | null;
   $createdAt: string;
   $updatedAt: string;
 }
@@ -27,6 +41,16 @@ interface TicketMessageDoc {
   $createdAt: string;
 }
 
+interface TicketActivityDoc {
+  $id: string;
+  ticket_id: string;
+  actor_user_id: string;
+  action: string;
+  summary: string;
+  detail_json?: string | null;
+  $createdAt: string;
+}
+
 function mapTicket(doc: TicketDoc): Ticket {
   return {
     $id: doc.$id,
@@ -36,6 +60,11 @@ function mapTicket(doc: TicketDoc): Ticket {
     priority: doc.priority as Ticket['priority'],
     category: doc.category ?? undefined,
     siteId: doc.site_id ?? undefined,
+    assignedToUserId: doc.assigned_to_user_id ?? undefined,
+    contextJson: doc.context_json ?? undefined,
+    notifyChannel: doc.notify_channel ?? undefined,
+    followerIds: Array.isArray(doc.follower_ids) ? doc.follower_ids : undefined,
+    reporter: doc.reporter ?? undefined,
     $createdAt: doc.$createdAt,
     $updatedAt: doc.$updatedAt,
   };
@@ -48,6 +77,18 @@ function mapMessage(doc: TicketMessageDoc): TicketMessage {
     userId: doc.user_id,
     body: doc.body,
     isStaff: doc.is_staff,
+    $createdAt: doc.$createdAt,
+  };
+}
+
+function mapActivity(doc: TicketActivityDoc): TicketActivity {
+  return {
+    $id: doc.$id,
+    ticketId: doc.ticket_id,
+    actorUserId: doc.actor_user_id,
+    action: doc.action,
+    summary: doc.summary,
+    detailJson: doc.detail_json ?? undefined,
     $createdAt: doc.$createdAt,
   };
 }
@@ -70,9 +111,10 @@ export const useTickets = () => {
 };
 
 export const useAdminTickets = () => {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
+  const effectiveAdmin = useEffectiveIsAdmin();
   return useQuery({
-    queryKey: ['adminTickets'],
+    queryKey: ['adminTickets', effectiveAdmin],
     queryFn: async () => {
       const res = await executeFunction<{ tickets: TicketDoc[]; total: number }>(TICKETS_FN, {
         action: 'adminList',
@@ -82,7 +124,7 @@ export const useAdminTickets = () => {
         total: res?.total ?? 0,
       };
     },
-    enabled: !!user && !!isAdmin,
+    enabled: !!user && effectiveAdmin,
   });
 };
 
@@ -91,16 +133,43 @@ export const useTicket = (ticketId: string | undefined) => {
   return useQuery({
     queryKey: ['ticket', ticketId, user?.$id],
     queryFn: async () => {
-      const res = await executeFunction<{ ticket: TicketDoc; messages: TicketMessageDoc[] }>(
-        TICKETS_FN,
-        { action: 'get', ticketId }
-      );
+      const res = await executeFunction<{
+        ticket: TicketDoc;
+        messages: TicketMessageDoc[];
+        activities: TicketActivityDoc[];
+        reporter: TicketUserSummary | null;
+        assignee: TicketUserSummary | null;
+        context: SupportTicketContext | null;
+        iFollow: boolean;
+        recentFromReporter?: TicketRecentFromReporter[];
+      }>(TICKETS_FN, { action: 'get', ticketId });
       return {
         ticket: mapTicket(res!.ticket),
         messages: (res?.messages ?? []).map(mapMessage),
+        activities: (res?.activities ?? []).map(mapActivity),
+        reporter: res?.reporter ?? null,
+        assignee: res?.assignee ?? null,
+        context: res?.context ?? null,
+        iFollow: res?.iFollow ?? false,
+        recentFromReporter: res?.recentFromReporter ?? [],
       };
     },
     enabled: !!user && !!ticketId,
+  });
+};
+
+export const useTicketAssignableAgents = () => {
+  const { user } = useAuth();
+  const effectiveAdmin = useEffectiveIsAdmin();
+  return useQuery({
+    queryKey: ['ticketAssignableAgents'],
+    queryFn: async () => {
+      const res = await executeFunction<{ agents: TicketUserSummary[] }>(TICKETS_FN, {
+        action: 'listAgents',
+      });
+      return res?.agents ?? [];
+    },
+    enabled: !!user && effectiveAdmin,
   });
 };
 
@@ -114,6 +183,8 @@ export const useCreateTicket = () => {
       category?: string;
       siteId?: string;
       targetUserId?: string;
+      context?: SupportTicketContext;
+      notifyChannel?: TicketNotifyChannel;
     }) =>
       executeFunction<{ ticket: TicketDoc }>(TICKETS_FN, {
         action: 'create',
@@ -121,6 +192,7 @@ export const useCreateTicket = () => {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['adminTickets'] });
     },
   });
 };
@@ -128,7 +200,7 @@ export const useCreateTicket = () => {
 export const useAddTicketMessage = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { ticketId: string; body: string }) =>
+    mutationFn: (data: { ticketId: string; body: string; asStaff?: boolean }) =>
       executeFunction(TICKETS_FN, { action: 'addMessage', ...data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
@@ -147,6 +219,36 @@ export const useUpdateTicketStatus = () => {
       queryClient.invalidateQueries({ queryKey: ['adminTickets'] });
       queryClient.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    },
+  });
+};
+
+export const useUpdateTicket = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      ticketId: string;
+      status?: Ticket['status'];
+      priority?: Ticket['priority'];
+      assignedToUserId?: string | null;
+    }) => executeFunction(TICKETS_FN, { action: 'updateStatus', ...data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['adminTickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    },
+  });
+};
+
+export const useSetTicketFollow = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { ticketId: string; follow: boolean }) =>
+      executeFunction(TICKETS_FN, { action: 'setFollow', ...data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['adminTickets'] });
     },
   });
 };

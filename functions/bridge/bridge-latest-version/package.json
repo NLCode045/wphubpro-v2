@@ -1,0 +1,9 @@
+{
+  "name": "bridge-latest-version",
+  "version": "1.0.0",
+  "description": "Returns latest bridge plugin version from platform_settings or storage.",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3"
+  }
+}

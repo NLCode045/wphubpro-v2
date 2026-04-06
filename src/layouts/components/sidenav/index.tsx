@@ -2,12 +2,13 @@
 import logoDark from '@/assets/images/logo-black.png'
 import logoSm from '@/assets/images/logo-sm.png'
 import logo from '@/assets/images/logo.png'
+import { ROUTE_PATHS } from '@/config/routePaths'
 import { useLayoutContext } from '@/context/useLayoutContext'
 import AppMenu from '@/layouts/components/sidenav/components/AppMenu'
 import UserProfile from '@/layouts/components/sidenav/components/UserProfile'
 
 import {Link} from "react-router";
-import { TbMenu4, TbX } from 'react-icons/tb'
+import { TbBook, TbMenu4, TbX } from 'react-icons/tb'
 import SimpleBar from "simplebar-react";
 
 const Sidenav = () => {
@@ -56,6 +57,20 @@ const Sidenav = () => {
       <SimpleBar id="sidenav" className="scrollbar">
         {sidenav.user && <UserProfile />}
         <AppMenu />
+        <div className="px-3 pb-3 pt-1 mt-auto border-top border-light border-opacity-10">
+          <Link
+            to={ROUTE_PATHS.DOCS}
+            onClick={() => {
+              if (sidenav.size === 'offcanvas') hideBackdrop()
+            }}
+            className="side-nav-link d-flex align-items-center gap-2 rounded py-2 px-2 text-decoration-none"
+          >
+            <span className="menu-icon">
+              <TbBook />
+            </span>
+            <span className="menu-text">Help &amp; docs</span>
+          </Link>
+        </div>
       </SimpleBar>
     </div>
   )

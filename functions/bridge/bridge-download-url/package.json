@@ -1,0 +1,9 @@
+{
+  "name": "bridge-download-url",
+  "version": "1.0.0",
+  "description": "Returns a public download URL for the latest WPHubPro Bridge zip (with file token).",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3"
+  }
+}

@@ -187,6 +187,7 @@ export const APPWRITE_FUNCTION_IDS = {
   LIBRARY_DELETE_VERSION: envString('APPWRITE_FUNCTION_LIBRARY_DELETE', 'library-delete-version'),
   MANAGE_SETTINGS: envString('APPWRITE_FUNCTION_MANAGE_SETTINGS', 'manage-settings'),
   PUBLIC_AUTH_CONFIG: envString('APPWRITE_FUNCTION_PUBLIC_AUTH_CONFIG', 'public-auth-config'),
+  STRIPE_CONFIG: envString('APPWRITE_FUNCTION_STRIPE_CONFIG', 'stripe-config'),
   ADMIN_MANAGE_USERS: envString('APPWRITE_FUNCTION_ADMIN_MANAGE_USERS', 'admin-manage-users'),
   HEALTH_AI_AGENT: envString('APPWRITE_FUNCTION_HEALTH_AI_AGENT', 'health-ai-agent'),
   WPHUB_SITES: envString('APPWRITE_FUNCTION_WPHUB_SITES', 'wphub-sites'),
@@ -201,6 +202,10 @@ export const APPWRITE_FUNCTION_IDS = {
   STRIPE_INVOICES: envString('APPWRITE_FUNCTION_STRIPE_INVOICES', 'stripe-invoices'),
   STRIPE_PAYMENT_METHODS: envString('APPWRITE_FUNCTION_STRIPE_PAYMENT_METHODS', 'stripe-payment-methods'),
   STRIPE_CREATE_CUSTOMER: envString('APPWRITE_FUNCTION_STRIPE_CREATE_CUSTOMER', 'stripe-create-customer'),
+  STRIPE_GATEWAY: envString('APPWRITE_FUNCTION_STRIPE_GATEWAY', 'stripe-gateway'),
+  S3_GATEWAY: envString('APPWRITE_FUNCTION_S3_GATEWAY', 's3-gateway'),
+  OPENAI_GATEWAY: envString('APPWRITE_FUNCTION_OPENAI_GATEWAY', 'openai-gateway'),
+  APPWRITE_GATEWAY: envString('APPWRITE_FUNCTION_APPWRITE_GATEWAY', 'appwrite-gateway'),
 } as const;
 
 export const COLLECTIONS = {

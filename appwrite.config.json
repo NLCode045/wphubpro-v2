@@ -43,7 +43,7 @@
             "$id": "wp-proxy",
             "name": "wp-proxy",
             "runtime": "node-20.0",
-            "path": "functions/wp-proxy",
+            "path": "functions/wordpress/wp-proxy",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -114,7 +114,7 @@
             "$id": "zip-parser",
             "name": "zip-parser",
             "runtime": "node-18.0",
-            "path": "functions/zip-parser",
+            "path": "functions/wordpress/zip-parser",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -160,7 +160,7 @@
             "$id": "manage-settings",
             "name": "manage-settings",
             "runtime": "node-20.0",
-            "path": "functions/manage-settings",
+            "path": "functions/utils/manage-settings",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -184,7 +184,7 @@
             "$id": "public-auth-config",
             "name": "public-auth-config",
             "runtime": "node-20.0",
-            "path": "functions/public-auth-config",
+            "path": "functions/utils/public-auth-config",
             "entrypoint": "index.js",
             "execute": [
                 "any"
@@ -206,7 +206,7 @@
             "$id": "stripe-portal-link",
             "name": "stripe-portal-link",
             "runtime": "node-20.0",
-            "path": "functions/stripe-portal-link",
+            "path": "functions/stripe/stripe-portal-link",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -228,7 +228,7 @@
             "$id": "stripe-create-customer",
             "name": "stripe-create-customer",
             "runtime": "node-18.0",
-            "path": "functions/stripe-create-customer",
+            "path": "functions/stripe/stripe-create-customer",
             "entrypoint": "index.js",
             "execute": [],
             "enabled": true,
@@ -252,7 +252,7 @@
             "$id": "admin-manage-users",
             "name": "admin-manage-users",
             "runtime": "node-20.0",
-            "path": "functions/admin-manage-users",
+            "path": "functions/database/admin-manage-users",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -341,7 +341,7 @@
             "$id": "wphub-sites",
             "name": "wphub-sites",
             "runtime": "node-20.0",
-            "path": "functions/wphub-sites",
+            "path": "functions/wordpress/wphub-sites",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -412,7 +412,7 @@
             "$id": "recovery-manager",
             "name": "recovery-manager",
             "runtime": "node-20.0",
-            "path": "functions/recovery-manager",
+            "path": "functions/other/recovery-manager",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -481,7 +481,7 @@
             "$id": "site-heartbeat",
             "name": "site-heartbeat",
             "runtime": "node-18.0",
-            "path": "functions/site-heartbeat",
+            "path": "functions/site-monitoring/site-heartbeat",
             "entrypoint": "index.js",
             "execute": [
                 "any"
@@ -506,7 +506,7 @@
             "$id": "site-heartbeat-log",
             "name": "site-heartbeat-log",
             "runtime": "node-20.0",
-            "path": "functions/site-heartbeat-log",
+            "path": "functions/site-monitoring/site-heartbeat-log",
             "entrypoint": "index.js",
             "execute": [
                 "any"
@@ -530,7 +530,7 @@
             "$id": "site-heartbeat-poke",
             "name": "site-heartbeat-poke",
             "runtime": "node-20.0",
-            "path": "functions/site-heartbeat-poke",
+            "path": "functions/site-monitoring/site-heartbeat-poke",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -553,7 +553,7 @@
             "$id": "health-ai-agent",
             "name": "health-ai-agent",
             "runtime": "node-20.0",
-            "path": "functions/health-ai-agent",
+            "path": "functions/site-monitoring/health-ai-agent",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -576,7 +576,7 @@
             "$id": "site-heartbeat-check",
             "name": "site-heartbeat-check",
             "runtime": "node-20.0",
-            "path": "functions/site-heartbeat-check",
+            "path": "functions/site-monitoring/site-heartbeat-check",
             "entrypoint": "index.js",
             "execute": [],
             "enabled": true,
@@ -602,7 +602,7 @@
             "$id": "sync-site-meta",
             "name": "sync-site-meta",
             "runtime": "node-20.0",
-            "path": "functions/sync-site-meta",
+            "path": "functions/wordpress/sync-site-meta",
             "entrypoint": "index.js",
             "execute": [
                 "any"
@@ -627,7 +627,7 @@
             "$id": "site-health",
             "name": "site-health",
             "runtime": "node-20.0",
-            "path": "functions/site-health",
+            "path": "functions/site-monitoring/site-health",
             "entrypoint": "index.js",
             "execute": [
                 "any"
@@ -652,7 +652,7 @@
             "$id": "bridge-site-log-action",
             "name": "bridge-site-log-action",
             "runtime": "node-20.0",
-            "path": "functions/bridge-site-log-action",
+            "path": "functions/wordpress/bridge-site-log-action",
             "entrypoint": "index.js",
             "execute": [
                 "any"
@@ -677,7 +677,7 @@
             "$id": "fetch-site-meta",
             "name": "fetch-site-meta",
             "runtime": "node-20.0",
-            "path": "functions/fetch-site-meta",
+            "path": "functions/wordpress/fetch-site-meta",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -702,7 +702,7 @@
             "$id": "site-pagespeed",
             "name": "site-pagespeed",
             "runtime": "node-20.0",
-            "path": "functions/site-pagespeed",
+            "path": "functions/other/site-pagespeed",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -727,7 +727,7 @@
             "$id": "site-app-icon-preview",
             "name": "site-app-icon-preview",
             "runtime": "node-20.0",
-            "path": "functions/site-app-icon-preview",
+            "path": "functions/other/site-app-icon-preview",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -750,7 +750,7 @@
             "$id": "stripe-subscriptions",
             "name": "stripe-subscriptions",
             "runtime": "node-20.0",
-            "path": "functions/stripe-subscriptions",
+            "path": "functions/stripe/stripe-subscriptions",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -800,7 +800,7 @@
             "$id": "stripe-customers",
             "name": "stripe-customers",
             "runtime": "node-20.0",
-            "path": "functions/stripe-customers",
+            "path": "functions/stripe/stripe-customers",
             "entrypoint": "index.js",
             "execute": [
                 "team:admin"
@@ -824,7 +824,7 @@
             "$id": "stripe-core",
             "name": "stripe-core",
             "runtime": "node-20.0",
-            "path": "functions/stripe-core",
+            "path": "functions/stripe/stripe-core",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -850,7 +850,7 @@
             "$id": "stripe-invoices",
             "name": "stripe-invoices",
             "runtime": "node-20.0",
-            "path": "functions/stripe-invoices",
+            "path": "functions/stripe/stripe-invoices",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -895,7 +895,7 @@
             "$id": "stripe-payment-methods",
             "name": "stripe-payment-methods",
             "runtime": "node-20.0",
-            "path": "functions/stripe-payment-methods",
+            "path": "functions/stripe/stripe-payment-methods",
             "entrypoint": "index.js",
             "execute": [
                 "users"
@@ -1213,6 +1213,11 @@
             "$id": "platform_db",
             "name": "The Platform DB",
             "enabled": true
+        },
+        {
+            "$id": "69d2ecf3000f449c752f",
+            "name": "vault",
+            "enabled": true
         }
     ],
     "tables": [
@@ -1340,21 +1345,22 @@
                 {
                     "key": "bridge_status",
                     "type": "string",
+                    "required": false,
+                    "array": false,
+                    "default": "disconnected",
                     "format": "enum",
                     "elements": [
                         "connected",
                         "disconnected"
-                    ],
-                    "required": false,
-                    "array": false,
-                    "default": "disconnected"
+                    ]
                 },
                 {
                     "key": "heartbeat_updated_at",
                     "type": "datetime",
                     "required": false,
                     "array": false,
-                    "default": null
+                    "default": null,
+                    "format": ""
                 },
                 {
                     "key": "log_data",
@@ -1524,8 +1530,7 @@
                     "type": "boolean",
                     "required": false,
                     "array": false,
-                    "default": false,
-                    "encrypt": false
+                    "default": false
                 },
                 {
                     "key": "versions_json",
@@ -1559,8 +1564,7 @@
                     "type": "boolean",
                     "required": false,
                     "array": false,
-                    "default": false,
-                    "encrypt": false
+                    "default": false
                 }
             ],
             "indexes": [
@@ -1619,7 +1623,7 @@
             ]
         },
         {
-            "$id": "library_categories",
+            "$id": "library_collections",
             "$permissions": [
                 "create(\"users\")",
                 "read(\"users\")",
@@ -1627,7 +1631,7 @@
                 "delete(\"users\")"
             ],
             "databaseId": "platform_db",
-            "name": "Library Categories",
+            "name": "Library Collections",
             "enabled": true,
             "rowSecurity": false,
             "columns": [
@@ -1650,38 +1654,11 @@
                     "encrypt": false
                 },
                 {
-                    "key": "color",
+                    "key": "items_json",
                     "type": "string",
-                    "required": false,
+                    "required": true,
                     "array": false,
-                    "size": 32,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "sort_order",
-                    "type": "integer",
-                    "required": false,
-                    "array": false,
-                    "default": 0,
-                    "min": 0,
-                    "max": 999999
-                },
-                {
-                    "key": "parent_id",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 36,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "category_scope",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 32,
+                    "size": 50000,
                     "default": null,
                     "encrypt": false
                 }
@@ -1695,19 +1672,6 @@
                         "user_id"
                     ],
                     "orders": [
-                        "ASC"
-                    ]
-                },
-                {
-                    "key": "user_id_parent_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "user_id",
-                        "parent_id"
-                    ],
-                    "orders": [
-                        "ASC",
                         "ASC"
                     ]
                 }
@@ -1770,286 +1734,6 @@
                     "status": "available",
                     "columns": [
                         "user_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                }
-            ]
-        },
-        {
-            "$id": "library_collections",
-            "$permissions": [
-                "create(\"users\")",
-                "read(\"users\")",
-                "update(\"users\")",
-                "delete(\"users\")"
-            ],
-            "databaseId": "platform_db",
-            "name": "Library Collections",
-            "enabled": true,
-            "rowSecurity": false,
-            "columns": [
-                {
-                    "key": "user_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "name",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "items_json",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 50000,
-                    "default": null,
-                    "encrypt": false
-                }
-            ],
-            "indexes": [
-                {
-                    "key": "user_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "user_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                }
-            ]
-        },
-        {
-            "$id": "platform_settings",
-            "$permissions": [
-                "read(\"any\")",
-                "create(\"team:admin\")",
-                "read(\"team:admin\")",
-                "update(\"team:admin\")",
-                "delete(\"team:admin\")"
-            ],
-            "databaseId": "platform_db",
-            "name": "Platform Settings",
-            "enabled": true,
-            "rowSecurity": false,
-            "columns": [
-                {
-                    "key": "key",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "value",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 10000,
-                    "default": null,
-                    "encrypt": false
-                }
-            ],
-            "indexes": [
-                {
-                    "key": "key_index",
-                    "type": "unique",
-                    "status": "available",
-                    "columns": [
-                        "key"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                }
-            ]
-        },
-        {
-            "$id": "accounts",
-            "$permissions": [
-                "read(\"users\")",
-                "update(\"users\")",
-                "create(\"team:admin\")",
-                "read(\"team:admin\")",
-                "update(\"team:admin\")",
-                "delete(\"team:admin\")"
-            ],
-            "databaseId": "platform_db",
-            "name": "Accounts",
-            "enabled": true,
-            "rowSecurity": false,
-            "columns": [
-                {
-                    "key": "user_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "stripe_customer_id",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "admin_notes",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 20000,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "avatar",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 512,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "mailbox_id",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 64,
-                    "default": null,
-                    "encrypt": false
-                }
-            ],
-            "indexes": [
-                {
-                    "key": "user_id_index",
-                    "type": "unique",
-                    "status": "available",
-                    "columns": [
-                        "user_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                },
-                {
-                    "key": "mailbox_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "mailbox_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                }
-            ]
-        },
-        {
-            "$id": "notifications",
-            "$permissions": [
-                "create(\"users\")",
-                "read(\"users\")",
-                "update(\"users\")",
-                "create(\"team:admin\")"
-            ],
-            "databaseId": "platform_db",
-            "name": "Notifications",
-            "enabled": true,
-            "rowSecurity": false,
-            "columns": [
-                {
-                    "key": "user_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "type",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 50,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "title",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 500,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "body",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 5000,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "read",
-                    "type": "boolean",
-                    "required": false,
-                    "array": false,
-                    "default": false,
-                    "encrypt": false
-                },
-                {
-                    "key": "meta",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 2000,
-                    "default": null,
-                    "encrypt": false
-                }
-            ],
-            "indexes": [
-                {
-                    "key": "user_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "user_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                },
-                {
-                    "key": "read_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "read"
                     ],
                     "orders": [
                         "ASC"
@@ -2188,6 +1872,234 @@
             ]
         },
         {
+            "$id": "platform_settings",
+            "$permissions": [
+                "read(\"any\")",
+                "create(\"team:admin\")",
+                "read(\"team:admin\")",
+                "update(\"team:admin\")",
+                "delete(\"team:admin\")"
+            ],
+            "databaseId": "platform_db",
+            "name": "Platform Settings",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "key",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "value",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 10000,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "key_index",
+                    "type": "unique",
+                    "status": "available",
+                    "columns": [
+                        "key"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "library_categories",
+            "$permissions": [
+                "create(\"users\")",
+                "read(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "databaseId": "platform_db",
+            "name": "Library Categories",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "user_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "name",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "color",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 32,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "sort_order",
+                    "type": "integer",
+                    "required": false,
+                    "array": false,
+                    "default": 0,
+                    "min": 0,
+                    "max": 999999
+                },
+                {
+                    "key": "parent_id",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 36,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "category_scope",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 32,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "user_id_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "user_id"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "user_id_parent_id_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "user_id",
+                        "parent_id"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "accounts",
+            "$permissions": [
+                "read(\"users\")",
+                "update(\"users\")",
+                "create(\"team:admin\")",
+                "read(\"team:admin\")",
+                "update(\"team:admin\")",
+                "delete(\"team:admin\")"
+            ],
+            "databaseId": "platform_db",
+            "name": "Accounts",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "user_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "stripe_customer_id",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "admin_notes",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 20000,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "avatar",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 512,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "mailbox_id",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 64,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "user_id_index",
+                    "type": "unique",
+                    "status": "available",
+                    "columns": [
+                        "user_id"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "mailbox_id_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "mailbox_id"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ]
+        },
+        {
             "$id": "ticket_activities",
             "$permissions": [
                 "read(\"team:admin\")"
@@ -2258,20 +2170,18 @@
             ]
         },
         {
-            "$id": "ticket_messages",
+            "$id": "forum_posts",
             "$permissions": [
                 "create(\"users\")",
-                "read(\"users\")",
-                "read(\"team:admin\")",
-                "create(\"team:admin\")"
+                "read(\"any\")"
             ],
             "databaseId": "platform_db",
-            "name": "Ticket Messages",
+            "name": "Forum Posts",
             "enabled": true,
             "rowSecurity": false,
             "columns": [
                 {
-                    "key": "ticket_id",
+                    "key": "thread_id",
                     "type": "string",
                     "required": true,
                     "array": false,
@@ -2293,321 +2203,20 @@
                     "type": "string",
                     "required": true,
                     "array": false,
-                    "size": 10000,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "is_staff",
-                    "type": "boolean",
-                    "required": false,
-                    "array": false,
-                    "default": false,
-                    "encrypt": false
-                }
-            ],
-            "indexes": [
-                {
-                    "key": "ticket_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "ticket_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                }
-            ]
-        },
-        {
-            "$id": "conversations",
-            "$permissions": [
-                "create(\"users\")",
-                "read(\"users\")",
-                "update(\"users\")",
-                "read(\"team:admin\")",
-                "update(\"team:admin\")"
-            ],
-            "databaseId": "platform_db",
-            "name": "Conversations",
-            "enabled": true,
-            "rowSecurity": false,
-            "columns": [
-                {
-                    "key": "participant_mailbox_ids",
-                    "type": "string",
-                    "required": true,
-                    "array": true,
-                    "size": 64,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "created_by_mailbox_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 64,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "subject",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 500,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "type",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 50,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "last_message_at",
-                    "type": "datetime",
-                    "required": false,
-                    "array": false,
-                    "default": null
-                },
-                {
-                    "key": "last_message_preview",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 500,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "meta",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 2000,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "thread_key",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 128,
+                    "size": 20000,
                     "default": null,
                     "encrypt": false
                 }
             ],
             "indexes": [
                 {
-                    "key": "thread_key_index",
+                    "key": "thread_id_index",
                     "type": "key",
                     "status": "available",
                     "columns": [
-                        "thread_key"
+                        "thread_id"
                     ],
                     "orders": [
-                        "ASC"
-                    ]
-                },
-                {
-                    "key": "last_message_at_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "last_message_at"
-                    ],
-                    "orders": [
-                        "DESC"
-                    ]
-                }
-            ]
-        },
-        {
-            "$id": "conversation_messages",
-            "$permissions": [
-                "create(\"users\")",
-                "read(\"users\")",
-                "read(\"team:admin\")",
-                "create(\"team:admin\")"
-            ],
-            "databaseId": "platform_db",
-            "name": "Conversation Messages",
-            "enabled": true,
-            "rowSecurity": false,
-            "columns": [
-                {
-                    "key": "conversation_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "author_mailbox_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 64,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "body",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 10000,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "message_type",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 50,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "ticket_id",
-                    "type": "string",
-                    "required": false,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                }
-            ],
-            "indexes": [
-                {
-                    "key": "conversation_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "conversation_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                },
-                {
-                    "key": "author_mailbox_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "author_mailbox_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                }
-            ]
-        },
-        {
-            "$id": "conversation_message_placements",
-            "$permissions": [
-                "create(\"users\")",
-                "read(\"users\")",
-                "update(\"users\")",
-                "read(\"team:admin\")",
-                "update(\"team:admin\")",
-                "create(\"team:admin\")"
-            ],
-            "databaseId": "platform_db",
-            "name": "Conversation Message Placements",
-            "enabled": true,
-            "rowSecurity": false,
-            "columns": [
-                {
-                    "key": "conversation_message_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "conversation_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 255,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "mailbox_id",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 64,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "mailbox_folder",
-                    "type": "string",
-                    "required": true,
-                    "array": false,
-                    "size": 32,
-                    "default": null,
-                    "encrypt": false
-                },
-                {
-                    "key": "read_at",
-                    "type": "datetime",
-                    "required": false,
-                    "array": false,
-                    "default": null
-                }
-            ],
-            "indexes": [
-                {
-                    "key": "conversation_message_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "conversation_message_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                },
-                {
-                    "key": "conversation_id_index",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "conversation_id"
-                    ],
-                    "orders": [
-                        "ASC"
-                    ]
-                },
-                {
-                    "key": "mailbox_folder_lookup",
-                    "type": "key",
-                    "status": "available",
-                    "columns": [
-                        "mailbox_id",
-                        "mailbox_folder",
-                        "conversation_id"
-                    ],
-                    "orders": [
-                        "ASC",
-                        "ASC",
                         "ASC"
                     ]
                 }
@@ -2772,18 +2381,306 @@
             ]
         },
         {
-            "$id": "forum_posts",
+            "$id": "notifications",
             "$permissions": [
                 "create(\"users\")",
-                "read(\"any\")"
+                "read(\"users\")",
+                "update(\"users\")",
+                "create(\"team:admin\")"
             ],
             "databaseId": "platform_db",
-            "name": "Forum Posts",
+            "name": "Notifications",
             "enabled": true,
             "rowSecurity": false,
             "columns": [
                 {
-                    "key": "thread_id",
+                    "key": "user_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "type",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 50,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "title",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 500,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "body",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 5000,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "read",
+                    "type": "boolean",
+                    "required": false,
+                    "array": false,
+                    "default": false
+                },
+                {
+                    "key": "meta",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 2000,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "user_id_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "user_id"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "read_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "read"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "conversations",
+            "$permissions": [
+                "create(\"users\")",
+                "read(\"users\")",
+                "update(\"users\")",
+                "read(\"team:admin\")",
+                "update(\"team:admin\")"
+            ],
+            "databaseId": "platform_db",
+            "name": "Conversations",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "participant_mailbox_ids",
+                    "type": "string",
+                    "required": true,
+                    "array": true,
+                    "size": 64,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "created_by_mailbox_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 64,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "subject",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 500,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "type",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 50,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "last_message_at",
+                    "type": "datetime",
+                    "required": false,
+                    "array": false,
+                    "default": null,
+                    "format": ""
+                },
+                {
+                    "key": "last_message_preview",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 500,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "meta",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 2000,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "thread_key",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 128,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "thread_key_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "thread_key"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "last_message_at_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "last_message_at"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "conversation_messages",
+            "$permissions": [
+                "create(\"users\")",
+                "read(\"users\")",
+                "read(\"team:admin\")",
+                "create(\"team:admin\")"
+            ],
+            "databaseId": "platform_db",
+            "name": "Conversation Messages",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "conversation_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "author_mailbox_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 64,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "body",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 10000,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "message_type",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 50,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "ticket_id",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "conversation_id_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "conversation_id"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "author_mailbox_id_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "author_mailbox_id"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "ticket_messages",
+            "$permissions": [
+                "create(\"users\")",
+                "read(\"users\")",
+                "read(\"team:admin\")",
+                "create(\"team:admin\")"
+            ],
+            "databaseId": "platform_db",
+            "name": "Ticket Messages",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "ticket_id",
                     "type": "string",
                     "required": true,
                     "array": false,
@@ -2805,24 +2702,166 @@
                     "type": "string",
                     "required": true,
                     "array": false,
-                    "size": 20000,
+                    "size": 10000,
                     "default": null,
                     "encrypt": false
+                },
+                {
+                    "key": "is_staff",
+                    "type": "boolean",
+                    "required": false,
+                    "array": false,
+                    "default": false
                 }
             ],
             "indexes": [
                 {
-                    "key": "thread_id_index",
+                    "key": "ticket_id_index",
                     "type": "key",
                     "status": "available",
                     "columns": [
-                        "thread_id"
+                        "ticket_id"
                     ],
                     "orders": [
                         "ASC"
                     ]
                 }
             ]
+        },
+        {
+            "$id": "conversation_message_placements",
+            "$permissions": [
+                "create(\"users\")",
+                "read(\"users\")",
+                "update(\"users\")",
+                "read(\"team:admin\")",
+                "update(\"team:admin\")",
+                "create(\"team:admin\")"
+            ],
+            "databaseId": "platform_db",
+            "name": "Conversation Message Placements",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "conversation_message_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "conversation_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "mailbox_id",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 64,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "mailbox_folder",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 32,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "read_at",
+                    "type": "datetime",
+                    "required": false,
+                    "array": false,
+                    "default": null,
+                    "format": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "conversation_message_id_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "conversation_message_id"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "conversation_id_index",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "conversation_id"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "mailbox_folder_lookup",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "mailbox_id",
+                        "mailbox_folder",
+                        "conversation_id"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC",
+                        "ASC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "connectors",
+            "$permissions": [],
+            "databaseId": "69d2ecf3000f449c752f",
+            "name": "connectors",
+            "enabled": true,
+            "rowSecurity": false,
+            "columns": [
+                {
+                    "key": "provider",
+                    "type": "text",
+                    "required": true,
+                    "array": false,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "encrypted_payload",
+                    "type": "text",
+                    "required": false,
+                    "array": false,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "iv",
+                    "type": "text",
+                    "required": false,
+                    "array": false,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": []
         }
     ],
     "buckets": [

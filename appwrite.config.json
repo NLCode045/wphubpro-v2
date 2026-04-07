@@ -163,6 +163,7 @@
             "path": "functions/admin/manage-settings",
             "entrypoint": "index.js",
             "execute": [
+                "any",
                 "users",
                 "team:admin"
             ],
@@ -278,7 +279,7 @@
             "$id": "admin-manage-users",
             "name": "admin-manage-users",
             "runtime": "node-20.0",
-            "path": "functions/database/admin-manage-users",
+            "path": "functions/admin/admin-manage-users",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -290,24 +291,7 @@
             "schedule": "",
             "timeout": 60,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "APPWRITE_DATABASE_ID",
-                    "value": "platform_db"
-                }
-            ],
+            
             "scopes": [
                 "sessions.write",
                 "users.read",
@@ -788,28 +772,7 @@
             "schedule": "",
             "timeout": 180,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "STRIPE_SECRET_KEY",
-                    "value": "$STRIPE_SECRET_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "APPWRITE_DATABASE_ID",
-                    "value": "platform_db"
-                }
-            ],
+            
             "scopes": [
                 "users.read",
                 "databases.read",
@@ -829,6 +792,7 @@
             "path": "functions/stripe/stripe-customers",
             "entrypoint": "index.js",
             "execute": [
+                "any",
                 "team:admin"
             ],
             "enabled": true,
@@ -888,28 +852,7 @@
             "schedule": "",
             "timeout": 15,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "STRIPE_SECRET_KEY",
-                    "value": "$STRIPE_SECRET_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "APPWRITE_DATABASE_ID",
-                    "value": "platform_db"
-                }
-            ],
+            
             "scopes": [
                 "databases.read",
                 "documents.read"
@@ -977,28 +920,7 @@
             "schedule": "",
             "timeout": 90,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "STRIPE_SECRET_KEY",
-                    "value": "$STRIPE_SECRET_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "APPWRITE_DATABASE_ID",
-                    "value": "platform_db"
-                }
-            ],
+            
             "scopes": [
                 "teams.read",
                 "users.read"
@@ -1044,28 +966,6 @@
             "schedule": "",
             "timeout": 60,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "ENCRYPTION_KEY",
-                    "value": "$ENCRYPTION_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "VAULT_DB_ID",
-                    "value": "69d2ecf3000f449c752f"
-                }
-            ],
             "scopes": [
                 "databases.read",
                 "documents.read",
@@ -1090,28 +990,6 @@
             "schedule": "",
             "timeout": 60,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "ENCRYPTION_KEY",
-                    "value": "$ENCRYPTION_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "VAULT_DB_ID",
-                    "value": "69d2ecf3000f449c752f"
-                }
-            ],
             "scopes": [
                 "databases.read",
                 "documents.read"
@@ -1134,28 +1012,6 @@
             "schedule": "",
             "timeout": 120,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "ENCRYPTION_KEY",
-                    "value": "$ENCRYPTION_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "VAULT_DB_ID",
-                    "value": "69d2ecf3000f449c752f"
-                }
-            ],
             "scopes": [
                 "databases.read",
                 "documents.read"
@@ -1178,28 +1034,6 @@
             "schedule": "",
             "timeout": 120,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "ENCRYPTION_KEY",
-                    "value": "$ENCRYPTION_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "VAULT_DB_ID",
-                    "value": "69d2ecf3000f449c752f"
-                }
-            ],
             "scopes": [
                 "databases.read",
                 "documents.read"
@@ -1222,28 +1056,7 @@
             "schedule": "",
             "timeout": 120,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "ENCRYPTION_KEY",
-                    "value": "$ENCRYPTION_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "VAULT_DB_ID",
-                    "value": "69d2ecf3000f449c752f"
-                }
-            ],
+            "env": [],
             "scopes": [
                 "databases.read",
                 "databases.write",
@@ -1262,7 +1075,7 @@
             "path": "functions/admin/admin-billing",
             "entrypoint": "index.js",
             "execute": [
-                "users",
+                "any",
                 "team:admin"
             ],
             "enabled": true,

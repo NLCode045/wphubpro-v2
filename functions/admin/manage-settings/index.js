@@ -63,6 +63,8 @@ async function userIsAdmin(users, teams, userId, log) {
   );
 }
 
+
+
 module.exports = async ({ req, res, log, error }) => {
   const endpoint =
     process.env.APPWRITE_ENDPOINT ||

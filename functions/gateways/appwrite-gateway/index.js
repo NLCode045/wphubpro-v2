@@ -10,7 +10,7 @@
  * Consumers: admin-manage-users, bulk-operations, system functions
  */
 const sdk = require('node-appwrite');
-const { validateGatewayEnvironment, parsePayload } = require('../_shared/gateway-vault-client.js');
+const { validateGatewayEnvironment, parsePayload } = require('https://69d42466001bf3811c6a.functions.wphub.pro');
 
 // Response helpers
 function success(res, data = {}, status = 200) {

@@ -52,9 +52,9 @@ function formatUser(
   const planName = acc?.stripeId ? 'Stripe' : 'Free';
   return {
     id: user.$id,
-    name: user.name || user.email || `User ${(user.$id || '').substring(0, 8)}`,
+    name: user.name || user.email || `aser ${(user.$id || '').substring(0, 8)}`,
     email: user.email || 'N/A',
-    role: isAdmin ? 'Admin' : 'User',
+    role: isAdmin ? 'admin' : 'user',
     isAdmin,
     planName,
     stripeId: acc?.stripeId || 'n/a',

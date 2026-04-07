@@ -6,8 +6,9 @@ const viteEnv = (import.meta as any).env as Record<string, string | undefined>;
 
 /**
  * Reads client env with fallbacks (short `.env` keys first):
- * `_${suffix}` → `VITE_${suffix}` → `APPWRITE_${suffix}`,
- * where `suffix` is everything after the `APPWRITE_` prefix of `appwriteKey`.
+ * - First checks Vite-exposed env vars (`import.meta.env`)
+ * - Then checks runtime env vars (`process.env` for Node/Appwrite Cloud)
+ * - Looks for: `_${suffix}` → `VITE_${suffix}` → `APPWRITE_${suffix}`
  *
  * Examples: `APPWRITE_ENDPOINT` tries `_ENDPOINT`, `VITE_ENDPOINT`, `APPWRITE_ENDPOINT`.
  */
@@ -19,10 +20,21 @@ function envString(appwriteKey: string, fallback: string): string {
   } else {
     keys.push(appwriteKey);
   }
+  
+  // Check Vite-exposed env vars (from .env at build time)
   for (const k of keys) {
     const v = viteEnv[k];
     if (typeof v === 'string' && v.trim() !== '') return v.trim();
   }
+  
+  // Check runtime env vars (process.env for Node.js / Appwrite Cloud)
+  if (typeof process !== 'undefined' && process.env) {
+    for (const k of keys) {
+      const v = process.env[k];
+      if (typeof v === 'string' && v.trim() !== '') return v.trim();
+    }
+  }
+  
   return fallback;
 }
 

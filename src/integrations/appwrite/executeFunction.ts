@@ -51,7 +51,13 @@ function isTerminalExecutionStatus(status: string | undefined): boolean {
 }
 
 function executionEndpointBase(): string {
-  return `${APPWRITE_ENDPOINT.replace(/\/$/, '')}/functions`;
+  const endpoint = (APPWRITE_ENDPOINT || '').trim();
+  if (!endpoint) {
+    throw new Error(
+      'APPWRITE_ENDPOINT is not configured. Please set APPWRITE_ENDPOINT in your .env file.'
+    );
+  }
+  return `${endpoint.replace(/\/$/, '')}/functions`;
 }
 
 const guestFetchHeaders: Record<string, string> = {

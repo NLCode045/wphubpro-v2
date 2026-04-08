@@ -124,7 +124,7 @@ module.exports = async ({ req, res, log, error }) => {
     const COLLECTION_ID = "platform_settings";
 
     if (actionRaw === "list") {
-      log("Listing platform_settings for admin " + userId);
+      log("Listing platform_settings for admin " + actorUserId);
       const list = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [sdk.Query.limit(500)]);
       const items = (list.documents || []).map((doc) => ({
         key: doc.key,
@@ -135,7 +135,7 @@ module.exports = async ({ req, res, log, error }) => {
 
     if (!category || settings === undefined) {
       error(
-        `Missing parameters. Received: category=${category}, userId=${userId}, settings=${JSON.stringify(
+        `Missing parameters. Received: category=${category}, userId=${actorUserId}, settings=${JSON.stringify(
           settings
         )}`
       );

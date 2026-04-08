@@ -1,89 +1,9 @@
 /**
- * Stripe Payment Methods Function
+ * Stripe Payment Methods Function - Consumer
+ * Routes to stripe-gateway for all Stripe operations
  * Actions: list, create-setup-intent, attach, detach, set-default, update-customer
- * Resolves Stripe customer from accounts collection (same as cancel/get).
  */
 const sdk = require("node-appwrite");
-const Stripe = require("stripe");
-const crypto = require("crypto");
-
-/**
- * Derive a consistent 32-byte key from the encryption key string using SHA256
- */
-function deriveKey(encryptionKey) {
-  return crypto.createHash('sha256').update(String(encryptionKey), 'utf8').digest();
-}
-
-/**
- * Decrypt a payload encrypted with AES-256-GCM
- * Input format: "iv:encryptedData:authTag" (all hex-encoded)
- */
-function decryptPayload(encryptedPayload, encryptionKey) {
-  if (!encryptedPayload || typeof encryptedPayload !== 'string') {
-    throw new Error('encryptedPayload must be a non-empty string');
-  }
-  if (!encryptionKey || typeof encryptionKey !== 'string') {
-    throw new Error('encryptionKey must be a non-empty string');
-  }
-
-  const parts = encryptedPayload.split(':');
-  if (parts.length !== 3) {
-    throw new Error('Invalid encrypted payload format');
-  }
-
-  try {
-    const iv = Buffer.from(parts[0], 'hex');
-    const encrypted = Buffer.from(parts[1], 'hex');
-    const authTag = Buffer.from(parts[2], 'hex');
-
-    if (iv.length !== 12) {
-      throw new Error('Invalid IV length');
-    }
-
-    const key = deriveKey(encryptionKey);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-    return JSON.parse(decrypted.toString('utf8'));
-  } catch (err) {
-    throw new Error(`Decryption failed: ${err.message}`);
-  }
-}
-
-/**
- * Retrieve and decrypt connector credentials from vault
- */
-async function getConnectorCredentials(provider, encryptionKey, databases, vaultDbId) {
-  if (!provider || typeof provider !== 'string') {
-    throw new Error('provider must be a non-empty string');
-  }
-  if (!encryptionKey || typeof encryptionKey !== 'string') {
-    throw new Error('encryptionKey must be a non-empty string');
-  }
-  if (!databases) {
-    throw new Error('databases client is required');
-  }
-  if (!vaultDbId || typeof vaultDbId !== 'string') {
-    throw new Error('vaultDbId must be a non-empty string');
-  }
-
-  try {
-    const doc = await databases.getDocument(vaultDbId, 'connectors', provider);
-
-    if (!doc || !doc.encrypted_payload) {
-      return null;
-    }
-
-    const credentials = decryptPayload(doc.encrypted_payload, encryptionKey);
-    return credentials;
-  } catch (err) {
-    if (err.code === 404) {
-      return null;
-    }
-    throw new Error(`Failed to retrieve connector credentials: ${err.message}`);
-  }
-}
 
 function parsePayload(req) {
   if (!req) return {};
@@ -96,6 +16,52 @@ function parsePayload(req) {
   }
   if (req.payload && typeof req.payload === "object") return req.payload;
   return req.query || {};
+}
+
+/**
+ * Call stripe-gateway with given action and payload
+ */
+async function callStripeGateway(action, payload, log, error) {
+  const endpoint = process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const apiKey = process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
+
+  const gatewayClient = new sdk.Client()
+    .setEndpoint(endpoint)
+    .setProject(projectId)
+    .setKey(apiKey);
+
+  const functions = new sdk.Functions(gatewayClient);
+  const gatewayFunctionId = process.env.STRIPE_GATEWAY_FUNCTION_ID || 'stripe-gateway';
+
+  try {
+    const response = await functions.createExecution(
+      gatewayFunctionId,
+      JSON.stringify({ action, payload }),
+      true
+    );
+
+    if (!response.responseBody) {
+      throw new Error('No response from stripe-gateway');
+    }
+
+    const result = typeof response.responseBody === 'string'
+      ? JSON.parse(response.responseBody)
+      : response.responseBody;
+
+    if (!result.success) {
+      throw new Error(result.message || 'Gateway operation failed');
+    }
+
+    return result;
+  } catch (err) {
+    error(`stripe-gateway call failed: ${err.message}`);
+    throw err;
+  }
 }
 
 async function getStripeCustomerId(databases, userId, log, error) {
@@ -115,47 +81,7 @@ async function getStripeCustomerId(databases, userId, log, error) {
   return accountDocs.documents[0].stripe_customer_id;
 }
 
-async function getStripeCredentials(req, log, error) {
-  const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-  const VAULT_DB_ID = process.env.VAULT_DB_ID || "69d2ecf3000f449c752f";
-  const APPWRITE_ENDPOINT =
-    process.env.APPWRITE_ENDPOINT ||
-    process.env.APPWRITE_FUNCTION_ENDPOINT ||
-    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const APPWRITE_PROJECT_ID =
-    process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const APPWRITE_API_KEY =
-    process.env.APPWRITE_API_KEY ||
-    process.env.APPWRITE_FUNCTION_API_KEY ||
-    process.env.APPWRITE_KEY;
-
-  if (!ENCRYPTION_KEY) {
-    throw new Error("ENCRYPTION_KEY not configured");
-  }
-
-  const adminClient = new sdk.Client()
-    .setEndpoint(APPWRITE_ENDPOINT)
-    .setProject(APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  const databases = new sdk.Databases(adminClient);
-
-  const stripeCredentials = await getConnectorCredentials("stripe", ENCRYPTION_KEY, databases, VAULT_DB_ID);
-  if (!stripeCredentials || !stripeCredentials.STRIPE_SECRET_KEY) {
-    throw new Error("Stripe credentials not found in vault");
-  }
-
-  return stripeCredentials.STRIPE_SECRET_KEY;
-}
-
 module.exports = async ({ req, res, log, error }) => {
-  let STRIPE_SECRET_KEY;
-  try {
-    STRIPE_SECRET_KEY = await getStripeCredentials(req, log, error);
-  } catch (err) {
-    log("Failed to get Stripe credentials: " + err.message);
-    return res.json({ success: false, message: "Stripe configuration missing" }, 500);
-  }
-
   const APPWRITE_ENDPOINT =
     process.env.APPWRITE_ENDPOINT ||
     process.env.APPWRITE_FUNCTION_ENDPOINT ||
@@ -182,7 +108,6 @@ module.exports = async ({ req, res, log, error }) => {
     .setProject(APPWRITE_PROJECT_ID)
     .setKey(APPWRITE_API_KEY);
   const databases = new sdk.Databases(client);
-  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
 
   const payload = parsePayload(req);
   const action = (payload.action || req.query?.action || "list").toString().toLowerCase();
@@ -194,61 +119,18 @@ module.exports = async ({ req, res, log, error }) => {
     }
 
     if (action === "get-customer") {
-      const c = await stripe.customers.retrieve(stripeCustomerId);
-      return res.json({
-        success: true,
-        customer: {
-          id: c.id,
-          email: c.email,
-          name: c.name,
-          phone: c.phone,
-          address: c.address
-            ? {
-                line1: c.address.line1,
-                line2: c.address.line2,
-                city: c.address.city,
-                state: c.address.state,
-                postal_code: c.address.postal_code,
-                country: c.address.country,
-              }
-            : null,
-        },
-      });
+      const result = await callStripeGateway('get-customer', { customerId: stripeCustomerId }, log, error);
+      return res.json(result);
     }
 
     if (action === "list") {
-      const [paymentMethods, customer] = await Promise.all([
-        stripe.paymentMethods.list({
-          customer: stripeCustomerId,
-          type: "card",
-        }),
-        stripe.customers.retrieve(stripeCustomerId),
-      ]);
-      const list = (paymentMethods.data || []).map((pm) => ({
-        id: pm.id,
-        type: pm.type,
-        card: pm.card
-          ? {
-              brand: pm.card.brand,
-              last4: pm.card.last4,
-              exp_month: pm.card.exp_month,
-              exp_year: pm.card.exp_year,
-            }
-          : null,
-      }));
-      const dpm = customer.invoice_settings?.default_payment_method;
-      const defaultPaymentMethodId =
-        typeof dpm === "string" ? dpm : dpm && dpm.id ? dpm.id : null;
-      return res.json({ success: true, paymentMethods: list, defaultPaymentMethodId });
+      const result = await callStripeGateway('list-payment-methods', { customerId: stripeCustomerId }, log, error);
+      return res.json(result);
     }
 
     if (action === "create-setup-intent") {
-      const setupIntent = await stripe.setupIntents.create({
-        customer: stripeCustomerId,
-        usage: "off_session",
-        automatic_payment_methods: { enabled: true },
-      });
-      return res.json({ success: true, clientSecret: setupIntent.client_secret });
+      const result = await callStripeGateway('create-setup-intent', { customerId: stripeCustomerId }, log, error);
+      return res.json(result);
     }
 
     if (action === "attach") {
@@ -256,17 +138,12 @@ module.exports = async ({ req, res, log, error }) => {
       if (!paymentMethodId) {
         return res.json({ success: false, error: "paymentMethodId required" }, 400);
       }
-      await stripe.paymentMethods.attach(paymentMethodId, { customer: stripeCustomerId });
-      if (setAsDefault) {
-        await stripe.customers.update(stripeCustomerId, {
-          invoice_settings: { default_payment_method: paymentMethodId },
-        });
-        const subs = await stripe.subscriptions.list({ customer: stripeCustomerId, status: "all", limit: 1 });
-        if (subs.data.length > 0) {
-          await stripe.subscriptions.update(subs.data[0].id, { default_payment_method: paymentMethodId });
-        }
-      }
-      return res.json({ success: true });
+      const result = await callStripeGateway('attach-payment-method', { 
+        customerId: stripeCustomerId, 
+        paymentMethodId, 
+        setAsDefault 
+      }, log, error);
+      return res.json(result);
     }
 
     if (action === "detach") {
@@ -274,8 +151,8 @@ module.exports = async ({ req, res, log, error }) => {
       if (!paymentMethodId) {
         return res.json({ success: false, error: "paymentMethodId required" }, 400);
       }
-      await stripe.paymentMethods.detach(paymentMethodId);
-      return res.json({ success: true });
+      const result = await callStripeGateway('detach-payment-method', { paymentMethodId }, log, error);
+      return res.json(result);
     }
 
     if (action === "set-default") {
@@ -283,41 +160,23 @@ module.exports = async ({ req, res, log, error }) => {
       if (!paymentMethodId) {
         return res.json({ success: false, error: "paymentMethodId required" }, 400);
       }
-      await stripe.customers.update(stripeCustomerId, {
-        invoice_settings: { default_payment_method: paymentMethodId },
-      });
-      const subs = await stripe.subscriptions.list({ customer: stripeCustomerId, status: "all", limit: 10 });
-      for (const sub of subs.data) {
-        if (sub.status === "active" || sub.status === "trialing") {
-          await stripe.subscriptions.update(sub.id, { default_payment_method: paymentMethodId });
-          break;
-        }
-      }
-      return res.json({ success: true });
+      const result = await callStripeGateway('set-default-payment-method', { 
+        customerId: stripeCustomerId, 
+        paymentMethodId 
+      }, log, error);
+      return res.json(result);
     }
 
     if (action === "update-customer") {
       const { name, email, phone, address } = payload;
-      const updateParams = {};
-      if (name !== undefined) updateParams.name = name === "" ? null : name;
-      if (email !== undefined) updateParams.email = email === "" ? null : email;
-      if (phone !== undefined) updateParams.phone = phone === "" ? null : phone;
-      if (address !== undefined && address !== null && typeof address === "object") {
-        const a = address;
-        const addr = {};
-        if (a.line1 !== undefined) addr.line1 = a.line1 || undefined;
-        if (a.line2 !== undefined) addr.line2 = a.line2 || undefined;
-        if (a.city !== undefined) addr.city = a.city || undefined;
-        if (a.state !== undefined) addr.state = a.state || undefined;
-        if (a.postal_code !== undefined) addr.postal_code = a.postal_code || undefined;
-        if (a.country !== undefined) addr.country = a.country || undefined;
-        if (Object.keys(addr).length > 0) updateParams.address = addr;
-      }
-      if (Object.keys(updateParams).length === 0) {
-        return res.json({ success: false, error: "No billing fields to update" }, 400);
-      }
-      await stripe.customers.update(stripeCustomerId, updateParams);
-      return res.json({ success: true });
+      const result = await callStripeGateway('update-customer', { 
+        customerId: stripeCustomerId,
+        name,
+        email,
+        phone,
+        address
+      }, log, error);
+      return res.json(result);
     }
 
     return res.json(

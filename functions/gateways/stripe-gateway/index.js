@@ -34,7 +34,7 @@ function decryptPayload(encryptedPayload, encryptionKey) {
 
   const parts = encryptedPayload.split(':');
   if (parts.length !== 3) {
-    throw new Error('Invalid encrypted payload format');
+    throw new Error(`Invalid encrypted payload format: expected 3 parts (iv:encrypted:tag), got ${parts.length}`);
   }
 
   try {
@@ -43,7 +43,10 @@ function decryptPayload(encryptedPayload, encryptionKey) {
     const authTag = Buffer.from(parts[2], 'hex');
 
     if (iv.length !== 12) {
-      throw new Error('Invalid IV length');
+      throw new Error(`Invalid IV length: expected 12 bytes, got ${iv.length}`);
+    }
+    if (authTag.length !== 16) {
+      throw new Error(`Invalid auth tag length: expected 16 bytes, got ${authTag.length}`);
     }
 
     const key = deriveKey(encryptionKey);
@@ -53,7 +56,7 @@ function decryptPayload(encryptedPayload, encryptionKey) {
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
     return JSON.parse(decrypted.toString('utf8'));
   } catch (err) {
-    throw new Error(`Decryption failed: ${err.message}`);
+    throw new Error(`Decryption failed: ${err.message}. This typically means the ENCRYPTION_KEY is incorrect or the payload was encrypted with a different key.`);
   }
 }
 
@@ -209,6 +212,30 @@ async function handleStripeOperation(req, res, log, error, action, stripe, datab
       case 'get-invoice':
         return await getInvoice(stripe, res, log, payload);
 
+      case 'get-subscription':
+        return await getSubscription(stripe, res, log, payload);
+
+      case 'get-price':
+        return await getPrice(stripe, res, log, payload);
+
+      case 'create-portal-session':
+        return await createPortalSession(stripe, res, log, payload);
+
+      case 'list-payment-methods':
+        return await listPaymentMethods(stripe, res, log, payload);
+
+      case 'create-setup-intent':
+        return await createSetupIntent(stripe, res, log, payload);
+
+      case 'attach-payment-method':
+        return await attachPaymentMethod(stripe, res, log, payload);
+
+      case 'detach-payment-method':
+        return await detachPaymentMethod(stripe, res, log, payload);
+
+      case 'set-default-payment-method':
+        return await setDefaultPaymentMethod(stripe, res, log, payload);
+
       case 'verify-webhook':
         return await verifyWebhook(databases, config, req, res, log, error);
 
@@ -331,6 +358,157 @@ async function getInvoice(stripe, res, log, payload) {
 
   const invoice = await stripe.invoices.retrieve(invoice_id);
   return success(res, { invoice });
+}
+
+async function getSubscription(stripe, res, log, payload) {
+  const { subscriptionId } = payload;
+  if (!subscriptionId) return fail(res, 'subscriptionId required', 400);
+
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    return success(res, { subscription });
+  } catch (err) {
+    error(`Failed to retrieve subscription: ${err.message}`);
+    return fail(res, err.message, 400);
+  }
+}
+
+async function getPrice(stripe, res, log, payload) {
+  const { priceId } = payload;
+  if (!priceId) return fail(res, 'priceId required', 400);
+
+  try {
+    const price = await stripe.prices.retrieve(priceId);
+    return success(res, { price });
+  } catch (err) {
+    error(`Failed to retrieve price: ${err.message}`);
+    return fail(res, err.message, 400);
+  }
+}
+
+async function createPortalSession(stripe, res, log, payload) {
+  const { customerId, returnUrl } = payload;
+  if (!customerId) return fail(res, 'customerId required', 400);
+
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl || 'https://wphubpro.netlify.app/#/subscription',
+    });
+    log(`Created billing portal session: ${session.id}`);
+    return success(res, { url: session.url, session_id: session.id });
+  } catch (err) {
+    error(`Failed to create portal session: ${err.message}`);
+    return fail(res, err.message, 400);
+  }
+}
+
+async function listPaymentMethods(stripe, res, log, payload) {
+  const { customerId } = payload;
+  if (!customerId) return fail(res, 'customerId required', 400);
+
+  try {
+    const [paymentMethods, customer] = await Promise.all([
+      stripe.paymentMethods.list({
+        customer: customerId,
+        type: "card",
+      }),
+      stripe.customers.retrieve(customerId),
+    ]);
+    const list = (paymentMethods.data || []).map((pm) => ({
+      id: pm.id,
+      type: pm.type,
+      card: pm.card
+        ? {
+            brand: pm.card.brand,
+            last4: pm.card.last4,
+            exp_month: pm.card.exp_month,
+            exp_year: pm.card.exp_year,
+          }
+        : null,
+    }));
+    const dpm = customer.invoice_settings?.default_payment_method;
+    const defaultPaymentMethodId =
+      typeof dpm === "string" ? dpm : dpm && dpm.id ? dpm.id : null;
+    return success(res, { paymentMethods: list, defaultPaymentMethodId });
+  } catch (err) {
+    error(`Failed to list payment methods: ${err.message}`);
+    return fail(res, err.message, 400);
+  }
+}
+
+async function createSetupIntent(stripe, res, log, payload) {
+  const { customerId } = payload;
+  if (!customerId) return fail(res, 'customerId required', 400);
+
+  try {
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      usage: "off_session",
+      automatic_payment_methods: { enabled: true },
+    });
+    return success(res, { clientSecret: setupIntent.client_secret });
+  } catch (err) {
+    error(`Failed to create setup intent: ${err.message}`);
+    return fail(res, err.message, 400);
+  }
+}
+
+async function attachPaymentMethod(stripe, res, log, payload) {
+  const { customerId, paymentMethodId, setAsDefault } = payload;
+  if (!customerId || !paymentMethodId) return fail(res, 'customerId and paymentMethodId required', 400);
+
+  try {
+    await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+    if (setAsDefault) {
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
+      });
+      const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 1 });
+      if (subs.data.length > 0) {
+        await stripe.subscriptions.update(subs.data[0].id, { default_payment_method: paymentMethodId });
+      }
+    }
+    return success(res, {});
+  } catch (err) {
+    error(`Failed to attach payment method: ${err.message}`);
+    return fail(res, err.message, 400);
+  }
+}
+
+async function detachPaymentMethod(stripe, res, log, payload) {
+  const { paymentMethodId } = payload;
+  if (!paymentMethodId) return fail(res, 'paymentMethodId required', 400);
+
+  try {
+    await stripe.paymentMethods.detach(paymentMethodId);
+    return success(res, {});
+  } catch (err) {
+    error(`Failed to detach payment method: ${err.message}`);
+    return fail(res, err.message, 400);
+  }
+}
+
+async function setDefaultPaymentMethod(stripe, res, log, payload) {
+  const { customerId, paymentMethodId } = payload;
+  if (!customerId || !paymentMethodId) return fail(res, 'customerId and paymentMethodId required', 400);
+
+  try {
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+    const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 10 });
+    for (const sub of subs.data) {
+      if (sub.status === "active" || sub.status === "trialing") {
+        await stripe.subscriptions.update(sub.id, { default_payment_method: paymentMethodId });
+        break;
+      }
+    }
+    return success(res, {});
+  } catch (err) {
+    error(`Failed to set default payment method: ${err.message}`);
+    return fail(res, err.message, 400);
+  }
 }
 
 async function verifyWebhook(databases, config, req, res, log, error) {

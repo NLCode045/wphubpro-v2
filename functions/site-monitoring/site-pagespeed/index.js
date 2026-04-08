@@ -1,6 +1,6 @@
 /**
  * site-pagespeed: Google PageSpeed Insights v5 for one strategy per call (`desktop` or `mobile`).
- * API key: GOOGLE_PAGESPEED_API_KEY (or aliases) in Appwrite function global env.
+ * Delegates PSI analysis to google-pagespeed-gateway.
  * Auth: JWT; user must own the site document.
  */
 const sdk = require('node-appwrite');
@@ -76,214 +76,56 @@ function normalizeUrl(raw) {
   return `https://${t}`;
 }
 
-function scoreFromCategory(categories, id) {
-  const c = categories && categories[id];
-  if (!c || typeof c.score !== 'number' || Number.isNaN(c.score)) return null;
-  return Math.round(Math.min(1, Math.max(0, c.score)) * 100);
-}
-
-function auditNumeric(audits, id) {
-  const a = audits && audits[id];
-  if (!a || typeof a.numericValue !== 'number' || Number.isNaN(a.numericValue)) return null;
-  return a.numericValue;
-}
-
-/** TTFB (via server-response-time), LCP, CLS from Lighthouse audits. */
-function extractCoreWebVitals(lr) {
-  const audits = lr.audits || {};
-  return {
-    timeToFirstByteMs: auditNumeric(audits, 'server-response-time'),
-    largestContentfulPaintMs: auditNumeric(audits, 'largest-contentful-paint'),
-    cumulativeLayoutShift: auditNumeric(audits, 'cumulative-layout-shift'),
-  };
-}
-
 /**
- * @param {string} url
- * @param {string} psiKey
- * @param {'desktop'|'mobile'} strategy
- * @param {(s:string)=>void} log
+ * Call google-pagespeed-gateway with given action and payload
  */
-async function runPsi(url, psiKey, strategy, log) {
+async function callGooglePageSpeedGateway(action, payload, log, error) {
+  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
+
+  const gatewayClient = new sdk.Client()
+    .setEndpoint(endpoint)
+    .setProject(projectId)
+    .setKey(apiKey);
+
+  const functions = new sdk.Functions(gatewayClient);
+  const gatewayFunctionId = process.env.GOOGLE_PAGESPEED_GATEWAY_FUNCTION_ID || 'google-pagespeed-gateway';
+
   try {
-    const params = new URLSearchParams();
-    params.set('url', url);
-    params.set('key', String(psiKey).trim());
-    params.set('strategy', strategy);
-    for (const c of ['PERFORMANCE', 'ACCESSIBILITY', 'BEST_PRACTICES', 'SEO']) {
-      params.append('category', c);
+    const response = await functions.createExecution(
+      gatewayFunctionId,
+      JSON.stringify({ action, payload }),
+      true
+    );
+
+    if (!response.responseBody) {
+      throw new Error('No response from google-pagespeed-gateway');
     }
 
-    const psiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`;
-    log(`[site-pagespeed] PSI ${strategy}: ${url}`);
+    const result = typeof response.responseBody === 'string'
+      ? JSON.parse(response.responseBody)
+      : response.responseBody;
 
-    const psiRes = await fetch(psiUrl, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-
-    const psiText = await psiRes.text();
-    let psiJson;
-    try {
-      psiJson = psiText ? JSON.parse(psiText) : {};
-    } catch {
-      return { ok: false, strategy, message: 'PageSpeed API returned invalid JSON.' };
+    if (!result.success) {
+      throw new Error(result.message || 'Gateway operation failed');
     }
 
-    if (!psiRes.ok) {
-      const msg =
-        (psiJson.error && psiJson.error.message) ||
-        psiJson.message ||
-        `PageSpeed API error (${psiRes.status})`;
-      return { ok: false, strategy, message: msg };
-    }
-
-    const lr = psiJson.lighthouseResult;
-    const categories = lr && lr.categories ? lr.categories : null;
-    if (!categories) {
-      return { ok: false, strategy, message: 'PageSpeed response had no Lighthouse categories.' };
-    }
-
-    const scores = {
-      performance: scoreFromCategory(categories, 'performance'),
-      accessibility: scoreFromCategory(categories, 'accessibility'),
-      bestPractices: scoreFromCategory(categories, 'best-practices'),
-      seo: scoreFromCategory(categories, 'seo'),
-    };
-
-    return {
-      ok: true,
-      strategy,
-      scores,
-      coreWebVitals: extractCoreWebVitals(lr),
-      analyzedUrl: psiJson.id || url,
-      lighthouseVersion: lr.lighthouseVersion || undefined,
-    };
-  } catch (e) {
-    return { ok: false, strategy, message: e.message || 'PageSpeed request failed.' };
+    return result;
+  } catch (err) {
+    error(`google-pagespeed-gateway call failed: ${err.message}`);
+    throw err;
   }
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const crypto = require("crypto");
-  const sdk = require("node-appwrite");
-
-  /**
-   * Derive a consistent 32-byte key from the encryption key string using SHA256
-   */
-  function deriveKey(encryptionKey) {
-    return crypto.createHash('sha256').update(String(encryptionKey), 'utf8').digest();
-  }
-
-  /**
-   * Decrypt a payload encrypted with AES-256-GCM
-   * Input format: "iv:encryptedData:authTag" (all hex-encoded)
-   */
-  function decryptPayload(encryptedPayload, encryptionKey) {
-    if (!encryptedPayload || typeof encryptedPayload !== 'string') {
-      throw new Error('encryptedPayload must be a non-empty string');
-    }
-    if (!encryptionKey || typeof encryptionKey !== 'string') {
-      throw new Error('encryptionKey must be a non-empty string');
-    }
-
-    const parts = encryptedPayload.split(':');
-    if (parts.length !== 3) {
-      throw new Error('Invalid encrypted payload format');
-    }
-
-    try {
-      const iv = Buffer.from(parts[0], 'hex');
-      const encrypted = Buffer.from(parts[1], 'hex');
-      const authTag = Buffer.from(parts[2], 'hex');
-
-      if (iv.length !== 12) {
-        throw new Error('Invalid IV length');
-      }
-
-      const key = deriveKey(encryptionKey);
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAuthTag(authTag);
-
-      const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-      return JSON.parse(decrypted.toString('utf8'));
-    } catch (err) {
-      throw new Error(`Decryption failed: ${err.message}`);
-    }
-  }
-
-  /**
-   * Retrieve and decrypt connector credentials from vault
-   */
-  async function getConnectorCredentials(provider, encryptionKey, databases, vaultDbId) {
-    if (!provider || typeof provider !== 'string') {
-      throw new Error('provider must be a non-empty string');
-    }
-    if (!encryptionKey || typeof encryptionKey !== 'string') {
-      throw new Error('encryptionKey must be a non-empty string');
-    }
-    if (!databases) {
-      throw new Error('databases client is required');
-    }
-    if (!vaultDbId || typeof vaultDbId !== 'string') {
-      throw new Error('vaultDbId must be a non-empty string');
-    }
-
-    try {
-      const doc = await databases.getDocument(vaultDbId, 'connectors', provider);
-
-      if (!doc || !doc.encrypted_payload) {
-        return null;
-      }
-
-      const credentials = decryptPayload(doc.encrypted_payload, encryptionKey);
-      return credentials;
-    } catch (err) {
-      if (err.code === 404) {
-        return null;
-      }
-      throw new Error(`Failed to retrieve connector credentials: ${err.message}`);
-    }
-  }
-
   const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
   const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
   const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
-  const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-  const VAULT_DB_ID = process.env.VAULT_DB_ID || "69d2ecf3000f449c752f";
 
   if (!endpoint || !projectId || !apiKey) {
     error('[site-pagespeed] Missing Appwrite server env');
     return fail(res, 'Function environment is not configured.', 500);
-  }
-
-  let psiKey;
-  try {
-    if (!ENCRYPTION_KEY) {
-      throw new Error("ENCRYPTION_KEY not configured");
-    }
-
-    const adminClient = new sdk.Client()
-      .setEndpoint(endpoint)
-      .setProject(projectId)
-      .setKey(apiKey);
-    const databases = new sdk.Databases(adminClient);
-
-    const googleCredentials = await getConnectorCredentials("google_api", ENCRYPTION_KEY, databases, VAULT_DB_ID);
-    if (!googleCredentials || !googleCredentials.GOOGLE_API_KEY) {
-      error('[site-pagespeed] Google API credentials not found in vault');
-      return fail(res, 'PageSpeed API key is not configured on the server.', 503);
-    }
-
-    psiKey = googleCredentials.GOOGLE_API_KEY;
-  } catch (err) {
-    error('[site-pagespeed] Failed to retrieve Google API key: ' + err.message);
-    return fail(res, 'PageSpeed API key is not configured on the server.', 503);
-  }
-
-  if (!psiKey || !String(psiKey).trim()) {
-    error('[site-pagespeed] Missing GOOGLE_API_KEY in vault');
-    return fail(res, 'PageSpeed API key is not configured on the server.', 503);
   }
 
   let body;
@@ -347,10 +189,8 @@ module.exports = async ({ req, res, log, error }) => {
     const strategyRaw = typeof body.strategy === 'string' ? body.strategy.trim().toLowerCase() : '';
     const strategy = strategyRaw === 'mobile' ? 'mobile' : 'desktop';
 
-    const result = await runPsi(url, psiKey, strategy, log);
-    if (!result.ok) {
-      return fail(res, result.message || 'PageSpeed analysis failed.', 502);
-    }
+    // Call google-pagespeed-gateway for PSI analysis
+    const result = await callGooglePageSpeedGateway('analyze', { url, strategy }, log, error);
 
     try {
       const existing = siteDoc.performance_meta || siteDoc.performanceMeta || '';

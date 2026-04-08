@@ -1,8 +1,6 @@
 /* eslint-disable no-unused-vars */
 const crypto = require("crypto");
 const sdk = require("node-appwrite");
-const { S3Client } = require("@aws-sdk/client-s3");
-const { Upload } = require("@aws-sdk/lib-storage");
 const archiver = require("archiver");
 const unzipper = require("unzipper");
 const stream = require("stream");
@@ -123,83 +121,47 @@ function mirrorLegacyFieldsFromVersions(versions) {
 
 // --- Main Handler ---
 module.exports = async ({ req, res, log, error }) => {
-  const vaultCrypto = require("crypto");
-
   /**
-   * Derive a consistent 32-byte key from the encryption key string using SHA256
+   * Call s3-gateway to perform S3 operations
    */
-  function deriveKey(encryptionKey) {
-    return vaultCrypto.createHash('sha256').update(String(encryptionKey), 'utf8').digest();
-  }
+  async function callS3Gateway(action, payload, log, error) {
+    const endpoint = process.env.APPWRITE_FUNCTION_ENDPOINT ||
+      process.env.APPWRITE_ENDPOINT ||
+      process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+    const projectId = process.env.APPWRITE_FUNCTION_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
+    const apiKey = process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_API_KEY || process.env.APPWRITE_KEY;
 
-  /**
-   * Decrypt a payload encrypted with AES-256-GCM
-   * Input format: "iv:encryptedData:authTag" (all hex-encoded)
-   */
-  function decryptPayload(encryptedPayload, encryptionKey) {
-    if (!encryptedPayload || typeof encryptedPayload !== 'string') {
-      throw new Error('encryptedPayload must be a non-empty string');
-    }
-    if (!encryptionKey || typeof encryptionKey !== 'string') {
-      throw new Error('encryptionKey must be a non-empty string');
-    }
+    const gatewayClient = new sdk.Client()
+      .setEndpoint(endpoint)
+      .setProject(projectId)
+      .setKey(apiKey);
 
-    const parts = encryptedPayload.split(':');
-    if (parts.length !== 3) {
-      throw new Error('Invalid encrypted payload format');
-    }
+    const functions = new sdk.Functions(gatewayClient);
+    const gatewayFunctionId = process.env.S3_GATEWAY_FUNCTION_ID || 's3-gateway';
 
     try {
-      const iv = Buffer.from(parts[0], 'hex');
-      const encrypted = Buffer.from(parts[1], 'hex');
-      const authTag = Buffer.from(parts[2], 'hex');
+      const response = await functions.createExecution(
+        gatewayFunctionId,
+        JSON.stringify({ action, payload }),
+        true
+      );
 
-      if (iv.length !== 12) {
-        throw new Error('Invalid IV length');
+      if (!response.responseBody) {
+        throw new Error('No response from s3-gateway');
       }
 
-      const key = deriveKey(encryptionKey);
-      const decipher = vaultCrypto.createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAuthTag(authTag);
+      const result = typeof response.responseBody === 'string'
+        ? JSON.parse(response.responseBody)
+        : response.responseBody;
 
-      const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-      return JSON.parse(decrypted.toString('utf8'));
+      if (!result.success) {
+        throw new Error(result.message || 'Gateway operation failed');
+      }
+
+      return result;
     } catch (err) {
-      throw new Error(`Decryption failed: ${err.message}`);
-    }
-  }
-
-  /**
-   * Retrieve and decrypt connector credentials from vault
-   */
-  async function getConnectorCredentials(provider, encryptionKey, databases, vaultDbId) {
-    if (!provider || typeof provider !== 'string') {
-      throw new Error('provider must be a non-empty string');
-    }
-    if (!encryptionKey || typeof encryptionKey !== 'string') {
-      throw new Error('encryptionKey must be a non-empty string');
-    }
-    if (!databases) {
-      throw new Error('databases client is required');
-    }
-    if (!vaultDbId || typeof vaultDbId !== 'string') {
-      throw new Error('vaultDbId must be a non-empty string');
-    }
-
-    try {
-      const doc = await databases.getDocument(vaultDbId, 'connectors', provider);
-
-      if (!doc || !doc.encrypted_payload) {
-        return null;
-      }
-
-      const credentials = decryptPayload(doc.encrypted_payload, encryptionKey);
-      return credentials;
-    } catch (err) {
-      if (err.code === 404) {
-        return null;
-      }
-      throw new Error(`Failed to retrieve connector credentials: ${err.message}`);
+      error(`s3-gateway call failed: ${err.message}`);
+      throw err;
     }
   }
 
@@ -216,54 +178,10 @@ module.exports = async ({ req, res, log, error }) => {
     process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_API_KEY || process.env.APPWRITE_KEY;
   const APPWRITE_FUNCTION_USER_ID = process.env.APPWRITE_FUNCTION_USER_ID || process.env.APPWRITE_USER_ID;
 
-  // Get S3 credentials from vault
-  let S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY;
-
-  try {
-    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-    const VAULT_DB_ID = process.env.VAULT_DB_ID || "69d2ecf3000f449c752f";
-
-    if (!ENCRYPTION_KEY) {
-      error("ENCRYPTION_KEY not configured");
-      return res.json({ success: false, message: "S3 environment is not configured." }, 500);
-    }
-
-    client
-      .setEndpoint(APPWRITE_FUNCTION_ENDPOINT)
-      .setProject(APPWRITE_FUNCTION_PROJECT_ID)
-      .setKey(APPWRITE_FUNCTION_API_KEY);
-
-    const databases = new sdk.Databases(client);
-    const s3Credentials = await getConnectorCredentials("s3", ENCRYPTION_KEY, databases, VAULT_DB_ID);
-
-    if (!s3Credentials || !s3Credentials.S3_BUCKET || !s3Credentials.S3_REGION || 
-        !s3Credentials.S3_ACCESS_KEY_ID || !s3Credentials.S3_SECRET_ACCESS_KEY) {
-      error("S3 credentials not found in vault");
-      return res.json({ success: false, message: "S3 environment is not configured." }, 500);
-    }
-
-    S3_BUCKET = s3Credentials.S3_BUCKET;
-    S3_REGION = s3Credentials.S3_REGION;
-    S3_ACCESS_KEY_ID = s3Credentials.S3_ACCESS_KEY_ID;
-    S3_SECRET_ACCESS_KEY = s3Credentials.S3_SECRET_ACCESS_KEY;
-  } catch (err) {
-    log("Failed to retrieve S3 credentials from vault: " + err.message);
-    error("S3 environment is not configured.");
-    return res.json({ success: false, message: "S3 environment is not configured." }, 500);
-  }
-
   if (!APPWRITE_FUNCTION_ENDPOINT || !APPWRITE_FUNCTION_PROJECT_ID || !APPWRITE_FUNCTION_API_KEY) {
     error("Appwrite environment variables are not set.");
     return res.json({ success: false, message: "Appwrite environment is not configured." }, 500);
   }
-
-  const s3 = new S3Client({
-    region: S3_REGION,
-    credentials: {
-      accessKeyId: S3_ACCESS_KEY_ID,
-      secretAccessKey: S3_SECRET_ACCESS_KEY,
-    },
-  });
 
   let payload = {};
   try {
@@ -375,16 +293,9 @@ module.exports = async ({ req, res, log, error }) => {
     archive.on("error", (e) => passThrough.destroy(e));
     archive.pipe(passThrough);
 
-    const parallelUploads3 = new Upload({
-      client: s3,
-      params: {
-        Bucket: S3_BUCKET,
-        Key: s3Key,
-        Body: passThrough,
-        ContentType: "application/zip",
-      },
-    });
-    const uploadDone = parallelUploads3.done();
+    // Collect zip data
+    const zipChunks = [];
+    passThrough.on('data', chunk => zipChunks.push(chunk));
 
     for (const file of directory.files) {
       if (file.type !== "File") continue;
@@ -395,7 +306,19 @@ module.exports = async ({ req, res, log, error }) => {
     }
 
     await archive.finalize();
-    await uploadDone;
+    const zipBuffer = Buffer.concat(zipChunks);
+
+    // Upload via s3-gateway
+    const uploadResult = await callS3Gateway(
+      'upload',
+      {
+        key: s3Key,
+        body: zipBuffer.toString('base64'),
+        contentType: 'application/zip',
+      },
+      log,
+      error
+    );
 
     log(`Uploaded plugin/theme root as single zip to S3 at ${s3Key}`);
 

@@ -10,7 +10,55 @@
  * Consumers: admin-manage-users, bulk-operations, system functions
  */
 const sdk = require('node-appwrite');
-const { validateGatewayEnvironment, parsePayload } = require('https://69d42466001bf3811c6a.functions.wphub.pro');
+
+/**
+ * Validate environment configuration for gateway functions
+ */
+function validateGatewayEnvironment() {
+  const required = [
+    'ENCRYPTION_KEY',
+    'APPWRITE_ENDPOINT',
+    'APPWRITE_PROJECT_ID',
+    'APPWRITE_API_KEY',
+  ];
+
+  const missing = required.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+
+  return {
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    APPWRITE_ENDPOINT: process.env.APPWRITE_ENDPOINT,
+    APPWRITE_PROJECT_ID: process.env.APPWRITE_PROJECT_ID,
+    APPWRITE_API_KEY: process.env.APPWRITE_API_KEY,
+    VAULT_DB_ID: process.env.VAULT_DB_ID || '69d2ecf3000f449c752f',
+  };
+}
+
+/**
+ * Parse request payload from various formats
+ */
+function parsePayload(req) {
+  if (!req) return {};
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (req.bodyRaw && typeof req.bodyRaw === 'string') {
+    try {
+      return JSON.parse(req.bodyRaw);
+    } catch {
+      return {};
+    }
+  }
+  if (req.payload && typeof req.payload === 'string') {
+    try {
+      return JSON.parse(req.payload);
+    } catch {
+      return {};
+    }
+  }
+  if (req.payload && typeof req.payload === 'object') return req.payload;
+  return {};
+}
 
 // Response helpers
 function success(res, data = {}, status = 200) {

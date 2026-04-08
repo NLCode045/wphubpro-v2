@@ -49,6 +49,20 @@ module.exports = async ({ req, res, log, error }) => {
     };
     const action = actionMap[actionRaw] || actionRaw;
 
+    // Debug logging
+    log("=== DEBUG: admin-manage-users request ===");
+    log("Request headers: " + JSON.stringify({
+      "x-appwrite-user-id": req.headers?.["x-appwrite-user-id"] || "(not set)",
+      "X-Appwrite-User-Id": req.headers?.["X-Appwrite-User-Id"] || "(not set)",
+      "x-appwrite-function-user-id": req.headers?.["x-appwrite-function-user-id"] || "(not set)",
+      "X-Appwrite-Function-User-Id": req.headers?.["X-Appwrite-Function-User-Id"] || "(not set)",
+      "x-appwrite-impersonate-user-id": req.headers?.["x-appwrite-impersonate-user-id"] || "(not set)",
+      "X-Appwrite-Impersonate-User-Id": req.headers?.["X-Appwrite-Impersonate-User-Id"] || "(not set)",
+    }));
+    log("Request payload: " + JSON.stringify(payload));
+    log("Action: " + action);
+    log("=== END DEBUG ===");
+
     const client = createClient(sdk, { endpoint, projectId, apiKey });
     const databases = new sdk.Databases(client);
     const stripeInstance = process.env.STRIPE_SECRET_KEY ? stripe(process.env.STRIPE_SECRET_KEY) : null;

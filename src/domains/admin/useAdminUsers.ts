@@ -91,13 +91,18 @@ async function fetchFormattedAdminUsers(params: ListUsersParams): Promise<{
   const role = params.role ?? 'all';
   const plan = params.plan ?? 'all';
 
+  const payload = { action: 'list', limit, offset, search, status, role, plan };
+  
+  // Debug logging
+  console.debug('[fetchFormattedAdminUsers] Sending payload:', payload);
+
   const res = await executeFunction<{
     success?: boolean;
     users: AppwriteUser[];
     total: number;
     limit?: number;
     offset?: number;
-  }>(APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS, { action: 'list', limit, offset, search, status, role, plan });
+  }>(APPWRITE_FUNCTION_IDS.ADMIN_MANAGE_USERS, payload);
 
   const rawUsers = res?.users ?? [];
   const total = res?.total ?? rawUsers.length;

@@ -1,13 +1,12 @@
 /**
  * health-ai-agent: JWT-authenticated suggest, executeOne, and dryRun for Site Health–driven fixes.
- * suggest: site health_meta + plugins_meta/themes_meta, optional Gemini, else heuristic advice_only rows.
+ * suggest: site health_meta + plugins_meta/themes_meta, optional Gemini (via openai-gateway), else heuristic advice_only rows.
  * executeOne: allowlisted bridge calls (health push, plugins, themes, hub/invoke registry handlers).
  * dryRun: analyze/plan from hub-stored meta only — no WordPress HTTP calls; plan validates like executeOne.
  */
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
-const { getConnectorCredentials } = require('../_shared/vault-client.js');
 
 const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || 'platform_db';
 const SITES_COLLECTION_ID = process.env.APPWRITE_SITES_COLLECTION_ID || 'sites';
@@ -71,6 +70,48 @@ function decryptApiKey(encrypted, key) {
     const decipher = crypto.createDecipheriv('aes-256-gcm', derivedKey, iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(encryptedBuf), decipher.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Call openai-gateway to generate Gemini content suggestions
+ */
+async function callOpenAIGateway(action, payload, log, error, endpoint, projectId, apiKey) {
+  const gatewayClient = new sdk.Client()
+    .setEndpoint(endpoint)
+    .setProject(projectId)
+    .setKey(apiKey);
+
+  const functions = new sdk.Functions(gatewayClient);
+  const gatewayFunctionId = process.env.OPENAI_GATEWAY_FUNCTION_ID || 'openai-gateway';
+
+  try {
+    const response = await functions.createExecution(
+      gatewayFunctionId,
+      JSON.stringify({ action, payload }),
+      true
+    );
+
+    if (!response.responseBody) {
+      throw new Error('No response from openai-gateway');
+    }
+
+    const result = typeof response.responseBody === 'string'
+      ? JSON.parse(response.responseBody)
+      : response.responseBody;
+
+    if (!result.success) {
+      throw new Error(result.message || 'Gateway operation failed');
+    }
+
+    return result;
+  } catch (err) {
+    error(`openai-gateway call failed: ${err.message}`);
+    throw err;
+  }
+}
   } catch {
     return null;
   }
@@ -466,14 +507,7 @@ function normalizeSuggestion(raw, index) {
   return null;
 }
 
-async function callGeminiForSuggestions(checksSummary, extras, log, geminiCredentials) {
-  if (!geminiCredentials) return null;
-
-  const key = String(geminiCredentials.GEMINI_API_KEY || '').trim();
-  if (!key) return null;
-
-  const model = String(geminiCredentials.GEMINI_MODEL || 'gemini-2.0-flash').trim() || 'gemini-2.0-flash';
-
+async function callGeminiForSuggestions(checksSummary, extras, log, error, endpoint, projectId, apiKey) {
   const system = `You are a WordPress Site Health assistant for WPHub Pro. Given Site Health checks and optional plugin/theme lists from the hub, propose concrete fixes.
 Return a single JSON object with key "suggestions" (array). Each item: id (short slug), title, description, kind, payload.
 Allowed kind values ONLY:
@@ -489,60 +523,44 @@ Max 8 suggestions. Prefer advice_only when unsure.`;
     plugins: (extras && extras.plugins) || [],
     themes: (extras && extras.themes) || [],
   });
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
 
   try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: system }],
-        },
-        contents: [
+    const gatewayResult = await callOpenAIGateway(
+      'generate-content',
+      {
+        model: 'gemini-2.0-flash',
+        messages: [
           {
             role: 'user',
-            parts: [{ text: `Site Health checks JSON:\n${userContent}` }],
+            content: `Site Health checks JSON:\n${userContent}`,
           },
         ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json',
-        },
-      }),
-    });
-    const text = await resp.text();
-    if (!resp.ok) {
-      log(`[health-ai-agent] Gemini HTTP ${resp.status}: ${text.slice(0, 300)}`);
+        systemPrompt: system,
+      },
+      log,
+      error,
+      endpoint,
+      projectId,
+      apiKey
+    );
+
+    if (!gatewayResult.content) {
+      log('[health-ai-agent] Gateway returned no content');
       return null;
     }
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return null;
-    }
-    const block = parsed?.promptFeedback?.blockReason;
-    if (block) {
-      log(`[health-ai-agent] Gemini blocked: ${block}`);
-      return null;
-    }
-    const parts = parsed?.candidates?.[0]?.content?.parts;
-    let rawText =
-      Array.isArray(parts) && parts[0] && typeof parts[0].text === 'string' ? parts[0].text.trim() : '';
-    if (!rawText) {
-      log(`[health-ai-agent] Gemini empty response`);
-      return null;
-    }
+
+    let rawText = String(gatewayResult.content).trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
     }
+
     let obj;
     try {
       obj = JSON.parse(rawText);
     } catch {
       return null;
     }
+
     const arr = Array.isArray(obj.suggestions) ? obj.suggestions : [];
     const normalized = [];
     const seen = new Set();
@@ -555,7 +573,7 @@ Max 8 suggestions. Prefer advice_only when unsure.`;
     }
     return normalized.length > 0 ? normalized : null;
   } catch (e) {
-    log(`[health-ai-agent] Gemini error: ${e.message}`);
+    log(`[health-ai-agent] Content generation error: ${e.message}`);
     return null;
   }
 }
@@ -858,20 +876,16 @@ module.exports = async ({ req, res, log, error }) => {
       update: t.update,
     }));
 
-    let aiList = await callGeminiForSuggestions(checksSummary, { plugins: pluginsCtx, themes: themesCtx }, log, null);
+    let aiList = await callGeminiForSuggestions(checksSummary, { plugins: pluginsCtx, themes: themesCtx }, log, error, endpoint, projectId, apiKey);
     let source = 'gemini';
 
-    // Try to get Gemini credentials from vault for AI suggestions
+    // If initial call fails, try again (fallback behavior)
     if (!aiList) {
       try {
-        const VAULT_DB_ID = process.env.VAULT_DB_ID || '69d2ecf3000f449c752f';
-        const geminiCredentials = await getConnectorCredentials('gemini', ENCRYPTION_KEY, databases, VAULT_DB_ID);
-        if (geminiCredentials) {
-          aiList = await callGeminiForSuggestions(checksSummary, { plugins: pluginsCtx, themes: themesCtx }, log, geminiCredentials);
-          source = 'gemini';
-        }
+        aiList = await callGeminiForSuggestions(checksSummary, { plugins: pluginsCtx, themes: themesCtx }, log, error, endpoint, projectId, apiKey);
+        source = 'gemini';
       } catch (err) {
-        log(`[health-ai-agent] Could not retrieve Gemini credentials: ${err.message}`);
+        log(`[health-ai-agent] Could not generate AI suggestions: ${err.message}`);
       }
     }
 

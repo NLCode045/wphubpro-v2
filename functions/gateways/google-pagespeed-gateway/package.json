@@ -1,0 +1,9 @@
+{
+  "name": "google-pagespeed-gateway",
+  "version": "1.0.0",
+  "description": "Central Google PageSpeed Insights API gateway - holds sole access to Google API credentials and performs all PageSpeed operations",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3"
+  }
+}

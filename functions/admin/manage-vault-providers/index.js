@@ -1,6 +1,73 @@
 /* eslint-disable no-unused-vars */
 const sdk = require('node-appwrite');
-const { encryptPayload, decryptPayload } = require('../../_shared/vault-client.js');
+const crypto = require('crypto');
+
+/**
+ * Derive a consistent 32-byte key from the encryption key string using SHA256
+ */
+function deriveKey(encryptionKey) {
+  return crypto.createHash('sha256').update(String(encryptionKey), 'utf8').digest();
+}
+
+/**
+ * Encrypt a payload object using AES-256-GCM
+ * Returns format: "iv:encryptedData:authTag" (all hex-encoded)
+ */
+function encryptPayload(plainObject, encryptionKey) {
+  if (!plainObject || typeof plainObject !== 'object') {
+    throw new Error('plainObject must be an object');
+  }
+  if (!encryptionKey || typeof encryptionKey !== 'string') {
+    throw new Error('encryptionKey must be a non-empty string');
+  }
+
+  const iv = crypto.randomBytes(12);
+  const key = deriveKey(encryptionKey);
+  const plaintext = JSON.stringify(plainObject);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return `${iv.toString('hex')}:${encrypted.toString('hex')}:${authTag.toString('hex')}`;
+}
+
+/**
+ * Decrypt a payload encrypted with encryptPayload
+ * Input format: "iv:encryptedData:authTag" (all hex-encoded)
+ */
+function decryptPayload(encryptedPayload, encryptionKey) {
+  if (!encryptedPayload || typeof encryptedPayload !== 'string') {
+    throw new Error('encryptedPayload must be a non-empty string');
+  }
+  if (!encryptionKey || typeof encryptionKey !== 'string') {
+    throw new Error('encryptionKey must be a non-empty string');
+  }
+
+  const parts = encryptedPayload.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted payload format');
+  }
+
+  try {
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = Buffer.from(parts[1], 'hex');
+    const authTag = Buffer.from(parts[2], 'hex');
+
+    if (iv.length !== 12) {
+      throw new Error('Invalid IV length');
+    }
+
+    const key = deriveKey(encryptionKey);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return JSON.parse(decrypted.toString('utf8'));
+  } catch (err) {
+    throw new Error(`Decryption failed: ${err.message}`);
+  }
+}
 
 function parsePayload(req) {
   if (!req) return {};

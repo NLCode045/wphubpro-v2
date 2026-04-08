@@ -1,13 +1,59 @@
-const Stripe = require("stripe");
 const sdk = require("node-appwrite");
-const { getConnectorCredentials } = require("../_shared/vault-client.js");
+
+/**
+ * Call stripe-gateway with given action and payload
+ */
+async function callStripeGateway(action, payload, log, error) {
+  const APPWRITE_ENDPOINT =
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
+
+  const gatewayClient = new sdk.Client()
+    .setEndpoint(APPWRITE_ENDPOINT)
+    .setProject(APPWRITE_PROJECT_ID)
+    .setKey(APPWRITE_API_KEY);
+
+  const functions = new sdk.Functions(gatewayClient);
+  const gatewayFunctionId = process.env.STRIPE_GATEWAY_FUNCTION_ID || 'stripe-gateway';
+
+  try {
+    const response = await functions.createExecution(
+      gatewayFunctionId,
+      JSON.stringify({ action, payload }),
+      true
+    );
+
+    if (!response.responseBody) {
+      throw new Error('No response from stripe-gateway');
+    }
+
+    const result = typeof response.responseBody === 'string'
+      ? JSON.parse(response.responseBody)
+      : response.responseBody;
+
+    if (!result.success) {
+      throw new Error(result.message || 'Gateway operation failed');
+    }
+
+    return result;
+  } catch (err) {
+    error(`stripe-gateway call failed: ${err.message}`);
+    throw err;
+  }
+}
 
 /**
  * Stripe Portal Link Function
  * Creates a Stripe billing portal session for the authenticated user
  *
  * Environment Variables Required:
- * - ENCRYPTION_KEY: For decrypting vault credentials
  * - APPWRITE_ENDPOINT: Appwrite API endpoint
  * - APPWRITE_PROJECT_ID: Appwrite project ID
  * - APPWRITE_API_KEY: Appwrite API key
@@ -17,9 +63,6 @@ const { getConnectorCredentials } = require("../_shared/vault-client.js");
  */
 module.exports = async ({ req, res, log, error }) => {
   try {
-    // Get Stripe credentials from vault
-    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-    const VAULT_DB_ID = process.env.VAULT_DB_ID || "69d2ecf3000f449c752f";
     const APPWRITE_ENDPOINT =
       process.env.APPWRITE_ENDPOINT ||
       process.env.APPWRITE_FUNCTION_ENDPOINT ||
@@ -31,48 +74,6 @@ module.exports = async ({ req, res, log, error }) => {
       process.env.APPWRITE_API_KEY ||
       process.env.APPWRITE_FUNCTION_API_KEY ||
       process.env.APPWRITE_KEY;
-
-    if (!ENCRYPTION_KEY) {
-      error("ENCRYPTION_KEY is not configured");
-      return res.json(
-        {
-          success: false,
-          message: "Configuration missing",
-        },
-        500
-      );
-    }
-
-    let STRIPE_SECRET_KEY;
-    try {
-      const adminClient = new sdk.Client()
-        .setEndpoint(APPWRITE_ENDPOINT)
-        .setProject(APPWRITE_PROJECT_ID)
-        .setKey(APPWRITE_API_KEY);
-      const databases = new sdk.Databases(adminClient);
-
-      const stripeCredentials = await getConnectorCredentials("stripe", ENCRYPTION_KEY, databases, VAULT_DB_ID);
-      if (!stripeCredentials || !stripeCredentials.STRIPE_SECRET_KEY) {
-        error("Stripe credentials not found in vault");
-        return res.json(
-          {
-            success: false,
-            message: "Stripe configuration missing",
-          },
-          500
-        );
-      }
-      STRIPE_SECRET_KEY = stripeCredentials.STRIPE_SECRET_KEY;
-    } catch (err) {
-      error("Failed to retrieve Stripe credentials: " + err.message);
-      return res.json(
-        {
-          success: false,
-          message: "Stripe configuration missing",
-        },
-        500
-      );
-    }
 
     if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) {
       error("Appwrite configuration missing");
@@ -163,23 +164,23 @@ module.exports = async ({ req, res, log, error }) => {
       );
     }
 
-    // Initialize Stripe
-    const stripe = new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: "2023-10-16",
-    });
+    // Create billing portal session via stripe-gateway
+    const portalResult = await callStripeGateway(
+      'create-portal-session',
+      {
+        customerId: stripeCustomerId,
+        returnUrl: returnUrl,
+      },
+      log,
+      error
+    );
 
-    // Create billing portal session
-    const session = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: returnUrl,
-    });
-
-    log(`Billing portal session created: ${session.id}`);
+    log(`Billing portal session created: ${portalResult.session_id}`);
 
     return res.json({
       success: true,
-      url: session.url,
-      session_id: session.id,
+      url: portalResult.url,
+      session_id: portalResult.session_id,
     });
   } catch (err) {
     error(`Failed to create billing portal session: ${err.message}`);

@@ -1,9 +1,10 @@
 /**
  * stripe-products: Consumer function for Stripe product operations
- * Routes to stripe-gateway via gateway-utils
+ * Routes to stripe-gateway via Appwrite Functions SDK
  *
- * Pure data flow - no credentials, no SDK initialization
+ * Pure data flow - no credentials, no vault access
  */
+const sdk = require('node-appwrite');
 
 function parsePayload(req) {
   if (!req) return {};
@@ -18,28 +19,50 @@ function parsePayload(req) {
   return {};
 }
 
-async function callGatewayUtils(action, payload) {
-  const response = await fetch(
-    `${process.env.APPWRITE_FUNCTION_ENDPOINT}/functions/gateway-utils/executions`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        operation: 'call-gateway',
-        gateway_id: 'stripe-gateway',
-        action,
-        payload,
-      }),
+/**
+ * Call stripe-gateway using Appwrite SDK
+ */
+async function callStripeGateway(action, payload, log, error) {
+  const endpoint = process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const apiKey = process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
+
+  const gatewayClient = new sdk.Client()
+    .setEndpoint(endpoint)
+    .setProject(projectId)
+    .setKey(apiKey);
+
+  const functions = new sdk.Functions(gatewayClient);
+  const gatewayFunctionId = process.env.STRIPE_GATEWAY_FUNCTION_ID || 'stripe-gateway';
+
+  try {
+    const response = await functions.createExecution(
+      gatewayFunctionId,
+      JSON.stringify({ action, payload }),
+      true
+    );
+
+    if (!response.responseBody) {
+      throw new Error('No response from stripe-gateway');
     }
-  );
 
-  if (!response.ok) {
-    throw new Error(`Gateway utils returned ${response.status}: ${response.statusText}`);
+    const result = typeof response.responseBody === 'string'
+      ? JSON.parse(response.responseBody)
+      : response.responseBody;
+
+    if (!result.success) {
+      throw new Error(result.message || 'Gateway operation failed');
+    }
+
+    return result;
+  } catch (err) {
+    error(`stripe-gateway call failed: ${err.message}`);
+    throw err;
   }
-
-  return await response.json();
 }
 
 module.exports = async ({ req, res, log, error }) => {
@@ -51,13 +74,7 @@ module.exports = async ({ req, res, log, error }) => {
       return res.json({ success: false, message: 'action required' }, 400);
     }
 
-    const result = await callGatewayUtils(action, payload.payload || payload);
-
-    if (!result.success) {
-      error(`stripe-gateway error: ${result.message}`);
-      return res.json(result, 500);
-    }
-
+    const result = await callStripeGateway(action, payload.payload || payload, log, error);
     return res.json(result);
   } catch (err) {
     error(`stripe-products error: ${err.message}`);

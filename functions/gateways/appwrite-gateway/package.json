@@ -1,0 +1,9 @@
+{
+  "name": "appwrite-gateway",
+  "version": "1.0.0",
+  "description": "Central Appwrite Admin API gateway - performs sensitive admin operations with authorization checks",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3"
+  }
+}

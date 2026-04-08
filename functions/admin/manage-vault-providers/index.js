@@ -29,6 +29,18 @@ function fail(res, message, statusCode = 500, extra = {}) {
   return res.json({ success: false, message, ...extra }, statusCode);
 }
 
+function callerUserIdFromReq(req) {
+  const fromEnv = process.env.APPWRITE_FUNCTION_USER_ID;
+  if (fromEnv && String(fromEnv).trim()) return String(fromEnv).trim();
+  const h = req.headers || {};
+  const v =
+    h['x-appwrite-user-id'] ||
+    h['X-Appwrite-User-Id'] ||
+    h['x-appwrite-function-user-id'] ||
+    h['X-Appwrite-Function-User-Id'];
+  return v ? String(v).trim() : '';
+}
+
 function normalizeProviderId(raw) {
   const s = String(raw || '').trim();
   if (!s) {
@@ -92,16 +104,30 @@ module.exports = async ({ req, res, log, error }) => {
   const actionRaw = String(payload.action || '')
     .toLowerCase()
     .trim();
-  const { userId } = payload;
 
-  if (!userId) {
-    return fail(res, 'Missing userId in request body', 400);
+  const actorUserId = callerUserIdFromReq(req);
+  if (!actorUserId) {
+    return fail(res, 'Unauthorized: could not resolve caller user', 401);
   }
 
+  // Debug logging
+  log('=== DEBUG: manage-vault-providers request ===');
+  log('Request headers: ' + JSON.stringify({
+    'x-appwrite-user-id': req.headers?.['x-appwrite-user-id'] || '(not set)',
+    'X-Appwrite-User-Id': req.headers?.['X-Appwrite-User-Id'] || '(not set)',
+    'x-appwrite-function-user-id': req.headers?.['x-appwrite-function-user-id'] || '(not set)',
+    'X-Appwrite-Function-User-Id': req.headers?.['X-Appwrite-Function-User-Id'] || '(not set)',
+    'x-appwrite-impersonate-user-id': req.headers?.['x-appwrite-impersonate-user-id'] || '(not set)',
+    'X-Appwrite-Impersonate-User-Id': req.headers?.['X-Appwrite-Impersonate-User-Id'] || '(not set)',
+  }));
+  log('Request payload: ' + JSON.stringify(payload));
+  log('Extracted actorUserId: ' + actorUserId);
+  log('=== END DEBUG ===');
+
   try {
-    const isAdmin = await userIsAdmin(users, teams, userId, log);
+    const isAdmin = await userIsAdmin(users, teams, actorUserId, log);
     if (!isAdmin) {
-      log('User ' + userId + ' is not an admin');
+      log('User ' + actorUserId + ' is not an admin');
       return fail(res, 'Forbidden: Admin access required', 403);
     }
 

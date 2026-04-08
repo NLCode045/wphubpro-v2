@@ -1,0 +1,7 @@
+{
+  "name": "gateway-utils",
+  "version": "1.0.0",
+  "description": "Central utility function for gateway communication and vault access",
+  "main": "index.js",
+  "dependencies": {}
+}

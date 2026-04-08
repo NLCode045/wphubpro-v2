@@ -8,15 +8,11 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 
-type VaultProvidersTabProps = {
-  userId: string;
-};
-
-export function VaultProvidersTab({ userId }: VaultProvidersTabProps) {
+export function VaultProvidersTab() {
   const { showNotification } = useNotificationContext();
-  const { data: items = [], isLoading, isError, error, refetch } = useVaultProvidersList(userId);
-  const upsert = useVaultProviderUpsert(userId);
-  const del = useVaultProviderDelete(userId);
+  const { data: items = [], isLoading, isError, error, refetch } = useVaultProvidersList();
+  const upsert = useVaultProviderUpsert();
+  const del = useVaultProviderDelete();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [isNew, setIsNew] = useState(false);
@@ -26,7 +22,6 @@ export function VaultProvidersTab({ userId }: VaultProvidersTabProps) {
   const [deleteProvider, setDeleteProvider] = useState<string | null>(null);
 
   const credsQuery = useVaultProviderCredentials(
-    userId,
     editingProvider,
     Boolean(modalOpen && !isNew && editingProvider),
   );

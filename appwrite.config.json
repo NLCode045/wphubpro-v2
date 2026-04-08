@@ -163,6 +163,7 @@
             "path": "functions/admin/manage-settings",
             "entrypoint": "index.js",
             "execute": [
+                "any",
                 "users",
                 "team:admin"
             ],
@@ -174,6 +175,7 @@
             "commands": "npm install",
             "scopes": [
                 "users.read",
+                "teams.read",
                 "documents.read",
                 "documents.write"
             ],
@@ -198,6 +200,7 @@
             "commands": "npm install",
             "scopes": [
                 "users.read",
+                "teams.read",
                 "documents.read",
                 "documents.write"
             ],
@@ -276,7 +279,7 @@
             "$id": "admin-manage-users",
             "name": "admin-manage-users",
             "runtime": "node-20.0",
-            "path": "functions/database/admin-manage-users",
+            "path": "functions/admin/admin-manage-users",
             "entrypoint": "index.js",
             "execute": [
                 "users",
@@ -288,24 +291,7 @@
             "schedule": "",
             "timeout": 60,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "APPWRITE_DATABASE_ID",
-                    "value": "platform_db"
-                }
-            ],
+            
             "scopes": [
                 "sessions.write",
                 "users.read",
@@ -786,28 +772,7 @@
             "schedule": "",
             "timeout": 180,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "STRIPE_SECRET_KEY",
-                    "value": "$STRIPE_SECRET_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "APPWRITE_DATABASE_ID",
-                    "value": "platform_db"
-                }
-            ],
+            
             "scopes": [
                 "users.read",
                 "databases.read",
@@ -827,6 +792,7 @@
             "path": "functions/stripe/stripe-customers",
             "entrypoint": "index.js",
             "execute": [
+                "any",
                 "team:admin"
             ],
             "enabled": true,
@@ -886,28 +852,7 @@
             "schedule": "",
             "timeout": 15,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "STRIPE_SECRET_KEY",
-                    "value": "$STRIPE_SECRET_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "APPWRITE_DATABASE_ID",
-                    "value": "platform_db"
-                }
-            ],
+            
             "scopes": [
                 "databases.read",
                 "documents.read"
@@ -975,28 +920,7 @@
             "schedule": "",
             "timeout": 90,
             "commands": "npm install",
-            "env": [
-                {
-                    "key": "STRIPE_SECRET_KEY",
-                    "value": "$STRIPE_SECRET_KEY"
-                },
-                {
-                    "key": "APPWRITE_ENDPOINT",
-                    "value": "https://api.wphub.pro/v1"
-                },
-                {
-                    "key": "APPWRITE_PROJECT_ID",
-                    "value": "698a55ce00010497b136"
-                },
-                {
-                    "key": "APPWRITE_API_KEY",
-                    "value": "$APPWRITE_API_KEY"
-                },
-                {
-                    "key": "APPWRITE_DATABASE_ID",
-                    "value": "platform_db"
-                }
-            ],
+            
             "scopes": [
                 "teams.read",
                 "users.read"
@@ -1028,13 +952,130 @@
             "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
+            "$id": "gateway-utils",
+            "name": "gateway-utils",
+            "runtime": "node-20.0",
+            "path": "functions/utils/gateway-utils",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 60,
+            "commands": "npm install",
+            "scopes": [
+                "databases.read",
+                "documents.read",
+                "functions.read",
+                "execution.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "stripe-gateway",
+            "name": "stripe-gateway",
+            "runtime": "node-20.0",
+            "path": "functions/gateways/stripe-gateway",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 60,
+            "commands": "npm install",
+            "scopes": [
+                "databases.read",
+                "documents.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "s3-gateway",
+            "name": "s3-gateway",
+            "runtime": "node-20.0",
+            "path": "functions/gateways/s3-gateway",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 120,
+            "commands": "npm install",
+            "scopes": [
+                "databases.read",
+                "documents.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "openai-gateway",
+            "name": "openai-gateway",
+            "runtime": "node-20.0",
+            "path": "functions/gateways/openai-gateway",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 120,
+            "commands": "npm install",
+            "scopes": [
+                "databases.read",
+                "documents.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
+            "$id": "appwrite-gateway",
+            "name": "appwrite-gateway",
+            "runtime": "node-20.0",
+            "path": "functions/gateways/appwrite-gateway",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 120,
+            "commands": "npm install",
+            "env": [],
+            "scopes": [
+                "databases.read",
+                "databases.write",
+                "documents.read",
+                "documents.write",
+                "users.read",
+                "users.write"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
             "$id": "admin-billing",
             "name": "admin-billing",
             "runtime": "node-20.0",
             "path": "functions/admin/admin-billing",
             "entrypoint": "index.js",
             "execute": [
-                "users",
+                "any",
                 "team:admin"
             ],
             "enabled": true,

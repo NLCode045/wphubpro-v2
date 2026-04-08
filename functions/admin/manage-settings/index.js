@@ -28,8 +28,48 @@ function fail(res, message, statusCode = 500, extra = {}) {
   return res.json({ success: false, message, ...extra }, statusCode);
 }
 
+function parseStoredValue(str) {
+  if (str == null || str === "") return {};
+  try {
+    return JSON.parse(str);
+  } catch {
+    return { _invalidJson: true, _raw: String(str) };
+  }
+}
+
+function callerUserIdFromReq(req) {
+  const fromEnv = process.env.APPWRITE_FUNCTION_USER_ID;
+  if (fromEnv && String(fromEnv).trim()) return String(fromEnv).trim();
+  const h = req.headers || {};
+  const v =
+    h["x-appwrite-user-id"] ||
+    h["X-Appwrite-User-Id"] ||
+    h["x-appwrite-function-user-id"] ||
+    h["X-Appwrite-Function-User-Id"];
+  return v ? String(v).trim() : "";
+}
+
+async function userIsAdmin(users, teams, userId, log) {
+  try {
+    const adminTeamId = "admin";
+    const memberships = await teams.listMemberships(adminTeamId);
+    if (memberships.memberships.some((m) => m.userId === userId)) return true;
+  } catch (teamErr) {
+    log("Could not check team membership: " + teamErr.message);
+  }
+  const user = await users.get(userId);
+  return user.labels?.some(
+    (l) => l.toLowerCase() === "admin" || l.toLowerCase() === "administrator"
+  );
+}
+
+
+
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT;
+  const endpoint =
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
   const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
   const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
 
@@ -43,7 +83,6 @@ module.exports = async ({ req, res, log, error }) => {
   const users = new sdk.Users(client);
   const teams = new sdk.Teams(client);
 
-  // Parse payload from request body
   let payload = {};
 
   try {
@@ -53,57 +92,63 @@ module.exports = async ({ req, res, log, error }) => {
     return fail(res, "Invalid request body", 400);
   }
 
-  const { category, settings, userId } = payload;
+  const actionRaw = String(payload.action || "")
+    .toLowerCase()
+    .trim();
+  const { category, settings } = payload;
 
-  if (!category || !settings || !userId) {
-    error(
-      `Missing parameters. Received: category=${category}, userId=${userId}, settings=${JSON.stringify(
-        settings
-      )}`
-    );
-    return fail(res, "Missing category, settings, or userId in request body", 400);
+  const actorUserId = callerUserIdFromReq(req);
+  if (!actorUserId) {
+    return fail(res, "Unauthorized: could not resolve caller user", 401);
   }
 
-  log("Updating settings for category: " + category);
-  log("User ID: " + userId);
+  // Debug logging
+  log("=== DEBUG: manage-settings request ===");
+  log("Request headers: " + JSON.stringify({
+    "x-appwrite-user-id": req.headers?.["x-appwrite-user-id"] || "(not set)",
+    "X-Appwrite-User-Id": req.headers?.["X-Appwrite-User-Id"] || "(not set)",
+    "x-appwrite-function-user-id": req.headers?.["x-appwrite-function-user-id"] || "(not set)",
+    "X-Appwrite-Function-User-Id": req.headers?.["X-Appwrite-Function-User-Id"] || "(not set)",
+    "x-appwrite-impersonate-user-id": req.headers?.["x-appwrite-impersonate-user-id"] || "(not set)",
+    "X-Appwrite-Impersonate-User-Id": req.headers?.["X-Appwrite-Impersonate-User-Id"] || "(not set)",
+  }));
+  log("Request payload: " + JSON.stringify(payload));
+  log("Extracted actorUserId: " + actorUserId);
+  log("=== END DEBUG ===");
 
   try {
-    // Check if user is member of admin team
-    let isAdmin = false;
-    try {
-      const adminTeamId = "admin";
-      const memberships = await teams.listMemberships(adminTeamId);
-      isAdmin = memberships.memberships.some((m) => m.userId === userId);
-      log(
-        "User admin check - Team memberships found: " + memberships.total + ", isAdmin: " + isAdmin
-      );
-    } catch (teamErr) {
-      log("Could not check team membership: " + teamErr.message);
-      // Fallback to label check for backwards compatibility
-      const user = await users.get(userId);
-      isAdmin = user.labels?.some(
-        (l) => l.toLowerCase() === "admin" || l.toLowerCase() === "administrator"
-      );
-      log(
-        "User admin check (fallback) - Labels: " +
-          JSON.stringify(user.labels) +
-          ", isAdmin: " +
-          isAdmin
-      );
-    }
+    const isAdmin = await userIsAdmin(users, teams, actorUserId, log);
+    log("User admin check for " + actorUserId + ": " + isAdmin);
 
     if (!isAdmin) {
-      log("User " + userId + " is not an admin");
+      log("User " + actorUserId + " is not an admin");
       return fail(res, "Forbidden: Admin access required", 403);
     }
 
-    log("User is admin, proceeding with settings update");
-
     const DATABASE_ID = "platform_db";
     const COLLECTION_ID = "platform_settings";
-    const valueStr = JSON.stringify(settings);
 
-    log("Querying for existing settings with key: " + category);
+    if (actionRaw === "list") {
+      log("Listing platform_settings for admin " + actorUserId);
+      const list = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [sdk.Query.limit(500)]);
+      const items = (list.documents || []).map((doc) => ({
+        key: doc.key,
+        value: parseStoredValue(doc.value),
+      }));
+      return ok(res, { success: true, items });
+    }
+
+    if (!category || settings === undefined) {
+      error(
+        `Missing parameters. Received: category=${category}, userId=${actorUserId}, settings=${JSON.stringify(
+          settings
+        )}`
+      );
+      return fail(res, "Missing category or settings in request body (use action: list to read)", 400);
+    }
+
+    log("Updating settings for category: " + category);
+    const valueStr = JSON.stringify(settings);
 
     const existing = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
       sdk.Query.equal("key", category),
@@ -118,15 +163,15 @@ module.exports = async ({ req, res, log, error }) => {
       });
       log("Settings updated successfully for category: " + category);
       return ok(res, { success: true, message: "Settings updated" });
-    } else {
-      log("Creating new document for category: " + category);
-      const newDoc = await databases.createDocument(DATABASE_ID, COLLECTION_ID, sdk.ID.unique(), {
-        key: category,
-        value: valueStr,
-      });
-      log("Settings created successfully with ID: " + newDoc.$id);
-      return ok(res, { success: true, message: "Settings created" });
     }
+
+    log("Creating new document for category: " + category);
+    const newDoc = await databases.createDocument(DATABASE_ID, COLLECTION_ID, sdk.ID.unique(), {
+      key: category,
+      value: valueStr,
+    });
+    log("Settings created successfully with ID: " + newDoc.$id);
+    return ok(res, { success: true, message: "Settings created" });
   } catch (e) {
     error(e.message);
     return fail(res, e.message, 500);

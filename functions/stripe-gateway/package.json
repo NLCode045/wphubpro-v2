@@ -1,0 +1,10 @@
+{
+  "name": "stripe-gateway",
+  "version": "1.0.0",
+  "description": "Central Stripe API gateway - holds sole access to Stripe credentials and performs all Stripe operations",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3",
+    "stripe": "^20.4.1"
+  }
+}

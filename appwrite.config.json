@@ -230,6 +230,25 @@
             "runtimeSpecification": "s-0.5vcpu-512mb"
         },
         {
+            "$id": "test-request-shape",
+            "name": "test-request-shape",
+            "runtime": "node-20.0",
+            "path": "functions/utils/test-request-shape",
+            "entrypoint": "index.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "commands": "npm install",
+            "scopes": [],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb"
+        },
+        {
             "$id": "stripe-portal-link",
             "name": "stripe-portal-link",
             "runtime": "node-20.0",
@@ -291,7 +310,6 @@
             "schedule": "",
             "timeout": 60,
             "commands": "npm install",
-            
             "scopes": [
                 "sessions.write",
                 "users.read",
@@ -772,7 +790,6 @@
             "schedule": "",
             "timeout": 180,
             "commands": "npm install",
-            
             "scopes": [
                 "users.read",
                 "databases.read",
@@ -852,7 +869,6 @@
             "schedule": "",
             "timeout": 15,
             "commands": "npm install",
-            
             "scopes": [
                 "databases.read",
                 "documents.read"
@@ -920,7 +936,6 @@
             "schedule": "",
             "timeout": 90,
             "commands": "npm install",
-            
             "scopes": [
                 "teams.read",
                 "users.read"
@@ -995,7 +1010,8 @@
                 "documents.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-0.5vcpu-512mb",
+            "deploymentRetention": 0
         },
         {
             "$id": "s3-gateway",
@@ -2984,6 +3000,5 @@
                 "mailbox_id": "69c47fb1000fb222e4b9"
             }
         }
-    ],
-    "topics": []
+    ]
 }

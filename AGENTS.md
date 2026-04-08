@@ -36,6 +36,12 @@ The app reads Appwrite credentials from `.env` (gitignored). All have hardcoded 
 - `functions/` — 31+ Appwrite Cloud Functions (JS/Node.js 20), deployed to Appwrite Cloud separately
 - `scripts/` — migration/release utilities (not part of dev workflow)
 
+#### Shared code and deploy packaging
+
+- Shared helpers live under `functions/_shared/` (for example `http.js`, `vault-client.js`). Nested functions load them with relative paths such as `require('../../_shared/http.js')` (depth depends on the folder).
+- Each function’s `path` in `appwrite.config.json` points at a **leaf** directory (for example `functions/utils/test-request-shape`). Whatever you upload or zip for that deployment must still include `functions/_shared/` next to those relative paths, or your build step must copy `_shared` into the artifact. If executions log `Cannot find module …/_shared/http.js`, widen the deployment root or add packaging that bundles `_shared`.
+- **`test-request-shape`** is a diagnostic function (`$id`: `test-request-shape`) that returns `parsed` (from shared `parsePayload`) plus a `probe` of which request fields exist (`bodyJson`, `bodyText`, `body`, `bodyRaw`, `payload`, `query`). Use it on staging to confirm how your Appwrite runtime supplies the body before migrating other functions.
+
 ### Gotchas
 
 - The Vite config sets `server.open: true`, which tries to open a browser on startup. In headless environments the dev server still starts fine.

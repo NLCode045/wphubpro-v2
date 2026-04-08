@@ -54,7 +54,7 @@ function formatUser(
     id: user.$id,
     name: user.name || user.email || `aser ${(user.$id || '').substring(0, 8)}`,
     email: user.email || 'N/A',
-    role: isAdmin ? 'admin' : 'user',
+    role: isAdmin ? 'Admin' : 'User',
     isAdmin,
     planName,
     stripeId: acc?.stripeId || 'n/a',

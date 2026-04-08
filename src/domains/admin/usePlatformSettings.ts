@@ -1,4 +1,3 @@
-import { useAuth } from '@/domains/auth';
 import { executeFunction } from '@/integrations/appwrite/executeFunction';
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,27 +7,25 @@ export interface PlatformSettingItem {
   value: unknown;
 }
 
-async function fetchPlatformSettings(userId: string): Promise<PlatformSettingItem[]> {
+async function fetchPlatformSettings(): Promise<PlatformSettingItem[]> {
   const res = await executeFunction<{ success?: boolean; items?: PlatformSettingItem[] }>(
     APPWRITE_FUNCTION_IDS.MANAGE_SETTINGS,
-    { action: 'list', userId },
+    { action: 'list' },
     { omitImpersonationHeaders: true },
   );
   return Array.isArray(res?.items) ? res.items : [];
 }
 
 export function usePlatformSettingsList() {
-  const { privilegedActorUserId } = useAuth();
   return useQuery({
-    queryKey: ['admin', 'platform-settings', privilegedActorUserId],
-    queryFn: () => fetchPlatformSettings(privilegedActorUserId as string),
-    enabled: typeof privilegedActorUserId === 'string' && privilegedActorUserId.length > 0,
+    queryKey: ['admin', 'platform-settings'],
+    queryFn: () => fetchPlatformSettings(),
+    enabled: true,
   });
 }
 
 export function usePlatformSettingsUpsert() {
   const queryClient = useQueryClient();
-  const { privilegedActorUserId } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -38,12 +35,9 @@ export function usePlatformSettingsUpsert() {
       category: string;
       settings: Record<string, unknown>;
     }) => {
-      if (!privilegedActorUserId) {
-        throw new Error('You must be signed in to save platform settings.');
-      }
       await executeFunction(
         APPWRITE_FUNCTION_IDS.MANAGE_SETTINGS,
-        { category, settings, userId: privilegedActorUserId },
+        { category, settings },
         { omitImpersonationHeaders: true },
       );
     },

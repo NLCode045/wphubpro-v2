@@ -272,6 +272,23 @@ export async function executeFunctionWithMeta<TResponse = unknown, TPayload = un
   };
 
   let execution: ExecutionRecord;
+  
+  // Debug logging
+  if (omitImpersonationHeaders || guestExecution) {
+    const h = client.headers as Record<string, string>;
+    console.debug(`[executeFunction] ${functionId}`, {
+      omitImpersonationHeaders,
+      guestExecution,
+      headers: {
+        'X-Appwrite-Impersonate-User-Id': h['X-Appwrite-Impersonate-User-Id'] || '(not set)',
+        'X-Appwrite-User-Id': h['X-Appwrite-User-Id'] || '(not set)',
+        'X-Appwrite-Project': h['X-Appwrite-Project'] || '(not set)',
+      },
+      payloadSize: body?.length || 0,
+      payload: body ? JSON.parse(body) : undefined,
+    });
+  }
+  
   if (omitImpersonationHeaders && !guestExecution) {
     execution = await withImpersonationHeadersStripped(runCreateExecution);
   } else {

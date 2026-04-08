@@ -95,21 +95,26 @@ module.exports = async ({ req, res, log, error }) => {
   const actionRaw = String(payload.action || "")
     .toLowerCase()
     .trim();
-  const { category, settings, userId: bodyUserId } = payload;
+  const { category, settings } = payload;
 
   const actorUserId = callerUserIdFromReq(req);
   if (!actorUserId) {
     return fail(res, "Unauthorized: could not resolve caller user", 401);
   }
 
-  if (!bodyUserId) {
-    error("Missing userId in request body");
-    return fail(res, "Missing userId in request body", 400);
-  }
-
-  if (String(bodyUserId) !== actorUserId) {
-    return fail(res, "userId must match the authenticated session user", 400);
-  }
+  // Debug logging
+  log("=== DEBUG: manage-settings request ===");
+  log("Request headers: " + JSON.stringify({
+    "x-appwrite-user-id": req.headers?.["x-appwrite-user-id"] || "(not set)",
+    "X-Appwrite-User-Id": req.headers?.["X-Appwrite-User-Id"] || "(not set)",
+    "x-appwrite-function-user-id": req.headers?.["x-appwrite-function-user-id"] || "(not set)",
+    "X-Appwrite-Function-User-Id": req.headers?.["X-Appwrite-Function-User-Id"] || "(not set)",
+    "x-appwrite-impersonate-user-id": req.headers?.["x-appwrite-impersonate-user-id"] || "(not set)",
+    "X-Appwrite-Impersonate-User-Id": req.headers?.["X-Appwrite-Impersonate-User-Id"] || "(not set)",
+  }));
+  log("Request payload: " + JSON.stringify(payload));
+  log("Extracted actorUserId: " + actorUserId);
+  log("=== END DEBUG ===");
 
   try {
     const isAdmin = await userIsAdmin(users, teams, actorUserId, log);

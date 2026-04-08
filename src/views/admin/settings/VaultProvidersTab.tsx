@@ -8,6 +8,12 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 
+interface KeyValuePair {
+  id: string;
+  key: string;
+  value: string;
+}
+
 export function VaultProvidersTab() {
   const { showNotification } = useNotificationContext();
   const { data: items = [], isLoading, isError, error, refetch } = useVaultProvidersList();
@@ -18,7 +24,7 @@ export function VaultProvidersTab() {
   const [isNew, setIsNew] = useState(false);
   const [providerIdInput, setProviderIdInput] = useState('');
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
-  const [jsonText, setJsonText] = useState('{}');
+  const [keyValuePairs, setKeyValuePairs] = useState<KeyValuePair[]>([]);
   const [deleteProvider, setDeleteProvider] = useState<string | null>(null);
 
   const credsQuery = useVaultProviderCredentials(
@@ -38,7 +44,14 @@ export function VaultProvidersTab() {
     if (!p || !credsQuery.isSuccess) return;
     if (lastHydratedProvider.current === p) return;
     lastHydratedProvider.current = p;
-    setJsonText(JSON.stringify(credsQuery.data ?? {}, null, 2));
+    
+    const creds = credsQuery.data ?? {};
+    const pairs = Object.entries(creds).map(([key, value], idx) => ({
+      id: `${idx}-${Date.now()}`,
+      key,
+      value: String(value),
+    }));
+    setKeyValuePairs(pairs);
   }, [modalOpen, isNew, editingProvider, credsQuery.isSuccess, credsQuery.data]);
 
   const notifyError = (err: unknown) => {
@@ -53,7 +66,7 @@ export function VaultProvidersTab() {
     setIsNew(true);
     setEditingProvider(null);
     setProviderIdInput('');
-    setJsonText('{\n  \n}');
+    setKeyValuePairs([]);
     setModalOpen(true);
   };
 
@@ -61,13 +74,37 @@ export function VaultProvidersTab() {
     setIsNew(false);
     setEditingProvider(provider);
     setProviderIdInput(provider);
-    setJsonText('{}');
+    setKeyValuePairs([]);
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
     setEditingProvider(null);
+    setKeyValuePairs([]);
+  };
+
+  const addKeyValuePair = () => {
+    setKeyValuePairs([
+      ...keyValuePairs,
+      {
+        id: `new-${Date.now()}`,
+        key: '',
+        value: '',
+      },
+    ]);
+  };
+
+  const removeKeyValuePair = (id: string) => {
+    setKeyValuePairs(keyValuePairs.filter((pair) => pair.id !== id));
+  };
+
+  const updateKeyValuePair = (id: string, field: 'key' | 'value', newValue: string) => {
+    setKeyValuePairs(
+      keyValuePairs.map((pair) =>
+        pair.id === id ? { ...pair, [field]: newValue } : pair
+      )
+    );
   };
 
   const saveModal = async () => {
@@ -76,18 +113,20 @@ export function VaultProvidersTab() {
       notifyError(new Error('Provider id is required.'));
       return;
     }
-    let credentials: Record<string, unknown>;
-    try {
-      const parsed = JSON.parse(jsonText) as unknown;
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        notifyError(new Error('Credentials must be a JSON object (not an array).'));
-        return;
-      }
-      credentials = parsed as Record<string, unknown>;
-    } catch {
-      notifyError(new Error('Invalid JSON in credentials.'));
+
+    // Validate key-value pairs
+    const invalidPairs = keyValuePairs.filter((pair) => !pair.key.trim());
+    if (invalidPairs.length > 0) {
+      notifyError(new Error('All keys must be non-empty.'));
       return;
     }
+
+    // Build credentials object from key-value pairs
+    const credentials: Record<string, string> = {};
+    keyValuePairs.forEach((pair) => {
+      credentials[pair.key.trim()] = pair.value;
+    });
+
     try {
       await upsert.mutateAsync({ provider: id, credentials });
       showNotification({
@@ -228,8 +267,8 @@ export function VaultProvidersTab() {
               after creation.
             </Form.Text>
           </Form.Group>
-          <Form.Group className="mb-0">
-            <Form.Label>Credentials (JSON object)</Form.Label>
+          <Form.Group className="mb-3">
+            <Form.Label>Credentials</Form.Label>
             {!isNew && credsQuery.isFetching && (
               <div className="d-flex align-items-center gap-2 text-muted small py-2">
                 <Spinner animation="border" size="sm" />
@@ -241,15 +280,55 @@ export function VaultProvidersTab() {
                 {credsQuery.error instanceof Error ? credsQuery.error.message : 'Could not load credentials.'}
               </Alert>
             )}
-            <Form.Control
-              as="textarea"
-              rows={14}
-              value={jsonText}
-              onChange={(e) => setJsonText(e.target.value)}
-              className="font-monospace small"
-              disabled={upsert.isPending || (!isNew && credsQuery.isFetching)}
-              spellCheck={false}
-            />
+            <div
+              className="border rounded p-3 bg-light"
+              style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {keyValuePairs.length === 0 ? (
+                <p className="text-muted small mb-0">No credentials yet. Add one below.</p>
+              ) : (
+                <div className="space-y-2">
+                  {keyValuePairs.map((pair) => (
+                    <div key={pair.id} className="d-flex gap-2 mb-2">
+                      <Form.Control
+                        size="sm"
+                        placeholder="Key (e.g., STRIPE_SECRET_KEY)"
+                        value={pair.key}
+                        onChange={(e) => updateKeyValuePair(pair.id, 'key', e.target.value)}
+                        disabled={upsert.isPending || (!isNew && credsQuery.isFetching)}
+                        style={{ flex: '0 0 40%' }}
+                      />
+                      <Form.Control
+                        size="sm"
+                        placeholder="Value"
+                        value={pair.value}
+                        onChange={(e) => updateKeyValuePair(pair.id, 'value', e.target.value)}
+                        disabled={upsert.isPending || (!isNew && credsQuery.isFetching)}
+                        type="password"
+                        style={{ flex: '1' }}
+                      />
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        type="button"
+                        onClick={() => removeKeyValuePair(pair.id)}
+                        disabled={upsert.isPending || (!isNew && credsQuery.isFetching)}
+                        className="px-3">
+                        ✕
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              className="mt-2"
+              type="button"
+              onClick={addKeyValuePair}
+              disabled={upsert.isPending || (!isNew && credsQuery.isFetching)}>
+              + Add credential
+            </Button>
           </Form.Group>
         </Modal.Body>
         <Modal.Footer>

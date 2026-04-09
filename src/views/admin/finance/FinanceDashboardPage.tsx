@@ -1,6 +1,6 @@
 import CustomChartJs from '@/components/CustomChartJs'
 import { ROUTE_PATHS } from '@/config/routePaths'
-import { useFinanceDashboard } from '@/domains/admin/finance/hooks'
+import { useFinanceDashboard, useFinanceDashboardDetails, useDashboardDetailsResult } from '@/domains/admin/finance/hooks'
 import type { FinanceDashboardPeriod } from '@/domains/admin/finance/types'
 import { AppwriteFunctionError } from '@/integrations/appwrite/errors'
 import { getColor } from '@/helpers/color'
@@ -52,6 +52,13 @@ function actionVariant(action: string): 'success' | 'danger' | 'primary' | 'seco
 const FinanceDashboardPage = () => {
   const [period, setPeriod] = useState<FinanceDashboardPeriod>('week')
   const { data, isLoading, error } = useFinanceDashboard(period)
+  
+  // Start async fetch for detailed stats  
+  const { data: detailsExecId } = useFinanceDashboardDetails(period)
+  const { data: detailsData, isLoading: detailsLoading } = useDashboardDetailsResult(
+    detailsExecId?.executionId,
+    period
+  )
 
   const revenueChart = useMemo<() => ChartJSOptionsType>(() => {
     const buckets = data?.stats?.buckets ?? []
@@ -193,6 +200,7 @@ const FinanceDashboardPage = () => {
           </ButtonGroup>
         </div>
         <span className="text-muted small">{data.rangeLabel ?? rangeLabel}</span>
+        {detailsLoading && <Badge bg="info" className="ms-2">Detailed stats loading...</Badge>}
       </div>
 
       {(truncated || kpis.revenueAllTimeTruncated) && (

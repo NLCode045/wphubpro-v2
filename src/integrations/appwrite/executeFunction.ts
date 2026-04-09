@@ -342,3 +342,62 @@ export async function executeFunction<TResponse = unknown, TPayload = unknown>(
   const { data } = await executeFunctionWithMeta<TResponse, TPayload>(functionId, payload, options);
   return data;
 }
+
+/**
+ * Start an async function execution and return the execution ID immediately.
+ * Caller is responsible for polling the execution status.
+ * Use this for long-running operations where you want to return immediately.
+ */
+export async function startAsyncExecution<TPayload = unknown>(
+  functionId: string,
+  payload?: TPayload
+): Promise<{ executionId: string }> {
+  const body =
+    payload === undefined
+      ? undefined
+      : typeof payload === 'string'
+        ? payload
+        : JSON.stringify(payload);
+
+  const execution = await functions.createExecution(
+    functionId,
+    body,
+    false,  // Async - don't wait for response
+  );
+
+  return { executionId: execution.$id };
+}
+
+/**
+ * Poll an async function execution until it completes or times out.
+ * Use this after startAsyncExecution to retrieve the result.
+ */
+export async function pollAsyncExecution<TResponse = unknown>(
+  functionId: string,
+  executionId: string,
+  maxWaitMs: number = 300_000,  // 5 minutes default
+  pollIntervalMs: number = 2_000  // 2 second poll interval
+): Promise<TResponse> {
+  const execution = await waitForExecutionResult(
+    functionId,
+    executionId,
+    maxWaitMs,
+    pollIntervalMs,
+    false
+  );
+
+  if (execution.status !== 'completed') {
+    throw new Error(`Execution "${executionId}" failed with status "${execution.status}": ${execution.errors}`);
+  }
+
+  const rawBody = execution.responseBody || '';
+  if (!rawBody) {
+    throw new Error(`Execution "${executionId}" completed but returned no response body`);
+  }
+
+  try {
+    return JSON.parse(rawBody) as TResponse;
+  } catch (err) {
+    throw new Error(`Failed to parse execution response: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}

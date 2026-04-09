@@ -181,6 +181,81 @@ async function initializeStripe(databases, config, log) {
 }
 
 /**
+ * Get Stripe credentials from vault
+ * Returns STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET for consumers
+ */
+async function getStripeCredentials(res, log, error, databases, config) {
+  try {
+    log('getStripeCredentials: START');
+    const credentials = await getProviderCredentials(
+      'stripe',
+      config.ENCRYPTION_KEY,
+      databases,
+      config.VAULT_DB_ID
+    );
+    
+    if (!credentials.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY not found in vault');
+    }
+    
+    log('getStripeCredentials: SUCCESS');
+    return success(res, {
+      STRIPE_SECRET_KEY: credentials.STRIPE_SECRET_KEY,
+      STRIPE_WEBHOOK_SECRET: credentials.STRIPE_WEBHOOK_SECRET || null,
+    });
+  } catch (err) {
+    error(`getStripeCredentials failed: ${err.message}`);
+    return fail(res, err.message, 500);
+  }
+}
+
+/**
+ * Execute a single Stripe API operation
+ * Consumer provides operation name (e.g., "subscriptions.list") and params
+ */
+async function executeStripeOperation(res, log, error, databases, config, payload) {
+  try {
+    const { operation, params } = payload;
+    log(`executeStripeOperation: START - operation="${operation}"`);
+    
+    if (!operation) {
+      log('executeStripeOperation: Missing operation parameter');
+      return fail(res, 'operation parameter required', 400);
+    }
+    
+    const credentials = await getProviderCredentials(
+      'stripe',
+      config.ENCRYPTION_KEY,
+      databases,
+      config.VAULT_DB_ID
+    );
+    
+    const stripe = new Stripe(credentials.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+    
+    // Parse operation as "resource.method" (e.g., "subscriptions.list", "customers.retrieve")
+    const [resource, method] = operation.split('.');
+    if (!resource || !method) {
+      log(`executeStripeOperation: Invalid operation format: "${operation}"`);
+      return fail(res, 'operation must be "resource.method" format (e.g., "subscriptions.list")', 400);
+    }
+    
+    if (!stripe[resource] || typeof stripe[resource][method] !== 'function') {
+      log(`executeStripeOperation: Invalid operation: stripe.${resource}.${method}()`);
+      return fail(res, `Invalid operation: stripe.${resource}.${method}() not found`, 400);
+    }
+    
+    log(`executeStripeOperation: Calling stripe.${resource}.${method}() with params:`, JSON.stringify(params));
+    const result = await stripe[resource][method](params);
+    
+    log(`executeStripeOperation: SUCCESS - ${resource}.${method}`);
+    return success(res, { result });
+  } catch (err) {
+    error(`executeStripeOperation failed: ${err.message}`);
+    return fail(res, err.message, 500);
+  }
+}
+
+/**
  * Route handler for Stripe operations
  */
 async function handleStripeOperation(req, res, log, error, action, stripe, databases, config, users) {
@@ -189,6 +264,15 @@ async function handleStripeOperation(req, res, log, error, action, stripe, datab
     const payload = parsePayload(req);
 
     switch (action) {
+      // NEW: Credential provider endpoints
+      case 'get-credentials':
+        log('handleStripeOperation: Routing to getStripeCredentials');
+        return await getStripeCredentials(res, log, error, databases, config);
+
+      case 'execute-operation':
+        log('handleStripeOperation: Routing to executeStripeOperation');
+        return await executeStripeOperation(res, log, error, databases, config, payload);
+
       case 'list-products':
         log('handleStripeOperation: Routing to listProducts');
         return await listProducts(stripe, res, log, payload);
@@ -280,6 +364,10 @@ async function handleStripeOperation(req, res, log, error, action, stripe, datab
       case 'admin-finance-dashboard':
         log('handleStripeOperation: Routing to adminFinanceDashboard');
         return await adminFinanceDashboard(stripe, databases, users, res, log, error, payload, config);
+
+      case 'admin-finance-dashboard-details':
+        log('handleStripeOperation: Routing to adminFinanceDashboardDetails');
+        return await adminFinanceDashboardDetails(stripe, databases, users, res, log, error, payload, config);
 
       case 'admin-get-details':
         log('handleStripeOperation: Routing to adminGetDetails');
@@ -668,52 +756,38 @@ async function adminFinanceSummary(stripe, res, log, error, payload) {
   log('adminFinanceSummary: START');
   try {
     const statusCounts = { active: 0, trialing: 0, past_due: 0, canceled: 0, unpaid: 0, paused: 0, incomplete: 0 };
-    log('adminFinanceSummary: Counting subscriptions by status');
+    log('adminFinanceSummary: Counting subscriptions by status (optimized: 1 page per status)');
     
     for (const status of Object.keys(statusCounts)) {
       log(`adminFinanceSummary: Querying status="${status}"`);
-      let total = 0;
-      let startingAfter = null;
-      for (let page = 0; page < 5; page++) {
-        const params = { status, limit: 100 };
-        if (startingAfter) params.starting_after = startingAfter;
-        log(`adminFinanceSummary: Stripe API call - subscriptions.list({status:"${status}", page:${page}, limit:100})`);
-        const batch = await stripe.subscriptions.list(params);
-        log(`adminFinanceSummary: Received ${batch.data.length} items for status="${status}", page=${page}`);
-        total += batch.data.length;
-        if (!batch.has_more || !batch.data.length) break;
-        startingAfter = batch.data[batch.data.length - 1].id;
-      }
-      statusCounts[status] = total;
-      log(`adminFinanceSummary: Status "${status}" total count: ${total}`);
+      const params = { status, limit: 100 };
+      log(`adminFinanceSummary: Stripe API call - subscriptions.list({status:"${status}", limit:100})`);
+      const batch = await stripe.subscriptions.list(params);
+      log(`adminFinanceSummary: Received ${batch.data.length} items for status="${status}", has_more=${batch.has_more}`);
+      statusCounts[status] = batch.data.length;
+      log(`adminFinanceSummary: Status "${status}" count: ${statusCounts[status]}`);
     }
 
-    log('adminFinanceSummary: Computing MRR from active subscriptions');
+    log('adminFinanceSummary: Computing MRR estimate from first page of active subscriptions (optimized)');
     let mrrCents = 0;
-    let startingAfter = null;
-    for (let page = 0; page < 5; page++) {
-      const params = { status: 'active', limit: 100, expand: ['data.items.data.price'] };
-      if (startingAfter) params.starting_after = startingAfter;
-      log(`adminFinanceSummary: Stripe API call - subscriptions.list({status:"active", page:${page}, expand:...})`);
-      const batch = await stripe.subscriptions.list(params);
-      log(`adminFinanceSummary: Received ${batch.data.length} active subscriptions for MRR calculation, page=${page}`);
-      for (const sub of batch.data) {
-        const item = sub.items?.data?.[0];
-        const price = item?.price;
-        if (price?.unit_amount != null && price.recurring) {
-          const ic = price.recurring.interval_count || 1;
-          let monthlyAmount = price.unit_amount * (item.quantity || 1);
-          if (price.recurring.interval === 'year') monthlyAmount /= (12 * ic);
-          else if (price.recurring.interval === 'week') monthlyAmount *= 52 / (12 * ic);
-          else if (price.recurring.interval === 'day') monthlyAmount *= 30 / ic;
-          else monthlyAmount /= ic;
-          mrrCents += monthlyAmount;
-        }
+    const params = { status: 'active', limit: 100, expand: ['data.items.data.price'] };
+    log(`adminFinanceSummary: Stripe API call - subscriptions.list({status:"active", limit:100, expand:...})`);
+    const activeSubsBatch = await stripe.subscriptions.list(params);
+    log(`adminFinanceSummary: Received ${activeSubsBatch.data.length} active subscriptions for MRR calculation`);
+    for (const sub of activeSubsBatch.data) {
+      const item = sub.items?.data?.[0];
+      const price = item?.price;
+      if (price?.unit_amount != null && price.recurring) {
+        const ic = price.recurring.interval_count || 1;
+        let monthlyAmount = price.unit_amount * (item.quantity || 1);
+        if (price.recurring.interval === 'year') monthlyAmount /= (12 * ic);
+        else if (price.recurring.interval === 'week') monthlyAmount *= 52 / (12 * ic);
+        else if (price.recurring.interval === 'day') monthlyAmount *= 30 / ic;
+        else monthlyAmount /= ic;
+        mrrCents += monthlyAmount;
       }
-      if (!batch.has_more || !batch.data.length) break;
-      startingAfter = batch.data[batch.data.length - 1].id;
     }
-    log(`adminFinanceSummary: Computed MRR: ${Math.round(mrrCents)} cents`);
+    log(`adminFinanceSummary: Computed MRR estimate: ${Math.round(mrrCents)} cents (from ${activeSubsBatch.data.length} active subscriptions)`);
 
     log('adminFinanceSummary: Querying failed payment intents');
     const failedPi = await stripe.paymentIntents.list({ limit: 20, created: { gte: Math.floor(Date.now() / 1000) - 7 * 24 * 3600 } });
@@ -792,6 +866,91 @@ async function adminFinanceDashboard(stripe, databases, users, res, log, error, 
     });
   } catch (err) {
     error(`adminFinanceDashboard: FAILED after ${Date.now() - startTime}ms - ${err.message}`);
+    return fail(res, err.message, 500);
+  }
+}
+
+async function adminFinanceDashboardDetails(stripe, databases, users, res, log, error, payload, config) {
+  const startTime = Date.now();
+  log('adminFinanceDashboardDetails: START - payload:', JSON.stringify(payload));
+  try {
+    const period = payload.period || 'week';
+    const now = Math.floor(Date.now() / 1000);
+    let windowStart, windowEnd;
+    log(`adminFinanceDashboardDetails: Period="${period}"`);
+    
+    if (period === 'day') {
+      windowStart = now - 7 * 86400;
+      windowEnd = now;
+    } else if (period === 'month') {
+      windowStart = now - 30 * 86400;
+      windowEnd = now;
+    } else if (period === 'year') {
+      windowStart = now - 365 * 86400;
+      windowEnd = now;
+    } else {
+      windowStart = now - 7 * 86400;
+      windowEnd = now;
+    }
+    log(`adminFinanceDashboardDetails: Window: ${windowStart} to ${windowEnd}`);
+
+    // Get all subscription events (heavy operation)
+    log('adminFinanceDashboardDetails: Querying subscription change events (up to 100 pages)');
+    const events = [];
+    let startingAfter = null;
+    for (let page = 0; page < 100; page++) {
+      const params = {
+        limit: 100,
+        types: ['customer.subscription.created', 'customer.subscription.deleted', 'customer.subscription.updated'],
+        created: { gte: windowStart },
+      };
+      if (startingAfter) params.starting_after = startingAfter;
+      log(`adminFinanceDashboardDetails: Stripe API call - events.list(page=${page})`);
+      const batch = await stripe.events.list(params);
+      log(`adminFinanceDashboardDetails: Received ${batch.data.length} events, page=${page}`);
+      events.push(...batch.data);
+      if (!batch.has_more || !batch.data.length) break;
+      startingAfter = batch.data[batch.data.length - 1].id;
+    }
+    log(`adminFinanceDashboardDetails: Total events fetched: ${events.length}`);
+
+    // Get detailed revenue breakdown (up to 100 pages of invoices)
+    log('adminFinanceDashboardDetails: Aggregating detailed revenue (up to 100 pages of invoices)');
+    let totalRevenueCents = 0;
+    let invoiceCount = 0;
+    startingAfter = null;
+    for (let page = 0; page < 100; page++) {
+      const params = {
+        status: 'paid',
+        limit: 100,
+        created: { gte: windowStart, lte: windowEnd },
+      };
+      if (startingAfter) params.starting_after = startingAfter;
+      log(`adminFinanceDashboardDetails: Stripe API call - invoices.list(page=${page})`);
+      const batch = await stripe.invoices.list(params);
+      log(`adminFinanceDashboardDetails: Received ${batch.data.length} invoices, page=${page}`);
+      for (const inv of batch.data) {
+        totalRevenueCents += inv.amount_paid || 0;
+        invoiceCount++;
+      }
+      if (!batch.has_more || !batch.data.length) break;
+      startingAfter = batch.data[batch.data.length - 1].id;
+    }
+    log(`adminFinanceDashboardDetails: Total revenue from ${invoiceCount} invoices: ${totalRevenueCents} cents`);
+
+    log(`adminFinanceDashboardDetails: SUCCESS - duration=${Date.now() - startTime}ms`);
+    return success(res, {
+      success: true,
+      period,
+      windowStart,
+      windowEnd,
+      revenueDetailsCents: totalRevenueCents,
+      invoiceCount,
+      eventCount: events.length,
+      events: events.slice(0, 50),  // Return first 50 events
+    });
+  } catch (err) {
+    error(`adminFinanceDashboardDetails: FAILED after ${Date.now() - startTime}ms - ${err.message}`);
     return fail(res, err.message, 500);
   }
 }

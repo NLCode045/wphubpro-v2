@@ -41,9 +41,7 @@ export function useFinanceDashboard(period: FinanceDashboardPeriod) {
   return useQuery<AdminFinanceDashboardResponse, Error>({
     queryKey: ['admin', 'finance', 'dashboard', period],
     queryFn: async () => {
-      // Do not use longRunning: async executions often return no responseBody on Appwrite when polling,
-      // so `success` is missing and the UI shows "Dashboard failed". Sync execution waits for the full
-      // response (function timeout is 180s in appwrite.config.json).
+      // Use optimized sync dashboard that returns fast (< 5 seconds)
       const res = await executeFunction<AdminFinanceDashboardResponse>(SUBS_FN, {
         action: 'admin-finance-dashboard',
         period,
@@ -56,6 +54,56 @@ export function useFinanceDashboard(period: FinanceDashboardPeriod) {
     },
     enabled,
     staleTime: 60_000,
+  })
+}
+
+/**
+ * Fetch detailed dashboard statistics asynchronously.
+ * This action makes many API calls and should not block the UI.
+ * Returns execution ID that can be polled.
+ */
+export function useFinanceDashboardDetails(period: FinanceDashboardPeriod) {
+  const enabled = useFinanceAdminEnabled()
+  return useQuery<{ executionId: string }, Error>({
+    queryKey: ['admin', 'finance', 'dashboard-details', period, 'start'],
+    queryFn: async () => {
+      // Start async execution - returns immediately with execution ID
+      const res = await executeFunction<{ executionId: string }>(SUBS_FN, {
+        action: 'admin-finance-dashboard-details',
+        period,
+        async: true,  // Request async execution
+      })
+      if (!res?.executionId) {
+        throw new Error('Failed to start async dashboard details execution')
+      }
+      return res
+    },
+    enabled,
+    staleTime: 0,  // Don't cache - we want fresh polling every time
+  })
+}
+
+/**
+ * Poll the result of an async dashboard details execution.
+ * Pass the executionId from useFinanceDashboardDetails.
+ * Polls every 2 seconds until complete.
+ */
+export function useDashboardDetailsResult(
+  executionId: string | undefined,
+  period: FinanceDashboardPeriod
+) {
+  const enabled = useFinanceAdminEnabled() && Boolean(executionId)
+  return useQuery<any, Error>({
+    queryKey: ['admin', 'finance', 'dashboard-details', period, 'result', executionId],
+    queryFn: async () => {
+      if (!executionId) throw new Error('No execution ID')
+      // Import at usage time to avoid circular deps
+      const { pollAsyncExecution } = await import('@/integrations/appwrite/executeFunction')
+      return await pollAsyncExecution<any>(SUBS_FN, executionId, 300_000, 2_000)
+    },
+    enabled,
+    refetchInterval: 0,  // Don't auto-refetch; polling happens in pollAsyncExecution
+    staleTime: Infinity,  // Once we have a result, keep it
   })
 }
 

@@ -196,7 +196,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 30,
+            "timeout": 60,
             "commands": "npm install",
             "scopes": [
                 "users.read",
@@ -754,7 +754,7 @@
                 "documents.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-subscriptions",
@@ -783,7 +783,7 @@
                 "documents.write"
             ],
             "buildSpecification": "s-1vcpu-512mb",
-            "runtimeSpecification": "s-1vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-customers",
@@ -808,7 +808,7 @@
                 "users.read"
             ],
             "buildSpecification": "s-1vcpu-512mb",
-            "runtimeSpecification": "s-1vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-core",
@@ -834,7 +834,7 @@
                 "users.write"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-invoices",
@@ -850,7 +850,7 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 15,
+            "timeout": 90,
             "commands": "npm install",
             
             "scopes": [
@@ -858,7 +858,7 @@
                 "documents.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-payment-methods",
@@ -880,7 +880,7 @@
                 "documents.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-order-payments",
@@ -901,7 +901,7 @@
                 "documents.read"
             ],
             "buildSpecification": "s-1vcpu-512mb",
-            "runtimeSpecification": "s-1vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-products",
@@ -926,7 +926,7 @@
                 "users.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-dashboard",
@@ -949,7 +949,7 @@
                 "users.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "gateway-utils",
@@ -973,7 +973,7 @@
                 "execution.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "stripe-gateway",
@@ -988,14 +988,14 @@
             "logging": true,
             "events": [],
             "schedule": "",
-            "timeout": 60,
+            "timeout": 120,
             "commands": "npm install",
             "scopes": [
                 "databases.read",
                 "documents.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "s3-gateway",
@@ -1017,7 +1017,7 @@
                 "documents.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "openai-gateway",
@@ -1039,7 +1039,7 @@
                 "documents.read"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "appwrite-gateway",
@@ -1066,7 +1066,7 @@
                 "users.write"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "admin-billing",
@@ -1093,7 +1093,7 @@
                 "documents.write"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb"
+            "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
             "$id": "notifications",

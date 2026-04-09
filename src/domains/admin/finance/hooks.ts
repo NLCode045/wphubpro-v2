@@ -57,13 +57,22 @@ export function useFinanceDashboard(period: FinanceDashboardPeriod) {
   })
 }
 
+export type UseFinanceDashboardDetailsOptions = {
+  /** When false, the heavy details job is not started (e.g. run after `useFinanceDashboard` succeeds). */
+  enabled?: boolean
+}
+
 /**
  * Fetch detailed dashboard statistics asynchronously.
  * This action makes many API calls and should not block the UI.
  * Returns execution ID that can be polled.
  */
-export function useFinanceDashboardDetails(period: FinanceDashboardPeriod) {
-  const enabled = useFinanceAdminEnabled()
+export function useFinanceDashboardDetails(
+  period: FinanceDashboardPeriod,
+  options?: UseFinanceDashboardDetailsOptions,
+) {
+  const adminEnabled = useFinanceAdminEnabled()
+  const startAllowed = options?.enabled !== false
   return useQuery<{ executionId: string }, Error>({
     queryKey: ['admin', 'finance', 'dashboard-details', period, 'start'],
     queryFn: async () => {
@@ -78,32 +87,8 @@ export function useFinanceDashboardDetails(period: FinanceDashboardPeriod) {
       }
       return res
     },
-    enabled,
+    enabled: adminEnabled && startAllowed,
     staleTime: 0,  // Don't cache - we want fresh polling every time
-  })
-}
-
-/**
- * Poll the result of an async dashboard details execution.
- * Pass the executionId from useFinanceDashboardDetails.
- * Polls every 2 seconds until complete.
- */
-export function useDashboardDetailsResult(
-  executionId: string | undefined,
-  period: FinanceDashboardPeriod
-) {
-  const enabled = useFinanceAdminEnabled() && Boolean(executionId)
-  return useQuery<any, Error>({
-    queryKey: ['admin', 'finance', 'dashboard-details', period, 'result', executionId],
-    queryFn: async () => {
-      if (!executionId) throw new Error('No execution ID')
-      // Import at usage time to avoid circular deps
-      const { pollAsyncExecution } = await import('@/integrations/appwrite/executeFunction')
-      return await pollAsyncExecution<any>(SUBS_FN, executionId, 300_000, 2_000)
-    },
-    enabled,
-    refetchInterval: 0,  // Don't auto-refetch; polling happens in pollAsyncExecution
-    staleTime: Infinity,  // Once we have a result, keep it
   })
 }
 
@@ -117,8 +102,17 @@ export type AdminSubscriptionListParams = {
   maxPages?: number
 }
 
-export function useAdminSubscriptionList(params: AdminSubscriptionListParams) {
-  const enabled = useFinanceAdminEnabled()
+export type UseAdminSubscriptionListOptions = {
+  /** When false, the list request is not started (e.g. wait until another query finishes). */
+  enabled?: boolean
+}
+
+export function useAdminSubscriptionList(
+  params: AdminSubscriptionListParams,
+  options?: UseAdminSubscriptionListOptions,
+) {
+  const adminEnabled = useFinanceAdminEnabled()
+  const startAllowed = options?.enabled !== false
   return useQuery<{ subscriptions: AdminSubscriptionRow[]; fetchedPages: number }, Error>({
     queryKey: ['admin', 'finance', 'subscriptions', params],
     queryFn: async () => {
@@ -137,7 +131,7 @@ export function useAdminSubscriptionList(params: AdminSubscriptionListParams) {
         fetchedPages: res.fetchedPages ?? 0,
       }
     },
-    enabled,
+    enabled: adminEnabled && startAllowed,
     staleTime: 30_000,
   })
 }
@@ -162,8 +156,14 @@ export type AdminStripePlansListData = {
   subscriptionCountsTruncated: boolean
 }
 
-export function useAdminStripePlansList() {
-  const enabled = useFinanceAdminEnabled()
+export type UseAdminStripePlansListOptions = {
+  /** When false, the plans request is not started (e.g. wait until another query finishes). */
+  enabled?: boolean
+}
+
+export function useAdminStripePlansList(options?: UseAdminStripePlansListOptions) {
+  const adminEnabled = useFinanceAdminEnabled()
+  const startAllowed = options?.enabled !== false
   return useQuery<AdminStripePlansListData, Error>({
     queryKey: ['admin', 'finance', 'plans'],
     queryFn: async () => {
@@ -182,7 +182,7 @@ export function useAdminStripePlansList() {
         subscriptionCountsTruncated: res.subscriptionCountsTruncated === true,
       }
     },
-    enabled,
+    enabled: adminEnabled && startAllowed,
     staleTime: 120_000,
   })
 }

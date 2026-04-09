@@ -28,7 +28,7 @@ async function callStripeGateway(action, payload, log, error) {
     const response = await functions.createExecution(
       gatewayFunctionId,
       JSON.stringify({ action, payload }),
-      true
+      false
     );
 
     if (!response.responseBody) {

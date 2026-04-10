@@ -83,7 +83,7 @@ Once we see the actual response structure, we can:
 
 ## Files Modified in Latest Changes
 
-1. **functions/stripe/stripe-subscriptions/index.js**
+1. **functions/stripe/stripe-consumer/** (legacy: `functions/stripe/deprecated/stripe-subscriptions/index.js`)
    - Enhanced getStripeCredentials() with improved logging
    - Added fallback for response.response property
    - Better error messages with full diagnostic data

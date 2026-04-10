@@ -72,7 +72,7 @@ All credential access goes through **gateway functions** — not directly from c
 
 | Gateway | Purpose | Consumers |
 |---|---|---|
-| `stripe-gateway` | All Stripe API operations | stripe-products, stripe-invoices, stripe-subscriptions, stripe-payments, etc. |
+| `stripe-gateway` | All Stripe API operations (vault-backed Stripe SDK only here) | stripe-products, stripe-invoices, stripe-subscriptions, stripe-payments, stripe-customers, stripe-config, stripe-order-payments, stripe-payment-methods, stripe-create-customer, stripe-portal-link, `stripe-webhook` (verify + orchestration) |
 | `s3-gateway` | All S3 operations (upload, download, delete) | zip-parser, file-upload functions |
 | `openai-gateway` | All AI/LLM operations (completions, embeddings) | health-ai-agent, content-generation functions |
 | `appwrite-gateway` | Admin Appwrite operations (bulk writes, user mgmt) | admin-manage-users, system functions |
@@ -132,7 +132,7 @@ New pattern (Three-tier architecture):
 ```
 Frontend/Consumer Code
     ↓
-Consumer Function (stripe-products, stripe-invoices, etc.)
+Consumer Function (`stripe-consumer`; legacy per-domain copies under `functions/stripe/deprecated/`)
     ↓ (pure data, no credentials)
 Gateway Function (stripe-gateway, s3-gateway, etc.)
     ↓ (has vault access)
@@ -141,24 +141,32 @@ Vault Database (encrypted credentials)
 External API (Stripe, S3, OpenAI, etc.)
 ```
 
+#### Modular boundaries (Stripe)
+
+| Layer | Role |
+| --- | --- |
+| **`stripe-gateway`** | Sole vault access for Stripe; `handlers/*` actions; merges nested `{ action, payload }` from consumers before dispatch |
+| **`stripe-consumer`** | Unified Appwrite function: routes to `handlers/*` (replaces separate `stripe-products`, `stripe-webhook`, etc.). Webhook verifies via gateway `verify-webhook`; sync in `handlers/processStripeWebhookEvent.js` |
+| **Consumers (deprecated tree)** | `functions/stripe/deprecated/stripe-*` — old one-function-per-domain layouts; do not add features here |
+| **Shared Stripe helpers** | Active: `functions/stripe/stripe-consumer/lib/`. Legacy mirror: `functions/stripe/deprecated/lib/` — not `functions/_shared` |
+
 #### Consumer Functions
 
-Consumer functions are simple pass-through functions that:
-- Accept requests with `action` and `payload`
-- Call the appropriate gateway with those parameters
-- Return gateway responses unchanged
-- **Have ZERO credential access**
+Consumer functions:
+- Accept requests with `action` and `payload` (when using pure passthrough)
+- Call **`stripe-gateway`** via [`functions/stripe/stripe-consumer/lib/callStripeGateway.js`](functions/stripe/stripe-consumer/lib/callStripeGateway.js) with `action` + payload
+- May add **local composition** (e.g. `stripe-subscriptions/handlers/*`, admin checks on `stripe-products`)
+- **Have ZERO Stripe secret / vault access**
 
-Example consumer function:
+Example (passthrough):
 ```javascript
-const { callGateway } = require('../_shared/consumer-gateway-caller');
+const { callStripeGateway } = require('./lib/callStripeGateway');
 
 module.exports = async ({ req, res, log, error }) => {
   try {
     const payload = parsePayload(req);
     const action = String(payload.action || req.query?.action || '').toLowerCase().trim();
-
-    const result = await callGateway('stripe-gateway', action, payload.payload || payload);
+    const result = await callStripeGateway(action, payload.payload || payload, log, error);
     return res.json(result);
   } catch (err) {
     return res.json({ success: false, message: err.message }, 500);
@@ -166,16 +174,17 @@ module.exports = async ({ req, res, log, error }) => {
 };
 ```
 
+#### Appwrite bootstrap (Stripe consumers)
+
+Each function that uses the Appwrite SDK or `Functions.createExecution` needs **`APPWRITE_ENDPOINT`**, **`APPWRITE_PROJECT_ID`**, **`APPWRITE_API_KEY`** (with optional `APPWRITE_FUNCTION_*` fallbacks — see [`functions/stripe/stripe-consumer/lib/appwriteEnv.js`](functions/stripe/stripe-consumer/lib/appwriteEnv.js)). **Do not** set `STRIPE_SECRET_KEY` on consumers; Stripe credentials live in the vault and are used only inside **`stripe-gateway`**.
+
 #### Available Consumer Functions
 
 | Consumer | Gateway | Purpose |
 |---|---|---|
-| stripe-products | stripe-gateway | Product & pricing management |
-| stripe-subscriptions | stripe-gateway | Subscription operations |
-| stripe-invoices | stripe-gateway | Invoice operations |
-| stripe-payments | stripe-gateway | Payment operations |
-| stripe-customers | stripe-gateway | Customer management |
-| stripe-config | stripe-gateway | Fetch publishable key for frontend |
+| **stripe-consumer** | stripe-gateway | **Active:** single deployment; `handlers/*` cover catalog, subscriptions, invoices, PMs, portal, checkout, webhook, etc. |
+| stripe-products, stripe-subscriptions, … (under `deprecated/`) | stripe-gateway | **Legacy** one-function-per-domain copies only |
+| stripe-webhook (`deprecated/`) | stripe-gateway (verify + actions) | Old standalone webhook entry; use **stripe-consumer** + Stripe URL instead |
 | s3-storage | s3-gateway | File upload/download/delete |
 | ai-content | openai-gateway | AI/LLM operations |
 | db-admin | appwrite-gateway | Admin database operations |

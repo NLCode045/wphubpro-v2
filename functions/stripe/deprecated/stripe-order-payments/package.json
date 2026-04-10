@@ -1,0 +1,9 @@
+{
+  "name": "stripe-order-payments",
+  "version": "1.0.0",
+  "description": "Stripe checkout session for subscription",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3"
+  }
+}

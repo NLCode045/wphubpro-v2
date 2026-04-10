@@ -29,11 +29,12 @@ const GITHUB_OAUTH_SCOPES = ['read:user', 'user:email'] as const;
  */
 function getOAuthRedirectUrls() {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const login = `${origin}${ROUTE_PATHS.LOGIN}`;
   return {
     // Land on login so MFA-pending OAuth sessions are not torn down by ProtectedRoute + sign-in mount.
     // Full sessions still redirect to the dashboard from AuthScreenGate.
-    success: `${origin}${ROUTE_PATHS.LOGIN}`,
-    failure: `${origin}${ROUTE_PATHS.LOGIN}`,
+    success: login,
+    failure: `${login}?oauth=github_error`,
   };
 }
 
@@ -233,12 +234,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loginWithGitHub = () => {
     const { success, failure } = getOAuthRedirectUrls();
-    account.createOAuth2Session(OAuthProvider.Github, success, failure, [...GITHUB_OAUTH_SCOPES]);
+    account.createOAuth2Session({
+      provider: OAuthProvider.Github,
+      success,
+      failure,
+      scopes: [...GITHUB_OAUTH_SCOPES],
+    });
   };
 
   const linkGitHubIdentity = () => {
     const { success, failure } = getGitHubLinkIdentityUrls();
-    account.createOAuth2Session(OAuthProvider.Github, success, failure, [...GITHUB_OAUTH_SCOPES]);
+    account.createOAuth2Session({
+      provider: OAuthProvider.Github,
+      success,
+      failure,
+      scopes: [...GITHUB_OAUTH_SCOPES],
+    });
   };
 
   const listOAuthIdentities = async (): Promise<Models.Identity[]> => {

@@ -97,6 +97,6 @@ Expected Outcome:
 
 ## No Changes Needed To
 
-- `functions/stripe/stripe-subscriptions/index.js` - Already correctly routes to stripe-gateway
+- `functions/stripe/deprecated/stripe-subscriptions/index.js` (legacy) — unified routing is `functions/stripe/stripe-consumer/`
 - Frontend code - Already sends correct action parameters
 - Other gateway functions - Pattern can be applied but not required for this fix

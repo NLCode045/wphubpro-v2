@@ -10,6 +10,9 @@ interface ImportMetaEnv {
   readonly APPWRITE_FUNCTION_MANAGE_SETTINGS?: string;
   readonly APPWRITE_FUNCTION_MANAGE_VAULT_PROVIDERS?: string;
   readonly APPWRITE_FUNCTION_NOTIFICATIONS?: string;
+  /** Unified Stripe consumer function id (defaults to `stripe-consumer` in appwrite). */
+  readonly APPWRITE_FUNCTION_STRIPE?: string;
+  readonly APPWRITE_FUNCTION_STRIPE_CONFIG?: string;
   readonly APPWRITE_FUNCTION_STRIPE_INVOICES?: string;
   readonly APPWRITE_FUNCTION_STRIPE_ORDER_PAYMENTS?: string;
   readonly APPWRITE_FUNCTION_STRIPE_PAYMENT_METHODS?: string;

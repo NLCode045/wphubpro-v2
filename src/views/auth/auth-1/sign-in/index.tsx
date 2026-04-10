@@ -8,7 +8,7 @@ import { account } from '@/services/appwrite'
 import { AppwriteException } from 'appwrite'
 import { useEffect, useState, type FormEvent } from 'react'
 import { FaEnvelope, FaGithub, FaMobileScreenButton } from 'react-icons/fa6'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
 /** Sign-in with email + password; second step only when Appwrite requires MFA (user has MFA enabled). */
@@ -38,6 +38,30 @@ const SignInPage = () => {
     verifyLoginEmailOtp,
   } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
+  /** GitHub OAuth failure redirect (see getOAuthRedirectUrls) or provider error query params. */
+  useEffect(() => {
+    const oauth = searchParams.get('oauth')
+    if (oauth === 'github_error') {
+      setError('GitHub sign-in was cancelled or failed. Try again or use email and password.')
+      const next = new URLSearchParams(searchParams)
+      next.delete('oauth')
+      const q = next.toString()
+      navigate({ search: q ? `?${q}` : '' }, { replace: true })
+      return
+    }
+    const errMsg = searchParams.get('message') ?? searchParams.get('error_description')
+    const errCode = searchParams.get('error')
+    if (errCode || errMsg) {
+      setError(errMsg ?? 'Sign-in with GitHub could not be completed.')
+      const next = new URLSearchParams(searchParams)
+      next.delete('error')
+      next.delete('message')
+      next.delete('error_description')
+      navigate({ search: next.toString() ? `?${next}` : '' }, { replace: true })
+    }
+  }, [searchParams, navigate])
 
   /**
    * Drop invalid sessions on load; keep MFA-pending sessions (e.g. after GitHub OAuth) so the user can

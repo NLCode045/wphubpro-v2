@@ -62,7 +62,9 @@ export const useInvoices = (ctx?: BillingAccountContext) => {
     queryKey: ['invoices', user?.$id, ctx?.stripeCustomerId],
     queryFn: async () => {
       if (!user) return [];
-      const result = await executeFunction<{ invoices: StripeInvoice[] }>(LIST_INVOICES_FUNCTION_ID);
+      const result = await executeFunction<{ invoices: StripeInvoice[] }>(LIST_INVOICES_FUNCTION_ID, {
+        stripeScope: 'invoices',
+      });
       return result?.invoices ?? [];
     },
     enabled: stripeBillingEnabled(user?.$id, ctx),

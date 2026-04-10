@@ -58,7 +58,7 @@ The improved code now:
 
 ## Files Modified
 
-1. **functions/stripe/stripe-subscriptions/index.js**
+1. **functions/stripe/stripe-consumer/index.js** (or legacy `deprecated/stripe-subscriptions/index.js`)
    - Enhanced `getStripeCredentials()` with fallback response handling
    - Added comprehensive logging
    - Better error messages with diagnostic data

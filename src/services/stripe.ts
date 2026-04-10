@@ -19,7 +19,7 @@ export async function getStripeConfig(): Promise<{ stripe_publishable_key: strin
       success?: boolean;
       stripe_publishable_key?: string;
       message?: string;
-    }>(APPWRITE_FUNCTION_IDS.STRIPE_CONFIG, {});
+    }>(APPWRITE_FUNCTION_IDS.STRIPE_CONFIG, { stripeScope: 'config' });
 
     if (!result?.success || !result?.stripe_publishable_key) {
       throw new Error('Invalid Stripe configuration response');

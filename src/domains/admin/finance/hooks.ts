@@ -50,6 +50,9 @@ export function useFinanceDashboard(period: FinanceDashboardPeriod) {
         const msg = (res as { error?: string } | null)?.error
         throw new Error(msg || 'Dashboard failed')
       }
+      if (!res.stats) {
+        throw new Error('Dashboard response missing stats (check stripe-consumer / admin-finance-dashboard).')
+      }
       return res
     },
     enabled,

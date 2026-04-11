@@ -10,6 +10,7 @@ import {
   TbListDetails,
   TbLogout2,
   TbPackages,
+  TbReceipt,
   TbSettings,
   TbUserCircle,
   TbUsers,
@@ -221,6 +222,12 @@ export const horizontalAdminMenuItems: MenuItemType[] = [
         label: 'Plans',
         icon: TbPackages,
         url: ROUTE_PATHS.ADMIN_FINANCE_PLANS,
+      },
+      {
+        key: 'admin-finance-billing',
+        label: 'Billing',
+        icon: TbReceipt,
+        url: ROUTE_PATHS.ADMIN_FINANCE_BILLING,
       },
       {
         key: 'admin-finance-payments',

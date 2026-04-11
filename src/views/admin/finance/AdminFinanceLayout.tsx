@@ -1,4 +1,3 @@
-import { AdminStripeSidebar } from '@/components/admin/AdminLayout'
 import { DocHelpButton } from '@/components/docs/DocHelpButton'
 import PageMetaData from '@/components/PageMetaData'
 import { ROUTE_PATHS } from '@/config/routePaths'
@@ -6,7 +5,7 @@ import { useDashboardNav } from '@/context/DashboardNavContext'
 import { useAuth } from '@/domains/auth'
 import type { DocsHelpContextKey } from '@/domains/docs/docsHelpMap'
 import { useEffect, useMemo } from 'react'
-import { Card, Col, Row } from 'react-bootstrap'
+import { Card } from 'react-bootstrap'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 
 function financeHelpContext(pathname: string): DocsHelpContextKey {
@@ -59,15 +58,8 @@ const AdminFinanceLayout = () => {
             <DocHelpButton contextKey={helpKey} />
           </div>
         </Card.Header>
-        <Card.Body className="p-0">
-          <Row className="g-0">
-            <Col lg={3} xl={2} className="border-bottom border-lg-0 border-lg-end bg-light bg-opacity-50 p-3">
-              <AdminStripeSidebar />
-            </Col>
-            <Col lg={9} xl={10} className="p-3 p-lg-4">
-              <Outlet />
-            </Col>
-          </Row>
+        <Card.Body className="p-3 p-lg-4">
+          <Outlet />
         </Card.Body>
       </Card>
     </>

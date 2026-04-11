@@ -27,31 +27,55 @@ function notFound(res: ServerResponse, message: string) {
   json(res, { error: 'stripe_api_dev_mock', message }, 404);
 }
 
+export type StripeApiDevPluginOptions = {
+  /** When `VITE_STRIPE_ADMIN_DEV_MOCK=1`, serve JSON stubs for `/api/stripe/*`. */
+  mock: boolean;
+  /**
+   * When set (`VITE_STRIPE_API_PROXY_TARGET`), Vite proxies `/api/stripe` to this origin — this middleware
+   * must not intercept.
+   */
+  forwardStripeTo?: string;
+};
+
 /**
- * When `VITE_STRIPE_ADMIN_DEV_MOCK` is `1` or `true`, handle `/api/stripe/*` in dev **before** the Vite
- * proxy (`/api` → `api.wphub.pro`). Without this, legacy `fetchStripeJson('/plans')` etc. hit a non-JSON
- * route and return HTML (often 401), which triggers confusing errors.
+ * Dev middleware for `/api/stripe/*`:
+ * - If `forwardStripeTo` is set → skip (Vite `buildDevProxy` handles forwarding).
+ * - Else if `mock` → JSON stubs (legacy `fetchStripeJson` clients).
+ * - Else → `501` JSON so clients never receive HTML from the SPA fallback or wrong upstream.
  *
- * Stubs:
- * - `/api/stripe/plans`, `/billing`, `/subscriptions` — member REST used by `hooks/usePlans` & friends
- * - `/api/stripe/admin/*` — admin REST from `stripeAdminApi.ts`
- *
- * Plan list/detail also use `/api/stripe/admin/plans/catalog` (`src/api/stripe/plans.ts` on the server).
- * Enable this mock only for local
- * JSON stubs, or add `http://localhost:5173` under Appwrite Platforms for real API + Functions.
+ * The generic `/api` proxy must **not** forward `/api/stripe` to hosts that return HTML; see `buildDevProxy.ts`.
  */
-export function stripeAdminDevMockPlugin(enabled: boolean): Plugin {
+export function stripeAdminDevMockPlugin(options: StripeApiDevPluginOptions | boolean): Plugin {
+  const opts: StripeApiDevPluginOptions =
+    typeof options === 'boolean' ? { mock: options } : options;
+  const { mock, forwardStripeTo } = opts;
+
   return {
-    name: 'stripe-api-dev-mock',
+    name: 'stripe-api-dev',
     apply: 'serve',
     enforce: 'pre',
     configureServer(server) {
-      if (!enabled) return;
+      if (forwardStripeTo) {
+        return;
+      }
 
       server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const raw = req.url?.split('?')[0] ?? '';
         if (!raw.startsWith('/api/stripe')) {
           next();
+          return;
+        }
+
+        if (!mock) {
+          json(
+            res,
+            {
+              error: 'stripe_rest_not_configured',
+              message:
+                'No local `/api/stripe` JSON backend. Use Appwrite `executeFunction` for Stripe (production parity), set `VITE_STRIPE_ADMIN_DEV_MOCK=1` for stubs, or set `VITE_STRIPE_API_PROXY_TARGET` to an origin that implements these routes.',
+            },
+            501,
+          );
           return;
         }
 

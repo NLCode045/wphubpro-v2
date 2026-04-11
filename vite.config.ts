@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildDevProxy } from './vite/buildDevProxy';
 import { stripeAdminDevMockPlugin } from './vite/stripeAdminDevMockPlugin';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,9 @@ export default defineConfig(({ mode }) => {
 
   const stripeAdminDevMock =
     fileEnv.VITE_STRIPE_ADMIN_DEV_MOCK === '1' || fileEnv.VITE_STRIPE_ADMIN_DEV_MOCK === 'true';
+
+  const stripeApiProxyTarget = (fileEnv.VITE_STRIPE_API_PROXY_TARGET ?? '').trim();
+  const devApiProxyTarget = (fileEnv.VITE_DEV_API_PROXY_TARGET ?? '').trim() || 'https://api.wphub.pro';
 
   return {
   /**
@@ -49,21 +53,24 @@ export default defineConfig(({ mode }) => {
     port: 5173,
     strictPort: false,
     open: true,
-    proxy: {
-      '/api': {
-        target: 'https://api.wphub.pro',
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
-    },
+    proxy: buildDevProxy({
+      apiTarget: devApiProxyTarget,
+      stripeTarget: stripeApiProxyTarget || undefined,
+    }),
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   },
-  plugins: [stripeAdminDevMockPlugin(stripeAdminDevMock), tailwindcss(), react()],
+  plugins: [
+    stripeAdminDevMockPlugin({
+      mock: stripeAdminDevMock,
+      forwardStripeTo: stripeApiProxyTarget || undefined,
+    }),
+    tailwindcss(),
+    react(),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

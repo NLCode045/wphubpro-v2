@@ -27,6 +27,12 @@ interface ImportMetaEnv {
   readonly APPWRITE_STORAGE_BUCKET_BRIDGE_ID?: string;
   readonly APPWRITE_STORAGE_BUCKET_PLATFORM_ID?: string;
   readonly STRIPE_PUBLISHABLE_KEY?: string;
+  /** Dev: proxy `/api/stripe` to this origin (JSON API). See `vite/buildDevProxy.ts`. */
+  readonly VITE_STRIPE_API_PROXY_TARGET?: string;
+  /** Dev: override default `https://api.wphub.pro` for non-Stripe `/api/*` proxy. */
+  readonly VITE_DEV_API_PROXY_TARGET?: string;
+  /** Dev: JSON stubs for `/api/stripe/*` when not using `VITE_STRIPE_API_PROXY_TARGET`. */
+  readonly VITE_STRIPE_ADMIN_DEV_MOCK?: string;
 }
 
 interface ImportMeta {

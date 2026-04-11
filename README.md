@@ -2,7 +2,7 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Authentication (Appwrite MFA)
+## Authentication (Appwrite MFA) 
 
 Enable the auth methods and MFA factors you need in your **Appwrite project** (self-hosted console or [Appwrite Cloud](https://cloud.appwrite.io)). This app completes MFA at `/verify-mfa` and on the sign-in screen when Appwrite returns `user_more_factors_required` after the first factor.
 

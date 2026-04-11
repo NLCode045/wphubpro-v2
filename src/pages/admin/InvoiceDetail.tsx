@@ -1,6 +1,6 @@
 import { ROUTE_PATHS } from '@/config/routePaths';
+import { useAdminStripeInvoice } from '@/domains/admin/finance/hooks';
 import { formatStripeAddress } from '@/lib/adminStripeFormat';
-import { useAdminInvoiceDetail } from '@/hooks/useAdminBilling';
 import { Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router';
 
@@ -15,7 +15,7 @@ function formatMoney(cents: unknown, currency: unknown) {
 
 const InvoiceDetailPage = () => {
   const { invoiceId } = useParams<{ invoiceId: string }>();
-  const { data, isLoading, error } = useAdminInvoiceDetail(invoiceId);
+  const { data, isLoading, error } = useAdminStripeInvoice(invoiceId);
 
   if (!invoiceId) return <p className="text-danger">Missing invoice id.</p>;
   if (isLoading) return <Spinner animation="border" />;

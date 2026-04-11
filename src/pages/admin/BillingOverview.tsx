@@ -1,5 +1,5 @@
 import { ROUTE_PATHS } from '@/config/routePaths';
-import { useAdminBillingOverview } from '@/hooks/useAdminBilling';
+import { useAdminPaymentsList, useAdminRecentInvoicesList } from '@/domains/admin/finance/hooks';
 import { Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router';
 
@@ -13,7 +13,14 @@ function formatMoney(cents: unknown, currency: unknown) {
 }
 
 const BillingOverviewPage = () => {
-  const { data, isLoading, error } = useAdminBillingOverview();
+  const recentQ = useAdminRecentInvoicesList({ limit: 25 });
+  const failedQ = useAdminPaymentsList({
+    limit: 30,
+    status: 'requires_payment_method',
+  });
+
+  const isLoading = recentQ.isLoading || failedQ.isLoading;
+  const error = recentQ.error ?? failedQ.error;
 
   if (isLoading) {
     return (
@@ -27,8 +34,8 @@ const BillingOverviewPage = () => {
     return <p className="text-danger mb-0">{error.message}</p>;
   }
 
-  const recent = data?.recentInvoices ?? [];
-  const failed = data?.failedPayments ?? [];
+  const recent = recentQ.data?.invoices ?? [];
+  const failed = failedQ.data?.orders ?? [];
 
   return (
     <Row className="g-3">
@@ -83,6 +90,9 @@ const BillingOverviewPage = () => {
         <Card className="border shadow-none h-100">
           <Card.Body>
             <h5 className="mb-3">Failed / incomplete payments</h5>
+            <p className="text-muted small mb-2">
+              PaymentIntents needing a new payment method (e.g. card declined).
+            </p>
             {!failed.length ? (
               <p className="text-muted small mb-0">None in the recent window.</p>
             ) : (
@@ -95,18 +105,15 @@ const BillingOverviewPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {failed.map((raw) => {
-                    const pi = raw as Record<string, unknown>;
-                    return (
-                      <tr key={String(pi.id)}>
-                        <td>
-                          <code className="small">{String(pi.id)}</code>
-                        </td>
-                        <td>{String(pi.status)}</td>
-                        <td>{formatMoney(pi.amount, pi.currency)}</td>
-                      </tr>
-                    );
-                  })}
+                  {failed.map((pi) => (
+                    <tr key={pi.id}>
+                      <td>
+                        <code className="small">{pi.id}</code>
+                      </td>
+                      <td>{pi.status}</td>
+                      <td>{formatMoney(pi.amount, pi.currency)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </Table>
             )}

@@ -271,6 +271,59 @@ export function useAdminPaymentsList(params: AdminPaymentsListParams) {
   })
 }
 
+export type AdminRecentInvoicesParams = {
+  limit?: number
+}
+
+/** Account-wide recent invoices (Stripe `invoices.list`), via stripe-gateway `list-invoices`. */
+export function useAdminRecentInvoicesList(params: AdminRecentInvoicesParams = {}) {
+  const enabled = useFinanceAdminEnabled()
+  const limit = Math.min(Math.max(params.limit ?? 25, 1), 100)
+  return useQuery<{ invoices: Record<string, unknown>[] }, Error>({
+    queryKey: ['admin', 'finance', 'invoices-recent', limit],
+    queryFn: async () => {
+      const res = await executeFunction<{
+        success?: boolean
+        invoices?: Record<string, unknown>[]
+        message?: string
+      }>(INVOICES_FN, {
+        action: 'list-invoices',
+        limit,
+      })
+      if (res && 'success' in res && res.success === false) {
+        throw new Error(res.message || 'Invoice list failed')
+      }
+      return { invoices: res?.invoices ?? [] }
+    },
+    enabled,
+    staleTime: 30_000,
+  })
+}
+
+/** Single invoice by id (Stripe `invoices.retrieve`), via stripe-gateway `get-invoice`. */
+export function useAdminStripeInvoice(invoiceId: string | undefined) {
+  const enabled = useFinanceAdminEnabled() && Boolean(invoiceId)
+  return useQuery<{ invoice: Record<string, unknown> }, Error>({
+    queryKey: ['admin', 'finance', 'invoice', invoiceId],
+    queryFn: async () => {
+      const res = await executeFunction<{
+        success?: boolean
+        invoice?: Record<string, unknown>
+        message?: string
+      }>(INVOICES_FN, {
+        action: 'get-invoice',
+        invoice_id: invoiceId,
+      })
+      if (!res?.invoice) {
+        throw new Error((res as { message?: string } | undefined)?.message || 'Invoice not found')
+      }
+      return { invoice: res.invoice }
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
 export function useAdminPaymentDetail(paymentIntentId: string | undefined) {
   const enabled = useFinanceAdminEnabled() && Boolean(paymentIntentId)
   return useQuery<AdminPaymentIntentDetail, Error>({

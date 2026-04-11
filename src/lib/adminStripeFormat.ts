@@ -25,6 +25,6 @@ export function billingIntervalFromSubscriptionJson(sub: Record<string, unknown>
   const price = first?.price as Record<string, unknown> | undefined;
   const rec = price?.recurring as Record<string, unknown> | undefined;
   if (!rec?.interval) return null;
-  const count = typeof rec.interval_count === 'number' && rec.interval_count > 1 ? `${rec.interval_count} ` : '';
-  return `${count}${String(rec.interval)}${Number(rec.interval_count) > 1 ? 's' : ''}`;
+  const count = typeof rec.interval_count === 'number' && rec.interval_count > 0 ? rec.interval_count : 1;
+  return `${count} × ${String(rec.interval)}`;
 }

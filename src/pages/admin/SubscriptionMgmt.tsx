@@ -127,7 +127,7 @@ const SubscriptionMgmtPage = () => {
         ),
       }),
     ],
-    [actionMut.isPending, navigate, refetch],
+    [actionMut.isPending, navigate],
   );
 
   const table = useReactTable({

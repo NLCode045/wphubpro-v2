@@ -1,3 +1,4 @@
+import { AdminStripeSidebar } from '@/components/admin/AdminLayout'
 import { DocHelpButton } from '@/components/docs/DocHelpButton'
 import PageMetaData from '@/components/PageMetaData'
 import { ROUTE_PATHS } from '@/config/routePaths'
@@ -5,16 +6,15 @@ import { useDashboardNav } from '@/context/DashboardNavContext'
 import { useAuth } from '@/domains/auth'
 import type { DocsHelpContextKey } from '@/domains/docs/docsHelpMap'
 import { useEffect, useMemo } from 'react'
-import { Card, Nav } from 'react-bootstrap'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-
-const tabClass = ({ isActive }: { isActive: boolean }) =>
-  `nav-link ${isActive ? 'active fw-semibold' : ''}`
+import { Card, Col, Row } from 'react-bootstrap'
+import { Outlet, useLocation, useNavigate } from 'react-router'
 
 function financeHelpContext(pathname: string): DocsHelpContextKey {
   if (pathname.includes('/subscriptions/')) return 'admin:finance:subscription-detail'
   if (pathname.includes('/plans/')) return 'admin:finance:plan-detail'
   if (pathname.includes('/payments/')) return 'admin:finance:payment-detail'
+  if (pathname.includes('/billing/invoices/')) return 'admin:finance:payment-detail'
+  if (pathname.endsWith('/billing') || pathname.includes('/finance/billing')) return 'admin:finance:payments'
   if (pathname.endsWith('/subscriptions') || pathname.includes('/finance/subscriptions')) {
     return 'admin:finance:subscriptions'
   }
@@ -58,31 +58,16 @@ const AdminFinanceLayout = () => {
             </div>
             <DocHelpButton contextKey={helpKey} />
           </div>
-          <Nav variant="tabs" className="mt-3 border-0">
-            <Nav.Item>
-              <NavLink to={ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD} className={tabClass} end>
-                Dashboard
-              </NavLink>
-            </Nav.Item>
-            <Nav.Item>
-              <NavLink to={ROUTE_PATHS.ADMIN_FINANCE_SUBSCRIPTIONS} className={tabClass}>
-                Subscriptions
-              </NavLink>
-            </Nav.Item>
-            <Nav.Item>
-              <NavLink to={ROUTE_PATHS.ADMIN_FINANCE_PLANS} className={tabClass}>
-                Plans
-              </NavLink>
-            </Nav.Item>
-            <Nav.Item>
-              <NavLink to={ROUTE_PATHS.ADMIN_FINANCE_PAYMENTS} className={tabClass}>
-                Payments
-              </NavLink>
-            </Nav.Item>
-          </Nav>
         </Card.Header>
-        <Card.Body className="pt-4">
-          <Outlet />
+        <Card.Body className="p-0">
+          <Row className="g-0">
+            <Col lg={3} xl={2} className="border-bottom border-lg-0 border-lg-end bg-light bg-opacity-50 p-3">
+              <AdminStripeSidebar />
+            </Col>
+            <Col lg={9} xl={10} className="p-3 p-lg-4">
+              <Outlet />
+            </Col>
+          </Row>
         </Card.Body>
       </Card>
     </>

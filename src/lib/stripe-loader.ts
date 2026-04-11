@@ -30,6 +30,23 @@ export function getStripe(): Promise<StripeJs | null> {
   return stripePromise;
 }
 
+function isProbablyHtml(body: string): boolean {
+  const s = body.trimStart();
+  return s.startsWith('<!') || s.startsWith('<html') || s.startsWith('<HTML');
+}
+
+function shortNonJsonError(status: number, body: string): Error {
+  if (isProbablyHtml(body)) {
+    const router = /router protection|general_access_forbidden|Error 401/i.test(body);
+    const msg = router
+      ? `API returned HTML (${status}, Appwrite router / domain protection). Add http://localhost:5173 (or your dev URL) under Appwrite Project → Settings → Platforms, or call an API base that allows this origin.`
+      : `API returned HTML instead of JSON (${status}). Check that the Stripe admin HTTP routes exist and return JSON.`;
+    return new Error(msg);
+  }
+  const snippet = body.length > 400 ? `${body.slice(0, 400)}…` : body;
+  return new Error(snippet || `Request failed (${status})`);
+}
+
 export async function fetchStripeJson<T>(path: string, init?: RequestInit): Promise<T> {
   const url = path.startsWith('http') ? path : `${STRIPE_API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
   const res = await fetch(url, {
@@ -42,9 +59,19 @@ export async function fetchStripeJson<T>(path: string, init?: RequestInit): Prom
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(text || `Request failed (${res.status})`);
+    throw shortNonJsonError(res.status, text);
   }
-  return (text ? (JSON.parse(text) as T) : ({} as T)) as T;
+  if (!text) {
+    return {} as T;
+  }
+  if (isProbablyHtml(text)) {
+    throw shortNonJsonError(res.status, text);
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Invalid JSON from API (Content-Type may be wrong). First bytes: ${text.slice(0, 120)}`);
+  }
 }
 
 export async function postStripeJson<T>(path: string, body: unknown): Promise<T> {

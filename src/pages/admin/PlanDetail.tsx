@@ -1,6 +1,6 @@
 import { ROUTE_PATHS } from '@/config/routePaths';
 import { useAdminPlanMutations, useAdminPlansCatalog } from '@/hooks/useAdminPlans';
-import { useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router';
 
@@ -42,7 +42,7 @@ const PlanDetailPage = () => {
 
   const pid = String(product.id);
 
-  const saveProduct = (e: React.FormEvent) => {
+  const saveProduct = (e: FormEvent) => {
     e.preventDefault();
     updateProduct.mutate(
       { productId: pid, body: { name: name.trim(), description: description.trim() || undefined } },
@@ -50,7 +50,7 @@ const PlanDetailPage = () => {
     );
   };
 
-  const addPrice = (e: React.FormEvent) => {
+  const addPrice = (e: FormEvent) => {
     e.preventDefault();
     const n = Number(amountMajor.replace(',', '.'));
     if (!Number.isFinite(n) || n <= 0) return;

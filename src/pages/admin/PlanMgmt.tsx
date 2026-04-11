@@ -1,6 +1,6 @@
 import { ROUTE_PATHS } from '@/config/routePaths';
 import { useAdminPlanMutations, useAdminPlansCatalog } from '@/hooks/useAdminPlans';
-import { useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import {
   Badge,
   Button,
@@ -29,7 +29,7 @@ const PlanMgmtPage = () => {
 
   const catalog = data?.catalog ?? [];
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const handleCreateProduct = (e: FormEvent) => {
     e.preventDefault();
     createProduct.mutate(
       { name: name.trim(), description: description.trim() || undefined },
@@ -44,7 +44,7 @@ const PlanMgmtPage = () => {
     );
   };
 
-  const handleCreatePrice = (e: React.FormEvent) => {
+  const handleCreatePrice = (e: FormEvent) => {
     e.preventDefault();
     if (!priceModal) return;
     const n = Number(amountMajor.replace(',', '.'));

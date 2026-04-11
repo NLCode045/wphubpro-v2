@@ -1,7 +1,7 @@
 /**
  * Server-only — live invoices from Stripe. Do not import from React components.
  */
-import type Stripe from '../../shims/stripe';
+import type * as St from '../../shims/stripe';
 
 import { getStripeFromEnv } from './client';
 
@@ -11,7 +11,7 @@ import { getStripeFromEnv } from './client';
 export async function listInvoicesForCustomer(
   customerId: string,
   options?: { limit?: number },
-): Promise<Stripe.ApiList<Stripe.Invoice>> {
+): Promise<St.Stripe.ApiList<St.Stripe.Invoice>> {
   const stripe = getStripeFromEnv();
   const limit = options?.limit ?? 50;
   return stripe.invoices.list({

@@ -1,7 +1,7 @@
 /**
  * Server-only — live subscription reads/writes in Stripe. Do not import from React components.
  */
-import type * as St from '../../shims/stripe';
+import type * as St from '@/types/stripe';
 
 import { getStripeFromEnv } from './client';
 
@@ -65,7 +65,7 @@ export async function createSubscription(
  */
 export async function updateSubscriptionPrice(
   body: UpdateSubscriptionBody,
-): Promise<Stripe.Response<Stripe.Subscription>> {
+): Promise<St.Stripe.Response<St.Stripe.Subscription>> {
   const stripe = getStripeFromEnv();
   const current = await stripe.subscriptions.retrieve(body.subscriptionId, {
     expand: ['items.data.price'],

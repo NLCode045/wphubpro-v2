@@ -3,7 +3,6 @@
  */
 import type { StripePlan as AdminStripePlanRow } from '@/types';
 import type { StripePlan as ProductPricePlan } from '@/types/stripe';
-import type StripeClient from '../../shims/stripe';
 import type * as St from '../../shims/stripe';
 
 import { getStripeFromEnv } from './client';
@@ -79,7 +78,9 @@ function buildPlanFromProduct(product: St.Stripe.Product, pricesData: St.Stripe.
   };
 }
 
-async function countSubscriptionsByProduct(stripe: StripeClient): Promise<{
+async function countSubscriptionsByProduct(
+  stripe: ReturnType<typeof getStripeFromEnv>,
+): Promise<{
   counts: Record<string, number>;
   subscriptionCountsTruncated: boolean;
 }> {

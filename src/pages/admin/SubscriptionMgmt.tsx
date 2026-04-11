@@ -1,11 +1,12 @@
 import DataTable from '@/components/table/DataTable';
 import { ROUTE_PATHS } from '@/config/routePaths';
 import {
-  billingIntervalFromSubscriptionJson,
-  formatStripeAddress,
-  planLabelFromSubscriptionJson,
-} from '@/lib/adminStripeFormat';
-import { useAdminSubscriptionAction, useAdminSubscriptionsList } from '@/hooks/useAdminSubscriptions';
+  useAdminCancelSubscription,
+  useAdminPauseSubscription,
+  useAdminResumeSubscription,
+  useAdminSubscriptionList,
+} from '@/domains/admin/finance/hooks';
+import type { AdminSubscriptionRow } from '@/domains/admin/finance/types';
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -20,55 +21,64 @@ type SubRow = {
   id: string;
   customerEmail: string;
   customerName: string;
-  address: string;
   status: string;
   plan: string;
   periodStart: string;
   periodEnd: string;
   interval: string;
   paused: boolean;
-  raw: Record<string, unknown>;
 };
 
 const columnHelper = createColumnHelper<SubRow>();
 
-function mapSub(r: Record<string, unknown>): SubRow {
-  const customer = r.customer;
-  const c = typeof customer === 'object' && customer ? (customer as Record<string, unknown>) : null;
-  const email = typeof c?.email === 'string' ? c.email : '—';
-  const name = typeof c?.name === 'string' && c.name ? c.name : '—';
-  const address = formatStripeAddress(c?.address);
-  const cps = r.current_period_start;
-  const cpe = r.current_period_end;
+function mapRow(r: AdminSubscriptionRow): SubRow {
   return {
-    id: String(r.id ?? ''),
-    customerEmail: email,
-    customerName: name,
-    address,
-    status: String(r.status ?? '—'),
-    plan: planLabelFromSubscriptionJson(r),
-    periodStart: typeof cps === 'number' ? new Date(cps * 1000).toLocaleDateString() : '—',
-    periodEnd: typeof cpe === 'number' ? new Date(cpe * 1000).toLocaleDateString() : '—',
-    interval: billingIntervalFromSubscriptionJson(r) ?? '—',
-    paused: Boolean(r.pause_collection),
-    raw: r,
+    id: r.subscriptionId,
+    customerEmail: r.customerEmail ?? '—',
+    customerName: r.customerName ?? '—',
+    status: r.status ?? '—',
+    plan: r.planName ?? '—',
+    periodStart: r.startDate ? new Date(r.startDate * 1000).toLocaleDateString() : '—',
+    periodEnd: r.currentPeriodEnd ? new Date(r.currentPeriodEnd * 1000).toLocaleDateString() : '—',
+    interval: r.billingCycle ?? '—',
+    paused: r.status === 'paused',
   };
 }
 
 const SubscriptionMgmtPage = () => {
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useAdminSubscriptionsList();
-  const actionMut = useAdminSubscriptionAction();
+  const listParams = useMemo(
+    () => ({
+      maxPages: 5,
+      sortField: 'startDate' as const,
+      sortDir: 'desc' as const,
+    }),
+    [],
+  );
+  const { data, isLoading, error, refetch } = useAdminSubscriptionList(listParams);
+  const cancelMut = useAdminCancelSubscription();
+  const pauseMut = useAdminPauseSubscription();
+  const resumeMut = useAdminResumeSubscription();
 
-  const rows: SubRow[] = useMemo(() => (data?.subscriptions ?? []).map((s) => mapSub(s)), [data?.subscriptions]);
+  const rows: SubRow[] = useMemo(() => (data?.subscriptions ?? []).map(mapRow), [data?.subscriptions]);
+
+  const actionPending = cancelMut.isPending || pauseMut.isPending || resumeMut.isPending;
 
   const runAction = (row: SubRow, action: 'cancel' | 'pause' | 'resume') => {
-    const labels = { cancel: 'Cancel this subscription immediately?', pause: 'Pause collection?', resume: 'Resume subscription?' };
+    const labels = {
+      cancel: 'Cancel this subscription?',
+      pause: 'Pause collection?',
+      resume: 'Resume subscription?',
+    };
     if (!window.confirm(labels[action])) return;
-    actionMut.mutate(
-      { subscriptionId: row.id, action },
-      { onSuccess: () => void refetch() },
-    );
+    const onDone = () => void refetch();
+    if (action === 'cancel') {
+      cancelMut.mutate({ subscriptionId: row.id }, { onSuccess: onDone });
+    } else if (action === 'pause') {
+      pauseMut.mutate({ subscriptionId: row.id }, { onSuccess: onDone });
+    } else {
+      resumeMut.mutate({ subscriptionId: row.id }, { onSuccess: onDone });
+    }
   };
 
   const columns = useMemo(
@@ -78,17 +88,13 @@ const SubscriptionMgmtPage = () => {
         cell: ({ getValue }) => <code className="small">{getValue()}</code>,
       }),
       columnHelper.accessor('customerEmail', {
-        header: 'Email',
+        header: 'Customer',
         cell: ({ row }) => (
           <div>
             <div className="small">{row.original.customerEmail}</div>
             <div className="text-muted small">{row.original.customerName}</div>
           </div>
         ),
-      }),
-      columnHelper.accessor('address', {
-        header: 'Address',
-        cell: ({ getValue }) => <span className="small text-muted">{getValue()}</span>,
       }),
       columnHelper.accessor('status', {
         header: 'Status',
@@ -100,7 +106,7 @@ const SubscriptionMgmtPage = () => {
         ),
       }),
       columnHelper.accessor('plan', { header: 'Plan' }),
-      columnHelper.accessor('periodStart', { header: 'Period start' }),
+      columnHelper.accessor('periodStart', { header: 'Start' }),
       columnHelper.accessor('periodEnd', { header: 'Period end' }),
       columnHelper.accessor('interval', { header: 'Billing' }),
       columnHelper.display({
@@ -108,26 +114,37 @@ const SubscriptionMgmtPage = () => {
         header: 'Actions',
         cell: ({ row }) => (
           <ButtonGroup size="sm">
-            <Button variant="outline-primary" onClick={() => navigate(ROUTE_PATHS.adminFinanceSubscriptionPath(row.original.id))}>
+            <Button
+              variant="outline-primary"
+              onClick={() => navigate(ROUTE_PATHS.adminFinanceSubscriptionPath(row.original.id))}
+            >
               View
             </Button>
             {row.original.paused ? (
-              <Button variant="outline-success" disabled={actionMut.isPending} onClick={() => runAction(row.original, 'resume')}>
+              <Button
+                variant="outline-success"
+                disabled={actionPending}
+                onClick={() => runAction(row.original, 'resume')}
+              >
                 Resume
               </Button>
             ) : (
-              <Button variant="outline-warning" disabled={actionMut.isPending} onClick={() => runAction(row.original, 'pause')}>
+              <Button
+                variant="outline-warning"
+                disabled={actionPending}
+                onClick={() => runAction(row.original, 'pause')}
+              >
                 Pause
               </Button>
             )}
-            <Button variant="outline-danger" disabled={actionMut.isPending} onClick={() => runAction(row.original, 'cancel')}>
+            <Button variant="outline-danger" disabled={actionPending} onClick={() => runAction(row.original, 'cancel')}>
               Cancel
             </Button>
           </ButtonGroup>
         ),
       }),
     ],
-    [actionMut.isPending, navigate],
+    [actionPending, navigate],
   );
 
   const table = useReactTable({
@@ -144,10 +161,14 @@ const SubscriptionMgmtPage = () => {
   return (
     <div>
       <p className="text-muted small mb-3">
-        All subscriptions (live Stripe, expanded customer + product).{' '}
+        Live Stripe data via Appwrite (<code className="small">admin-list-subscriptions</code>).{' '}
         <Link to={ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD}>Back to dashboard</Link>
       </p>
-      <DataTable table={table} onRowClick={(row) => navigate(ROUTE_PATHS.adminFinanceSubscriptionPath(row.id))} emptyMessage="No subscriptions." />
+      <DataTable
+        table={table}
+        onRowClick={(row) => navigate(ROUTE_PATHS.adminFinanceSubscriptionPath(row.id))}
+        emptyMessage="No subscriptions."
+      />
     </div>
   );
 };

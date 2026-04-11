@@ -23,27 +23,60 @@ function mapPaymentIntentsToOrders(paymentIntentsData) {
   });
 }
 
+/**
+ * Stripe `paymentIntents.list()` does not support a `status` filter (returns unknown_parameter).
+ * When `payload.status` is set, use `paymentIntents.search()`; if Search fails (e.g. region), list + in-memory filter.
+ */
 module.exports = async function adminListPaymentIntents(ctx) {
   const { stripe, res, log, error, payload } = ctx;
   const startTime = Date.now();
   log('adminListPaymentIntents: START - payload:', JSON.stringify(payload));
   try {
-    const params = {
-      limit: Math.min(Number(payload.limit) || 100, 100),
+    const limit = Math.min(Number(payload.limit) || 100, 100);
+    const customerFilter = payload.customer || payload.customerId || null;
+    const statusFilter = payload.status ? String(payload.status).trim() : '';
+
+    let rows;
+    let has_more = false;
+
+    const listParams = {
+      limit,
       expand: ['data.customer'],
     };
-    if (payload.status) params.status = payload.status;
-    const customerFilter = payload.customer || payload.customerId;
-    if (customerFilter) params.customer = customerFilter;
+    if (customerFilter) listParams.customer = customerFilter;
 
-    log(`adminListPaymentIntents: Stripe API call - paymentIntents.list(${JSON.stringify({ ...params, expand: '[data.customer]' })})`);
+    if (statusFilter) {
+      const qStatus = statusFilter.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      let query = `status:'${qStatus}'`;
+      if (customerFilter) {
+        const qCust = String(customerFilter).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        query += ` AND customer:'${qCust}'`;
+      }
+      try {
+        const searchResult = await stripe.paymentIntents.search({
+          query,
+          limit,
+          expand: ['data.customer'],
+        });
+        rows = searchResult.data;
+        has_more = searchResult.has_more;
+      } catch (searchErr) {
+        log(`adminListPaymentIntents: search failed (${searchErr.message}), using list + filter`);
+        const listed = await stripe.paymentIntents.list(listParams);
+        rows = listed.data.filter((pi) => pi.status === statusFilter);
+        has_more = listed.has_more;
+      }
+    } else {
+      const listed = await stripe.paymentIntents.list(listParams);
+      rows = listed.data;
+      has_more = listed.has_more;
+    }
 
-    const paymentIntents = await stripe.paymentIntents.list(params);
-    const orders = mapPaymentIntentsToOrders(paymentIntents.data);
+    const orders = mapPaymentIntentsToOrders(rows);
     log(
-      `adminListPaymentIntents: SUCCESS - received ${orders.length} payment intents, duration=${Date.now() - startTime}ms`,
+      `adminListPaymentIntents: SUCCESS - ${orders.length} rows, duration=${Date.now() - startTime}ms`,
     );
-    return success(res, { orders, has_more: paymentIntents.has_more });
+    return success(res, { orders, has_more });
   } catch (err) {
     error(`adminListPaymentIntents: FAILED after ${Date.now() - startTime}ms - ${err.message}`);
     return fail(res, err.message, 500);

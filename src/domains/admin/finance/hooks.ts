@@ -159,6 +159,7 @@ export function useAdminSubscriptionDetails(subscriptionId: string | undefined) 
       return await executeAdminFunction<SubscriptionDetailsResponse>(SUBS_FN, {
         action: 'admin-get-details',
         subscriptionId,
+        subscription_id: subscriptionId,
       })
     },
     enabled,

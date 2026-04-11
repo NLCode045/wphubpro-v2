@@ -1,22 +1,33 @@
 const { success, fail } = require('../lib/responses');
+const buildSubscriptionDetailsPayload = require('./lib/subscriptionDetailsMember');
 
+/**
+ * Admin subscription detail — same JSON shape as member-subscription-details (customer, plan, invoices).
+ * Accepts `subscription_id` or `subscriptionId` (consumer / Appwrite clients often send camelCase).
+ */
 module.exports = async function adminGetDetails(ctx) {
   const { stripe, res, log, error, payload } = ctx;
   const startTime = Date.now();
-  log('adminGetDetails: START - payload:', JSON.stringify(payload));
+  const subscriptionId = payload.subscription_id || payload.subscriptionId;
+  log('adminGetDetails: START - subscriptionId:', subscriptionId);
   try {
-    const { subscription_id } = payload;
-    if (!subscription_id) {
-      log('adminGetDetails: Missing subscription_id parameter');
+    if (!subscriptionId) {
       return fail(res, 'subscription_id required', 400);
     }
 
-    log(`adminGetDetails: Stripe API call - subscriptions.retrieve("${subscription_id}", {expand:...})`);
-    const subscription = await stripe.subscriptions.retrieve(subscription_id, {
-      expand: ['customer', 'items.data.price.product'],
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+      expand: [
+        'latest_invoice',
+        'customer',
+        'default_payment_method',
+        'schedule',
+        'items.data.price.product',
+      ],
     });
-    log(`adminGetDetails: SUCCESS - retrieved subscription "${subscription_id}", duration=${Date.now() - startTime}ms`);
-    return success(res, { subscription });
+
+    const body = await buildSubscriptionDetailsPayload(stripe, subscription, log);
+    log(`adminGetDetails: SUCCESS duration=${Date.now() - startTime}ms`);
+    return success(res, body);
   } catch (err) {
     error(`adminGetDetails: FAILED after ${Date.now() - startTime}ms - ${err.message}`);
     return fail(res, err.message, 500);

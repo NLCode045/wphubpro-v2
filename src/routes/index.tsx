@@ -4,13 +4,15 @@ import { ROUTE_PATHS } from '@/config/routePaths'
 import MainLayout from '@/layouts/MainLayout.tsx'
 import AdminDashboardPage from '@/views/admin'
 import AdminFinanceLayout from '@/views/admin/finance/AdminFinanceLayout'
-import FinanceDashboardPage from '@/views/admin/finance/FinanceDashboardPage'
 import FinancePaymentDetailPage from '@/views/admin/finance/FinancePaymentDetailPage'
 import FinancePaymentsPage from '@/views/admin/finance/FinancePaymentsPage'
-import FinancePlanDetailPage from '@/views/admin/finance/FinancePlanDetailPage'
-import FinancePlansPage from '@/views/admin/finance/FinancePlansPage'
-import FinanceSubscriptionDetailPage from '@/views/admin/finance/FinanceSubscriptionDetailPage'
-import FinanceSubscriptionsPage from '@/views/admin/finance/FinanceSubscriptionsPage'
+import BillingOverviewPage from '@/pages/admin/BillingOverview'
+import AdminStripeDashboardPage from '@/pages/admin/Dashboard'
+import InvoiceDetailPage from '@/pages/admin/InvoiceDetail'
+import PlanDetailPage from '@/pages/admin/PlanDetail'
+import PlanMgmtPage from '@/pages/admin/PlanMgmt'
+import SubscriptionDetailPage from '@/pages/admin/SubscriptionDetail'
+import SubscriptionMgmtPage from '@/pages/admin/SubscriptionMgmt'
 import AdminDocsManagerPage from '@/views/admin/docs/AdminDocsManagerPage'
 import AdminPlatformSettingsPage from '@/views/admin/settings'
 import AdminUsersOverviewPage from '@/views/admin/users'
@@ -99,11 +101,13 @@ export const routes: RouteObject[] = [
         element: <AdminFinanceLayout />,
         children: [
           { index: true, element: <Navigate to="dashboard" replace /> },
-          { path: 'dashboard', element: <FinanceDashboardPage /> },
-          { path: 'subscriptions', element: <FinanceSubscriptionsPage /> },
-          { path: 'subscriptions/:subscriptionId', element: <FinanceSubscriptionDetailPage /> },
-          { path: 'plans', element: <FinancePlansPage /> },
-          { path: 'plans/:productId', element: <FinancePlanDetailPage /> },
+          { path: 'dashboard', element: <AdminStripeDashboardPage /> },
+          { path: 'subscriptions', element: <SubscriptionMgmtPage /> },
+          { path: 'subscriptions/:subscriptionId', element: <SubscriptionDetailPage /> },
+          { path: 'plans', element: <PlanMgmtPage /> },
+          { path: 'plans/:productId', element: <PlanDetailPage /> },
+          { path: 'billing', element: <BillingOverviewPage /> },
+          { path: 'billing/invoices/:invoiceId', element: <InvoiceDetailPage /> },
           { path: 'payments', element: <FinancePaymentsPage /> },
           { path: 'payments/:paymentIntentId', element: <FinancePaymentDetailPage /> },
         ],

@@ -161,12 +161,24 @@ const FinanceDashboardPage = () => {
     const hint =
       error instanceof AppwriteFunctionError &&
       (String(error.message).includes('Invalid') || String(error.rawBody).includes('admin-finance-dashboard'))
-        ? ' Deploy the latest `stripe-subscriptions` Appwrite function so it includes the `admin-finance-dashboard` action.'
+        ? ' Deploy the latest `stripe-consumer` Appwrite function so it includes the `admin-finance-dashboard` action.'
         : ''
     return (
       <div className="border border-danger border-opacity-25 rounded p-3 bg-danger-subtle">
         <p className="text-danger mb-1 fw-semibold">Could not load finance dashboard</p>
         <p className="text-danger small mb-0">{error?.message ?? 'Unknown error.'}{hint}</p>
+      </div>
+    )
+  }
+
+  if (!data.stats) {
+    return (
+      <div className="border border-warning border-opacity-25 rounded p-3 bg-warning-subtle">
+        <p className="text-warning-emphasis mb-1 fw-semibold">Incomplete dashboard response</p>
+        <p className="small text-muted mb-0">
+          The function returned success but no <code className="small">stats</code>. Check the{' '}
+          <code className="small">admin-finance-dashboard</code> handler in <code className="small">stripe-gateway</code>.
+        </p>
       </div>
     )
   }
@@ -340,7 +352,7 @@ const FinanceDashboardPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {data.recentPaidInvoices.map((inv) => (
+                {(data.recentPaidInvoices ?? []).map((inv) => (
                   <tr key={inv.id}>
                     <td className="small text-nowrap">{new Date(inv.created * 1000).toLocaleString()}</td>
                     <td className="small">{inv.customerDisplayName}</td>
@@ -362,7 +374,7 @@ const FinanceDashboardPage = () => {
                     <td>{formatMoney(inv.amount_paid, inv.currency)}</td>
                   </tr>
                 ))}
-                {data.recentPaidInvoices.length === 0 && (
+                {(data.recentPaidInvoices ?? []).length === 0 && (
                   <tr>
                     <td colSpan={4} className="text-muted text-center py-3">
                       No paid invoices.
@@ -397,7 +409,7 @@ const FinanceDashboardPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {data.recentSubscriptionChanges.map((row) => (
+                {(data.recentSubscriptionChanges ?? []).map((row) => (
                   <tr key={row.id}>
                     <td className="small text-nowrap">{new Date(row.created * 1000).toLocaleString()}</td>
                     <td className="small">
@@ -412,7 +424,7 @@ const FinanceDashboardPage = () => {
                     </td>
                   </tr>
                 ))}
-                {data.recentSubscriptionChanges.length === 0 && (
+                {(data.recentSubscriptionChanges ?? []).length === 0 && (
                   <tr>
                     <td colSpan={5} className="text-muted text-center py-3">
                       No recent events.

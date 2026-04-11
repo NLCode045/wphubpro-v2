@@ -5,7 +5,8 @@
 .app-topbar {
     position: sticky;
     top: 0;
-    z-index: 1001;
+    // Above default sidenav (1005) and on-hover expanded sidenav (1045); below offcanvas drawer (1055)
+    z-index: 1046;
     background: $topbar-bg;
     box-shadow: $card-box-shadow;
     height: $topbar-height;
@@ -57,6 +58,15 @@
     ul {
         list-style-type: none;
         margin-bottom: 0;
+    }
+
+    // Popper menus: stay above this bar and sidenav hover layers
+    .dropdown-menu {
+        z-index: 1070;
+    }
+
+    .dropdown-menu:not(.dropdown-menu-lg):not(.dropdown-menu-xl):not(.dropdown-menu-xxl) {
+        min-width: 15rem;
     }
 }
 

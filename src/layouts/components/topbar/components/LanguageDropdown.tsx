@@ -32,13 +32,25 @@ const LanguageDropdown = () => {
   return (
     <div className="topbar-item">
       <Dropdown align="end">
-        <DropdownToggle as={'button'} className="topbar-link fw-bold  drop-arrow-none">
-          <img src={language.flag} alt="user-image" className="w-100 rounded" width="18" height="18" />
+        <DropdownToggle as={'button'} className="topbar-link fw-bold drop-arrow-none d-inline-flex align-items-center justify-content-center p-1">
+          <img
+            src={language.flag}
+            alt=""
+            width={20}
+            height={20}
+            className="rounded flex-shrink-0 object-fit-cover"
+          />
         </DropdownToggle>
         <DropdownMenu className="dropdown-menu-end">
           {availableLanguages.map((lang) => (
             <DropdownItem key={lang.code} title={lang.name} onClick={() => setLanguage(lang)}>
-              <img src={lang.flag} alt="English" className="me-1 rounded" width="18" height="18" />
+              <img
+                src={lang.flag}
+                alt=""
+                width={20}
+                height={20}
+                className="me-2 rounded flex-shrink-0 object-fit-cover align-middle"
+              />
               <span className="align-middle">{lang.nativeName}</span>
             </DropdownItem>
           ))}

@@ -39,9 +39,9 @@ const FinanceSubscriptionsPage = () => {
     [sortField, sortDir],
   )
 
-  const { data: plansData } = useAdminStripePlansList()
+  const plansQuery = useAdminStripePlansList()
   const planOptions = useMemo(() => {
-    const list = plansData?.plans ?? []
+    const list = plansQuery.data?.plans ?? []
     const opts: { id: string; label: string }[] = []
     for (const p of list) {
       opts.push({ id: p.id, label: p.name })
@@ -50,7 +50,7 @@ const FinanceSubscriptionsPage = () => {
       }
     }
     return opts
-  }, [plansData])
+  }, [plansQuery.data?.plans])
 
   const listParams = useMemo(() => {
     const isPrice = planFilter.startsWith('price_')
@@ -65,7 +65,11 @@ const FinanceSubscriptionsPage = () => {
     }
   }, [status, planFilter, debouncedSearch, sortField, sortDir])
 
-  const { data, isLoading, error, refetch, isFetching } = useAdminSubscriptionList(listParams)
+  const { data, isLoading: listLoading, error, refetch, isFetching } = useAdminSubscriptionList(
+    listParams,
+    { enabled: plansQuery.isFetched },
+  )
+  const isLoading = !plansQuery.isFetched || listLoading
 
   const rows: AdminSubscriptionRow[] = data?.subscriptions ?? []
 

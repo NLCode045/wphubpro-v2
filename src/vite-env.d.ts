@@ -10,6 +10,9 @@ interface ImportMetaEnv {
   readonly APPWRITE_FUNCTION_MANAGE_SETTINGS?: string;
   readonly APPWRITE_FUNCTION_MANAGE_VAULT_PROVIDERS?: string;
   readonly APPWRITE_FUNCTION_NOTIFICATIONS?: string;
+  /** Unified Stripe consumer function id (defaults to `stripe-consumer` in appwrite). */
+  readonly APPWRITE_FUNCTION_STRIPE?: string;
+  readonly APPWRITE_FUNCTION_STRIPE_CONFIG?: string;
   readonly APPWRITE_FUNCTION_STRIPE_INVOICES?: string;
   readonly APPWRITE_FUNCTION_STRIPE_ORDER_PAYMENTS?: string;
   readonly APPWRITE_FUNCTION_STRIPE_PAYMENT_METHODS?: string;
@@ -24,6 +27,12 @@ interface ImportMetaEnv {
   readonly APPWRITE_STORAGE_BUCKET_BRIDGE_ID?: string;
   readonly APPWRITE_STORAGE_BUCKET_PLATFORM_ID?: string;
   readonly STRIPE_PUBLISHABLE_KEY?: string;
+  /** Dev: proxy `/api/stripe` to this origin (JSON API). See `vite/buildDevProxy.ts`. */
+  readonly VITE_STRIPE_API_PROXY_TARGET?: string;
+  /** Dev: override default `https://api.wphub.pro` for non-Stripe `/api/*` proxy. */
+  readonly VITE_DEV_API_PROXY_TARGET?: string;
+  /** Dev: JSON stubs for `/api/stripe/*` when not using `VITE_STRIPE_API_PROXY_TARGET`. */
+  readonly VITE_STRIPE_ADMIN_DEV_MOCK?: string;
 }
 
 interface ImportMeta {

@@ -1,0 +1,10 @@
+{
+  "name": "stripe-consumer",
+  "version": "1.0.0",
+  "description": "Unified Stripe consumer: routes member/admin Stripe flows to stripe-gateway",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^22.1.3",
+    "stripe": "^20.4.1"
+  }
+}

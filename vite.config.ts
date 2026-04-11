@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => {
     open: true,
     proxy: {
       '/api': {
-        target: 'https://appwrite.wphub.pro',
+        target: 'https://api.wphub.pro',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, ''),

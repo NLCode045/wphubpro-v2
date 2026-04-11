@@ -25,6 +25,7 @@ import 'react-quill-new/dist/quill.snow.css'
 import 'simplebar-react/dist/simplebar.min.css'
 import 'sweetalert2/dist/sweetalert2.min.css'
 
+import '@/tailwind.css'
 import '@/assets/scss/app.scss'
 
 createRoot(document.getElementById('root')!).render(

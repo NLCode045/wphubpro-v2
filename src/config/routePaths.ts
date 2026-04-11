@@ -29,6 +29,10 @@ export const ROUTE_PATHS = {
   ADMIN_FINANCE_SUBSCRIPTIONS: '/admin/finance/subscriptions',
   ADMIN_FINANCE_PLANS: '/admin/finance/plans',
   ADMIN_FINANCE_PAYMENTS: '/admin/finance/payments',
+  /** Invoices & failed payments (Stripe-as-a-Source). */
+  ADMIN_FINANCE_BILLING: '/admin/finance/billing',
+  adminFinanceInvoicePath: (invoiceId: string) =>
+    `/admin/finance/billing/invoices/${encodeURIComponent(invoiceId)}`,
   adminFinanceSubscriptionPath: (subscriptionId: string) =>
     `/admin/finance/subscriptions/${encodeURIComponent(subscriptionId)}`,
   adminFinancePlanPath: (productId: string) =>

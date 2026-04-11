@@ -6,6 +6,8 @@ module.exports = {
   'list-products': require('./list-products'),
   /** WPHub catalog: StripePlan[] */
   list: require('./list'),
+  /** Admin plan detail page (`productId`, `plan`, `stats`, `subscribers`) */
+  get: require('./get-plan'),
   'get-product': require('./get-product'),
   'create-product': require('./create-product'),
   'list-prices': require('./list-prices'),

@@ -8,7 +8,9 @@ function mapSubscriptionToAdminRow(sub) {
   const price = item?.price;
   const product = price?.product;
   const productId = typeof product === 'string' ? product : product?.id ?? null;
-  const planName = typeof product === 'object' && product?.name ? product.name : null;
+  /** Without expanding `price.product`, Stripe returns product id only — use price nickname as label. */
+  const planName =
+    typeof product === 'object' && product?.name ? product.name : price?.nickname || null;
   const priceId = price?.id ?? null;
 
   let billingCycle = null;
@@ -89,13 +91,15 @@ module.exports = async function adminListSubscriptions(ctx) {
     const searchLower = payload.search ? String(payload.search).toLowerCase().trim() : '';
     const productIdFilter = payload.productId ? String(payload.productId).trim() : '';
 
-    const listParams = { limit, expand: ['data.customer', 'data.items.data.price.product'] };
+    /** Max 4 expand levels on subscription lists; `data.items.data.price.product` exceeds Stripe's limit. */
+    const listParams = { limit, expand: ['data.customer', 'data.items.data.price'] };
     if (payload.status) listParams.status = payload.status;
     if (payload.priceId) listParams.price = payload.priceId;
 
     const rows = [];
     let startingAfter;
     let totalHasMore = false;
+    let pagesFetched = 0;
 
     for (let page = 0; page < maxPages; page += 1) {
       const pageParams = { ...listParams };
@@ -103,6 +107,7 @@ module.exports = async function adminListSubscriptions(ctx) {
 
       log(`adminListSubscriptions: Stripe subscriptions.list page ${page + 1}`, JSON.stringify(pageParams));
       const list = await stripe.subscriptions.list(pageParams);
+      pagesFetched = page + 1;
 
       for (const sub of list.data) {
         if (!subscriptionMatchesProduct(sub, productIdFilter)) continue;
@@ -122,7 +127,7 @@ module.exports = async function adminListSubscriptions(ctx) {
     return success(res, {
       subscriptions: rows,
       has_more: totalHasMore,
-      fetchedPages: maxPages,
+      fetchedPages: pagesFetched,
     });
   } catch (err) {
     error(`adminListSubscriptions: FAILED after ${Date.now() - startTime}ms - ${err.message}`);

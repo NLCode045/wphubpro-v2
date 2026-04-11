@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { dirname, resolve } from 'node:path';
@@ -57,7 +58,7 @@ export default defineConfig(({ mode }) => {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   },
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

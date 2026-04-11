@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { stripeAdminDevMockPlugin } from './vite/stripeAdminDevMockPlugin';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
@@ -14,6 +16,9 @@ export default defineConfig(({ mode }) => {
     fileEnv._STRIPE_PUBLISHABLE_KEY ||
     ''
   ).trim();
+
+  const stripeAdminDevMock =
+    fileEnv.VITE_STRIPE_ADMIN_DEV_MOCK === '1' || fileEnv.VITE_STRIPE_ADMIN_DEV_MOCK === 'true';
 
   return {
   /**
@@ -58,7 +63,7 @@ export default defineConfig(({ mode }) => {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   },
-  plugins: [tailwindcss(), react()],
+  plugins: [stripeAdminDevMockPlugin(stripeAdminDevMock), tailwindcss(), react()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

@@ -38,9 +38,11 @@ function isProbablyHtml(body: string): boolean {
 function shortNonJsonError(status: number, body: string): Error {
   if (isProbablyHtml(body)) {
     const router = /router protection|general_access_forbidden|Error 401/i.test(body);
+    const devHint =
+      ' Local dev: set `VITE_STRIPE_ADMIN_DEV_MOCK=1` in `.env` to use Vite JSON stubs for `/api/stripe/admin/*`, or deploy real admin routes that return JSON.';
     const msg = router
-      ? `API returned HTML (${status}, Appwrite router / domain protection). Add http://localhost:5173 (or your dev URL) under Appwrite Project → Settings → Platforms, or call an API base that allows this origin.`
-      : `API returned HTML instead of JSON (${status}). Check that the Stripe admin HTTP routes exist and return JSON.`;
+      ? `API returned HTML (${status}, Appwrite router / domain protection). Add http://localhost:5173 under Appwrite Project → Settings → Platforms, or use a backend that allows this origin.${devHint}`
+      : `API returned HTML instead of JSON (${status}). The URL is probably not your Stripe admin API (often SPA/HTML fallback). Implement GET /stripe/admin/stats (or your gateway path) to return JSON, or use the dev mock.${devHint}`;
     return new Error(msg);
   }
   const snippet = body.length > 400 ? `${body.slice(0, 400)}…` : body;

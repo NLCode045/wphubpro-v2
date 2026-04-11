@@ -1,9 +1,11 @@
 /**
  * Server-only — raw body + signing secret. Do not import from React components.
  */
-import type * as St from '../../shims/stripe';
+import Stripe from 'stripe';
 
 import { getStripeFromEnv } from './client';
+
+type StripeInstance = InstanceType<typeof Stripe>;
 
 export interface VerifyWebhookParams {
   rawBody: string | Buffer;
@@ -13,7 +15,9 @@ export interface VerifyWebhookParams {
 /**
  * Verifies `Stripe-Signature` using `STRIPE_WEBHOOK_SECRET` (set in Appwrite / your API route env).
  */
-export function verifyStripeWebhookEvent(params: VerifyWebhookParams): St.Stripe.Event {
+export function verifyStripeWebhookEvent(
+  params: VerifyWebhookParams,
+): ReturnType<StripeInstance['webhooks']['constructEvent']> {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret?.trim()) {
     throw new Error('STRIPE_WEBHOOK_SECRET is required for webhook verification');
@@ -29,7 +33,7 @@ export function verifyStripeWebhookEvent(params: VerifyWebhookParams): St.Stripe
  * Baseline handlers — extend with email/receipt logic; billing state stays live in Stripe.
  */
 export async function handleStripeWebhookEvent(
-  event: St.Stripe.Event,
+  event: Stripe.Event,
 ): Promise<{ ok: boolean; detail: string }> {
   switch (event.type) {
     case 'invoice.paid':

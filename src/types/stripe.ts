@@ -2,7 +2,7 @@
  * Stripe billing types — aligned with stripe-node SDK shapes (Stripe-as-a-Source).
  * Prefer `import type` from here in UI code; never import server API modules in React.
  */
-import type * as StripeTypes from '../shims/stripe';
+import type * as StripeTypes from 'stripe';
 
 export type StripeCustomer = StripeTypes.Stripe.Customer;
 

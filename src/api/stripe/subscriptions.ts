@@ -1,11 +1,13 @@
 /**
  * Server-only — live subscription reads/writes in Stripe. Do not import from React components.
  */
-import type * as St from '@/types/stripe';
+import Stripe from 'stripe';
 
 import { getStripeFromEnv } from './client';
 
-const SUBSCRIPTION_EXPAND: St.Stripe.SubscriptionRetrieveParams['expand'] = [
+type StripeInstance = InstanceType<typeof Stripe>;
+
+const SUBSCRIPTION_EXPAND: Stripe.SubscriptionRetrieveParams['expand'] = [
   'latest_invoice',
   'latest_invoice.payment_intent',
   'items.data.price.product',
@@ -16,7 +18,9 @@ const SUBSCRIPTION_EXPAND: St.Stripe.SubscriptionRetrieveParams['expand'] = [
 /**
  * Live subscriptions for a Stripe customer id (from Appwrite `prefs.stripe_customer_id`).
  */
-export async function listSubscriptionsForCustomer(customerId: string): Promise<St.Stripe.ApiList<St.Stripe.Subscription>> {
+export async function listSubscriptionsForCustomer(
+  customerId: string,
+): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['list']>>> {
   const stripe = getStripeFromEnv();
   return stripe.subscriptions.list({
     customer: customerId,
@@ -29,7 +33,7 @@ export async function listSubscriptionsForCustomer(customerId: string): Promise<
 /** Used by admin subscription detail via `admin.ts` → `getStripeSubscriptionForAdmin`. */
 export async function getSubscription(
   subscriptionId: string,
-): Promise<St.Stripe.Response<St.Stripe.Subscription>> {
+): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['retrieve']>>> {
   const stripe = getStripeFromEnv();
   return stripe.subscriptions.retrieve(subscriptionId, { expand: SUBSCRIPTION_EXPAND });
 }
@@ -37,7 +41,7 @@ export async function getSubscription(
 export interface CreateSubscriptionBody {
   customerId: string;
   priceId: string;
-  paymentBehavior?: St.Stripe.SubscriptionCreateParams['payment_behavior'];
+  paymentBehavior?: Stripe.SubscriptionCreateParams['payment_behavior'];
 }
 
 export interface UpdateSubscriptionBody {
@@ -50,7 +54,7 @@ export interface UpdateSubscriptionBody {
  */
 export async function createSubscription(
   body: CreateSubscriptionBody,
-): Promise<St.Stripe.Response<St.Stripe.Subscription>> {
+): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['create']>>> {
   const stripe = getStripeFromEnv();
   return stripe.subscriptions.create({
     customer: body.customerId,
@@ -65,7 +69,7 @@ export async function createSubscription(
  */
 export async function updateSubscriptionPrice(
   body: UpdateSubscriptionBody,
-): Promise<St.Stripe.Response<St.Stripe.Subscription>> {
+): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['update']>>> {
   const stripe = getStripeFromEnv();
   const current = await stripe.subscriptions.retrieve(body.subscriptionId, {
     expand: ['items.data.price'],

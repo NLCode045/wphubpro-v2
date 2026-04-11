@@ -1,9 +1,11 @@
 /**
  * Server-only — live invoices from Stripe. Do not import from React components.
  */
-import type * as St from '../../shims/stripe';
+import Stripe from 'stripe';
 
 import { getStripeFromEnv } from './client';
+
+type StripeInstance = InstanceType<typeof Stripe>;
 
 /**
  * GET: invoices for a Stripe customer id (newest first).
@@ -11,7 +13,7 @@ import { getStripeFromEnv } from './client';
 export async function listInvoicesForCustomer(
   customerId: string,
   options?: { limit?: number },
-): Promise<St.Stripe.ApiList<St.Stripe.Invoice>> {
+): Promise<Awaited<ReturnType<StripeInstance['invoices']['list']>>> {
   const stripe = getStripeFromEnv();
   const limit = options?.limit ?? 50;
   return stripe.invoices.list({

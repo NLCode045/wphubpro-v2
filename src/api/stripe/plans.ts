@@ -3,7 +3,7 @@
  */
 import type { StripePlan as AdminStripePlanRow } from '@/types';
 import type { StripePlan as ProductPricePlan } from '@/types/stripe';
-import type * as St from '../../shims/stripe';
+import type Stripe from 'stripe';
 
 import { getStripeFromEnv } from './client';
 
@@ -30,7 +30,7 @@ export type AdminPlanDetailPayload = {
   }>;
 };
 
-function buildPlanFromProduct(product: St.Stripe.Product, pricesData: St.Stripe.Price[]): AdminStripePlanRow {
+function buildPlanFromProduct(product: Stripe.Product, pricesData: Stripe.Price[]): AdminStripePlanRow {
   const metadata = Object.entries(product.metadata || {}).map(([key, value]) => ({
     key,
     value: String(value),

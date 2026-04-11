@@ -28,7 +28,7 @@
         "src/*"
       ],
       "stripe": [
-        "./src/shims/stripe.d.ts"
+        "./src/shims/stripe"
       ]
     }
   },

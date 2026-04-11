@@ -39,10 +39,10 @@ function shortNonJsonError(status: number, body: string): Error {
   if (isProbablyHtml(body)) {
     const router = /router protection|general_access_forbidden|Error 401/i.test(body);
     const devHint =
-      ' Local dev: set `VITE_STRIPE_ADMIN_DEV_MOCK=1` in `.env` to use Vite JSON stubs for `/api/stripe/admin/*`, or deploy real admin routes that return JSON.';
+      ' Local dev: set `VITE_STRIPE_ADMIN_DEV_MOCK=1` in `.env` so Vite serves JSON stubs for `/api/stripe/*` (legacy REST) instead of proxying to HTML. Finance admin screens normally use Appwrite Functions (`executeFunction`), not `/api/stripe`; this error means this request used `fetchStripeJson`.';
     const msg = router
-      ? `API returned HTML (${status}, Appwrite router / domain protection). Add http://localhost:5173 under Appwrite Project → Settings → Platforms, or use a backend that allows this origin.${devHint}`
-      : `API returned HTML instead of JSON (${status}). The URL is probably not your Stripe admin API (often SPA/HTML fallback). Implement GET /stripe/admin/stats (or your gateway path) to return JSON, or use the dev mock.${devHint}`;
+      ? `API returned HTML (${status}). The Vite dev proxy forwards \`/api/stripe\` to your API host; that path often is not a JSON Stripe route (401 / HTML). Add http://localhost:5173 under Appwrite → Project → Settings → Platforms if Appwrite SDK calls fail CORS, and use the dev mock above for legacy \`/api/stripe\` clients.${devHint}`
+      : `API returned HTML instead of JSON (${status}). Check the requested URL under \`/api/stripe\`, or enable the dev mock in the hint below.${devHint}`;
     return new Error(msg);
   }
   const snippet = body.length > 400 ? `${body.slice(0, 400)}…` : body;

@@ -1,16 +1,22 @@
 /**
  * Server-only — aggregated metrics from Stripe (live). Do not import from React components.
  */
-import type Stripe from 'stripe';
-
-import type { BillingAdminStats } from '@/types/stripe';
+import type {
+  BillingAdminStats,
+  StripeCustomer,
+  StripeInvoice,
+  StripePaymentIntent,
+  StripePrice,
+  StripeProduct,
+  StripeSubscription,
+} from '@/types/stripe';
 import type { StripeAdminDashboardStats } from '@/types/stripeAdmin';
 
 import { getStripeFromEnv } from './client';
 import { getPlanDetailForAdmin, listPlansForAdmin } from './plans';
 import { getSubscription } from './subscriptions';
 
-function recurringAmountToMonthlyCents(price: Stripe.Price, quantity: number): number {
+function recurringAmountToMonthlyCents(price: StripePrice, quantity: number): number {
   if (price.unit_amount == null || !price.recurring) return 0;
   const line = price.unit_amount * quantity;
   switch (price.recurring.interval) {
@@ -27,7 +33,7 @@ function recurringAmountToMonthlyCents(price: Stripe.Price, quantity: number): n
   }
 }
 
-function subscriptionMonthlyCents(sub: Stripe.Subscription): { cents: number; currency?: string } {
+function subscriptionMonthlyCents(sub: StripeSubscription): { cents: number; currency?: string } {
   let cents = 0;
   let currency: string | undefined;
   for (const item of sub.items.data) {
@@ -39,7 +45,7 @@ function subscriptionMonthlyCents(sub: Stripe.Subscription): { cents: number; cu
   return { cents, currency };
 }
 
-function addMonthlyFromSubscription(mrr: { total: number; currency?: string }, sub: Stripe.Subscription): void {
+function addMonthlyFromSubscription(mrr: { total: number; currency?: string }, sub: StripeSubscription): void {
   const row = subscriptionMonthlyCents(sub);
   mrr.total += row.cents;
   if (!mrr.currency && row.currency) mrr.currency = row.currency;
@@ -97,9 +103,9 @@ export async function getStripeAdminDashboardStats(): Promise<StripeAdminDashboa
 
 const MAX_SUB_LIST = 500;
 
-export async function listStripeSubscriptionsForAdmin(): Promise<{ subscriptions: import('stripe').Stripe.Subscription[] }> {
+export async function listStripeSubscriptionsForAdmin(): Promise<{ subscriptions: StripeSubscription[] }> {
   const stripe = getStripeFromEnv();
-  const subscriptions: import('stripe').Stripe.Subscription[] = [];
+  const subscriptions: StripeSubscription[] = [];
   for await (const sub of stripe.subscriptions.list({
     status: 'all',
     limit: 100,
@@ -113,11 +119,11 @@ export async function listStripeSubscriptionsForAdmin(): Promise<{ subscriptions
 
 export async function getStripeSubscriptionForAdmin(
   subscriptionId: string,
-): Promise<{ subscription: import('stripe').Stripe.Subscription; customer: import('stripe').Stripe.Customer | null }> {
+): Promise<{ subscription: StripeSubscription; customer: StripeCustomer | null }> {
   /** Single retrieve path — `subscriptions.ts#getSubscription` (expand + server-only Stripe). */
   const subscription = await getSubscription(subscriptionId);
   const cust = subscription.customer;
-  let customer: import('stripe').Stripe.Customer | null = null;
+  let customer: StripeCustomer | null = null;
   if (typeof cust === 'string') {
     const stripe = getStripeFromEnv();
     const c = await stripe.customers.retrieve(cust);
@@ -132,7 +138,7 @@ export async function runStripeSubscriptionAdminAction(
   subscriptionId: string,
   action: 'cancel' | 'pause' | 'resume',
   options?: { cancelAtPeriodEnd?: boolean },
-): Promise<import('stripe').Stripe.Subscription> {
+): Promise<StripeSubscription> {
   const stripe = getStripeFromEnv();
   if (action === 'cancel') {
     if (options?.cancelAtPeriodEnd === true) {
@@ -163,11 +169,11 @@ export async function getStripeAdminCatalogPlanDetail(productId: string) {
 }
 
 export async function listProductsAndPricesForAdmin(): Promise<{
-  catalog: Array<{ product: import('stripe').Stripe.Product; prices: import('stripe').Stripe.Price[] }>;
+  catalog: Array<{ product: StripeProduct; prices: StripePrice[] }>;
 }> {
   const stripe = getStripeFromEnv();
   const products = await stripe.products.list({ limit: 100 });
-  const catalog: Array<{ product: import('stripe').Stripe.Product; prices: import('stripe').Stripe.Price[] }> = [];
+  const catalog: Array<{ product: StripeProduct; prices: StripePrice[] }> = [];
   for (const product of products.data) {
     const prices = await stripe.prices.list({ product: product.id, limit: 100, active: true });
     catalog.push({ product, prices: prices.data });
@@ -178,7 +184,7 @@ export async function listProductsAndPricesForAdmin(): Promise<{
 export async function createStripeProductAdmin(params: {
   name: string;
   description?: string;
-}): Promise<import('stripe').Stripe.Product> {
+}): Promise<StripeProduct> {
   const stripe = getStripeFromEnv();
   return stripe.products.create({ name: params.name, description: params.description });
 }
@@ -186,7 +192,7 @@ export async function createStripeProductAdmin(params: {
 export async function updateStripeProductAdmin(
   productId: string,
   params: { name?: string; description?: string; active?: boolean },
-): Promise<import('stripe').Stripe.Product> {
+): Promise<StripeProduct> {
   const stripe = getStripeFromEnv();
   return stripe.products.update(productId, params);
 }
@@ -196,7 +202,7 @@ export async function createStripePriceAdmin(params: {
   unit_amount: number;
   currency: string;
   interval: 'month' | 'year' | 'week' | 'day';
-}): Promise<import('stripe').Stripe.Price> {
+}): Promise<StripePrice> {
   const stripe = getStripeFromEnv();
   return stripe.prices.create({
     product: params.productId,
@@ -207,15 +213,15 @@ export async function createStripePriceAdmin(params: {
 }
 
 export async function getStripeAdminBillingOverview(): Promise<{
-  recentInvoices: import('stripe').Stripe.Invoice[];
-  failedPayments: import('stripe').Stripe.PaymentIntent[];
+  recentInvoices: StripeInvoice[];
+  failedPayments: StripePaymentIntent[];
 }> {
   const stripe = getStripeFromEnv();
   const recentInvoices = await stripe.invoices.list({
     limit: 40,
     expand: ['data.customer', 'data.lines.data.price.product'],
   });
-  const failed: import('stripe').Stripe.PaymentIntent[] = [];
+  const failed: StripePaymentIntent[] = [];
   for await (const pi of stripe.paymentIntents.list({ limit: 50 })) {
     if (pi.last_payment_error || pi.status === 'requires_payment_method') {
       failed.push(pi);
@@ -225,7 +231,7 @@ export async function getStripeAdminBillingOverview(): Promise<{
   return { recentInvoices: recentInvoices.data, failedPayments: failed };
 }
 
-export async function getStripeInvoiceForAdmin(invoiceId: string): Promise<import('stripe').Stripe.Invoice> {
+export async function getStripeInvoiceForAdmin(invoiceId: string): Promise<StripeInvoice> {
   const stripe = getStripeFromEnv();
   return stripe.invoices.retrieve(invoiceId, {
     expand: ['customer', 'payment_intent', 'lines.data.price.product'],

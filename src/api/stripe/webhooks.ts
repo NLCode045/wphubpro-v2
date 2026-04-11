@@ -1,7 +1,7 @@
 /**
  * Server-only — raw body + signing secret. Do not import from React components.
  */
-import type Stripe from 'stripe';
+import type Stripe from '../../shims/stripe';
 
 import { getStripeFromEnv } from './client';
 

@@ -1,7 +1,7 @@
 /**
  * Server-only — live subscription reads/writes in Stripe. Do not import from React components.
  */
-import type Stripe from 'stripe';
+import type Stripe from '../../shims/stripe';
 
 import { getStripeFromEnv } from './client';
 

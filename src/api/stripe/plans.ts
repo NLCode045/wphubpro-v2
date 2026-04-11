@@ -3,7 +3,8 @@
  */
 import type { StripePlan as AdminStripePlanRow } from '@/types';
 import type { StripePlan as ProductPricePlan } from '@/types/stripe';
-import type Stripe from 'stripe';
+import type StripeClient from '../../shims/stripe';
+import type * as St from '../../shims/stripe';
 
 import { getStripeFromEnv } from './client';
 
@@ -30,7 +31,7 @@ export type AdminPlanDetailPayload = {
   }>;
 };
 
-function buildPlanFromProduct(product: Stripe.Product, pricesData: Stripe.Price[]): AdminStripePlanRow {
+function buildPlanFromProduct(product: St.Stripe.Product, pricesData: St.Stripe.Price[]): AdminStripePlanRow {
   const metadata = Object.entries(product.metadata || {}).map(([key, value]) => ({
     key,
     value: String(value),
@@ -236,8 +237,12 @@ export async function getPlanDetailForAdmin(productId: string): Promise<AdminPla
 
         const cust = sub.customer;
         const customerId = typeof cust === 'string' ? cust : cust?.id ?? '';
-        const email = typeof cust === 'object' && cust ? cust.email || '' : '';
-        const name = typeof cust === 'object' && cust ? cust.name || '' : '';
+        let email = '';
+        let name = '';
+        if (typeof cust === 'object' && cust !== null && !('deleted' in cust && cust.deleted)) {
+          email = cust.email ?? '';
+          name = cust.name ?? '';
+        }
         const userId = sub.metadata?.appwrite_user_id ? String(sub.metadata.appwrite_user_id) : null;
 
         subscribers.push({

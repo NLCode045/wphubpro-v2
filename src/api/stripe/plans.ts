@@ -79,7 +79,7 @@ function buildPlanFromProduct(product: St.Stripe.Product, pricesData: St.Stripe.
   };
 }
 
-async function countSubscriptionsByProduct(stripe: Stripe): Promise<{
+async function countSubscriptionsByProduct(stripe: StripeClient): Promise<{
   counts: Record<string, number>;
   subscriptionCountsTruncated: boolean;
 }> {

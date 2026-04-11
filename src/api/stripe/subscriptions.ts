@@ -1,11 +1,11 @@
 /**
  * Server-only — live subscription reads/writes in Stripe. Do not import from React components.
  */
-import type Stripe from '../../shims/stripe';
+import type * as St from '../../shims/stripe';
 
 import { getStripeFromEnv } from './client';
 
-const SUBSCRIPTION_EXPAND: Stripe.SubscriptionRetrieveParams['expand'] = [
+const SUBSCRIPTION_EXPAND: St.Stripe.SubscriptionRetrieveParams['expand'] = [
   'latest_invoice',
   'latest_invoice.payment_intent',
   'items.data.price.product',
@@ -16,7 +16,7 @@ const SUBSCRIPTION_EXPAND: Stripe.SubscriptionRetrieveParams['expand'] = [
 /**
  * Live subscriptions for a Stripe customer id (from Appwrite `prefs.stripe_customer_id`).
  */
-export async function listSubscriptionsForCustomer(customerId: string): Promise<Stripe.ApiList<Stripe.Subscription>> {
+export async function listSubscriptionsForCustomer(customerId: string): Promise<St.Stripe.ApiList<St.Stripe.Subscription>> {
   const stripe = getStripeFromEnv();
   return stripe.subscriptions.list({
     customer: customerId,
@@ -29,7 +29,7 @@ export async function listSubscriptionsForCustomer(customerId: string): Promise<
 /** Used by admin subscription detail via `admin.ts` → `getStripeSubscriptionForAdmin`. */
 export async function getSubscription(
   subscriptionId: string,
-): Promise<Stripe.Response<Stripe.Subscription>> {
+): Promise<St.Stripe.Response<St.Stripe.Subscription>> {
   const stripe = getStripeFromEnv();
   return stripe.subscriptions.retrieve(subscriptionId, { expand: SUBSCRIPTION_EXPAND });
 }

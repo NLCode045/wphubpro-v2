@@ -7,6 +7,7 @@ import type { BillingAdminStats } from '@/types/stripe';
 import type { StripeAdminDashboardStats } from '@/types/stripeAdmin';
 
 import { getStripeFromEnv } from './client';
+import { getPlanDetailForAdmin, listPlansForAdmin } from './plans';
 import { getSubscription } from './subscriptions';
 
 function recurringAmountToMonthlyCents(price: Stripe.Price, quantity: number): number {
@@ -130,9 +131,13 @@ export async function getStripeSubscriptionForAdmin(
 export async function runStripeSubscriptionAdminAction(
   subscriptionId: string,
   action: 'cancel' | 'pause' | 'resume',
+  options?: { cancelAtPeriodEnd?: boolean },
 ): Promise<import('stripe').Stripe.Subscription> {
   const stripe = getStripeFromEnv();
   if (action === 'cancel') {
+    if (options?.cancelAtPeriodEnd === true) {
+      return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+    }
     return stripe.subscriptions.cancel(subscriptionId);
   }
   if (action === 'pause') {
@@ -141,6 +146,20 @@ export async function runStripeSubscriptionAdminAction(
     });
   }
   return stripe.subscriptions.update(subscriptionId, { pause_collection: null });
+}
+
+/** Admin finance plan list — delegates to `plans.ts` (`listPlansForAdmin`). */
+export async function getStripeAdminCatalogPlans() {
+  return listPlansForAdmin({
+    activeOnly: false,
+    excludeHidden: false,
+    excludeNonSellable: false,
+    includeCounts: true,
+  });
+}
+
+export async function getStripeAdminCatalogPlanDetail(productId: string) {
+  return getPlanDetailForAdmin(productId);
 }
 
 export async function listProductsAndPricesForAdmin(): Promise<{

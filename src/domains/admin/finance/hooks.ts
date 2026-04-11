@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { executeFunction, type ExecuteFunctionOptions } from '@/integrations/appwrite/executeFunction'
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite'
-import { fetchAdminSubscription } from '@/lib/stripeAdminApi'
+import type { AdminPlanDetailPayload } from '@/api/stripe/plans'
+import { fetchAdminCatalogPlanDetail, fetchAdminCatalogPlans, fetchAdminSubscription } from '@/lib/stripeAdminApi'
 import type { StripePlan } from '@/types'
 import type {
   AdminFinanceDashboardResponse,
@@ -179,80 +180,29 @@ export type UseAdminStripePlansListOptions = {
   enabled?: boolean
 }
 
+/**
+ * Admin plan list via `GET /api/stripe/admin/plans/catalog` → `listPlansForAdmin` in `src/api/stripe/plans.ts`.
+ * Does not use Appwrite Functions.
+ */
 export function useAdminStripePlansList(options?: UseAdminStripePlansListOptions) {
   const adminEnabled = useFinanceAdminEnabled()
   const startAllowed = options?.enabled !== false
   return useQuery<AdminStripePlansListData, Error>({
-    queryKey: ['admin', 'finance', 'plans'],
-    queryFn: async () => {
-      const res = await executeAdminFunction<{
-        plans?: StripePlan[]
-        subscriptionCountsTruncated?: boolean
-      }>(PRODUCTS_FN, {
-        action: 'list',
-        active_only: false,
-        exclude_hidden: false,
-        exclude_non_sellable: false,
-        include_active_subscription_counts: true,
-      })
-      return {
-        plans: res.plans ?? [],
-        subscriptionCountsTruncated: res.subscriptionCountsTruncated === true,
-      }
-    },
+    queryKey: ['admin', 'finance', 'plans', 'api', 'catalog'],
+    queryFn: async () => fetchAdminCatalogPlans(),
     enabled: adminEnabled && startAllowed,
     staleTime: 120_000,
   })
 }
 
-export type AdminPlanDetailResponse = {
-  success: boolean
-  plan: {
-    id: string
-    name: string
-    description: string
-    status: string
-    monthlyPrice: number
-    yearlyPrice: number
-    monthlyPriceId: string | null
-    yearlyPriceId: string | null
-    currency: string
-    metadata: { key: string; value: string }[]
-    stripeLink: string
-  }
-  stats: {
-    totalSubscriptions: number
-    subscriptionsMonthly: number
-    subscriptionsYearly: number
-    totalEarnings: number
-    upgradedTo: number
-    downgradedTo: number
-    downgradedFrom: number
-  }
-  subscribers: Array<{
-    subscriptionId: string
-    customerId: string
-    email: string
-    name: string
-    billingInterval: string
-    subscribedSince: number
-    status: string
-    userId?: string | null
-  }>
-}
-
+/**
+ * Plan detail via `GET /api/stripe/admin/plans/catalog/:productId` → `getPlanDetailForAdmin` in `plans.ts`.
+ */
 export function useAdminPlanDetail(productId: string | undefined) {
   const enabled = useFinanceAdminEnabled() && Boolean(productId)
-  return useQuery<AdminPlanDetailResponse, Error>({
-    queryKey: ['admin', 'finance', 'plan', productId],
-    queryFn: async () => {
-      const res = await executeAdminFunction<AdminPlanDetailResponse>(PRODUCTS_FN, {
-        action: 'get',
-        productId,
-      })
-      if (!res?.success) throw new Error('Plan detail failed')
-      return res
-    },
+  return useQuery<AdminPlanDetailPayload, Error>({
+    queryKey: ['admin', 'finance', 'plan', 'api', 'catalog', productId],
+    queryFn: async () => fetchAdminCatalogPlanDetail(productId!),
     enabled,
     staleTime: 60_000,
   })

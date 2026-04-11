@@ -1,6 +1,7 @@
 /**
  * JSON shapes returned by `/api/stripe/admin/*` (live Stripe data, serialized).
  */
+import type { StripePlan } from '@/types';
 import type { BillingAdminStats } from '@/types/stripe';
 
 export interface StripeAdminDashboardStats extends BillingAdminStats {
@@ -39,4 +40,10 @@ export interface AdminPlansCatalogPayload {
     product: Record<string, unknown>;
     prices: Record<string, unknown>[];
   }>;
+}
+
+/** `GET .../plans/catalog` — `src/api/stripe/plans.ts` (`listPlansForAdmin`). */
+export interface AdminPlansCatalogListPayload {
+  plans: StripePlan[];
+  subscriptionCountsTruncated: boolean;
 }

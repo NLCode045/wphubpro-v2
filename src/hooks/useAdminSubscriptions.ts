@@ -31,12 +31,23 @@ export function useAdminSubscriptionDetail(subscriptionId: string | undefined) {
 export function useAdminSubscriptionAction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { subscriptionId: string; action: 'cancel' | 'pause' | 'resume' }) =>
-      postAdminSubscriptionAction(args.subscriptionId, { action: args.action }),
+    mutationFn: (args: {
+      subscriptionId: string;
+      action: 'cancel' | 'pause' | 'resume';
+      /** When `action` is `cancel`, set `true` to schedule cancel at period end instead of immediate cancel. */
+      atPeriodEnd?: boolean;
+    }) =>
+      postAdminSubscriptionAction(args.subscriptionId, {
+        action: args.action,
+        ...(args.action === 'cancel' && args.atPeriodEnd !== undefined
+          ? { atPeriodEnd: args.atPeriodEnd }
+          : {}),
+      }),
     onSuccess: (_d, args) => {
       void qc.invalidateQueries({ queryKey: adminSubscriptionsQueryKey });
       void qc.invalidateQueries({ queryKey: adminSubscriptionDetailQueryKey(args.subscriptionId) });
       void qc.invalidateQueries({ queryKey: ['stripe-admin', 'stats'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'finance'] });
     },
   });
 }

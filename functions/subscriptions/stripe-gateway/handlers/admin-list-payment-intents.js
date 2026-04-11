@@ -24,8 +24,9 @@ function mapPaymentIntentsToOrders(paymentIntentsData) {
 }
 
 /**
- * Stripe `paymentIntents.list()` does not support a `status` filter (returns unknown_parameter).
- * When `payload.status` is set, use `paymentIntents.search()`; if Search fails (e.g. region), list + in-memory filter.
+ * `paymentIntents.list()` does not accept `status` (Stripe: "Received unknown parameter: status").
+ * `paymentIntents.search` is not available in all regions / API versions.
+ * Always list, then optionally filter by `payload.status` in memory (first `limit` rows only).
  */
 module.exports = async function adminListPaymentIntents(ctx) {
   const { stripe, res, log, error, payload } = ctx;
@@ -36,45 +37,22 @@ module.exports = async function adminListPaymentIntents(ctx) {
     const customerFilter = payload.customer || payload.customerId || null;
     const statusFilter = payload.status ? String(payload.status).trim() : '';
 
-    let rows;
-    let has_more = false;
-
     const listParams = {
       limit,
       expand: ['data.customer'],
     };
     if (customerFilter) listParams.customer = customerFilter;
 
+    const listed = await stripe.paymentIntents.list(listParams);
+    let rows = listed.data;
     if (statusFilter) {
-      const qStatus = statusFilter.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      let query = `status:'${qStatus}'`;
-      if (customerFilter) {
-        const qCust = String(customerFilter).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        query += ` AND customer:'${qCust}'`;
-      }
-      try {
-        const searchResult = await stripe.paymentIntents.search({
-          query,
-          limit,
-          expand: ['data.customer'],
-        });
-        rows = searchResult.data;
-        has_more = searchResult.has_more;
-      } catch (searchErr) {
-        log(`adminListPaymentIntents: search failed (${searchErr.message}), using list + filter`);
-        const listed = await stripe.paymentIntents.list(listParams);
-        rows = listed.data.filter((pi) => pi.status === statusFilter);
-        has_more = listed.has_more;
-      }
-    } else {
-      const listed = await stripe.paymentIntents.list(listParams);
-      rows = listed.data;
-      has_more = listed.has_more;
+      rows = rows.filter((pi) => pi.status === statusFilter);
     }
+    const has_more = listed.has_more;
 
     const orders = mapPaymentIntentsToOrders(rows);
     log(
-      `adminListPaymentIntents: SUCCESS - ${orders.length} rows, duration=${Date.now() - startTime}ms`,
+      `adminListPaymentIntents: SUCCESS - ${orders.length} rows (statusFilter=${statusFilter || 'none'}), duration=${Date.now() - startTime}ms`,
     );
     return success(res, { orders, has_more });
   } catch (err) {

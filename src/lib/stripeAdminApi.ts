@@ -5,8 +5,10 @@
  * - `GET .../stats` → `getStripeAdminDashboardStats`
  * - `GET .../subscriptions` → `listStripeSubscriptionsForAdmin`
  * - `GET .../subscriptions/:id` → `getStripeSubscriptionForAdmin`
- * - `POST .../subscriptions/:id/actions` body `{ action: 'cancel'|'pause'|'resume' }` → `runStripeSubscriptionAdminAction`
+ * - `POST .../subscriptions/:id/actions` body `{ action, atPeriodEnd?: boolean }` (`cancel` + `atPeriodEnd: true` = end of period) → `runStripeSubscriptionAdminAction`
  * - `GET .../plans` → `listProductsAndPricesForAdmin`
+ * - `GET .../plans/catalog` → `getStripeAdminCatalogPlans` (`src/api/stripe/plans.ts`)
+ * - `GET .../plans/catalog/:productId` → `getStripeAdminCatalogPlanDetail` (`plans.ts`)
  * - `POST .../plans/products` → `createStripeProductAdmin`
  * - `PATCH .../plans/products/:productId` → `updateStripeProductAdmin`
  * - `POST .../plans/prices` → `createStripePriceAdmin`
@@ -14,8 +16,10 @@
  * - `GET .../billing/invoices/:invoiceId` → `getStripeInvoiceForAdmin`
  */
 import { fetchStripeJson, patchStripeJson, postStripeJson } from '@/lib/stripe-loader';
+import type { AdminPlanDetailPayload } from '@/api/stripe/plans';
 import type {
   AdminBillingOverviewPayload,
+  AdminPlansCatalogListPayload,
   AdminPlansCatalogPayload,
   StripeAdminDashboardStats,
 } from '@/types/stripeAdmin';
@@ -40,7 +44,10 @@ export function fetchAdminSubscription(subscriptionId: string) {
   );
 }
 
-export function postAdminSubscriptionAction(subscriptionId: string, body: { action: 'cancel' | 'pause' | 'resume' }) {
+export function postAdminSubscriptionAction(
+  subscriptionId: string,
+  body: { action: 'cancel' | 'pause' | 'resume'; atPeriodEnd?: boolean },
+) {
   return postStripeJson<{ subscription: Record<string, unknown> }>(
     `${A}/subscriptions/${encodeURIComponent(subscriptionId)}/actions`,
     body,
@@ -49,6 +56,16 @@ export function postAdminSubscriptionAction(subscriptionId: string, body: { acti
 
 export function fetchAdminPlansCatalog() {
   return fetchStripeJson<AdminPlansCatalogPayload>(`${A}/plans`);
+}
+
+export function fetchAdminCatalogPlans() {
+  return fetchStripeJson<AdminPlansCatalogListPayload>(`${A}/plans/catalog`);
+}
+
+export function fetchAdminCatalogPlanDetail(productId: string) {
+  return fetchStripeJson<AdminPlanDetailPayload>(
+    `${A}/plans/catalog/${encodeURIComponent(productId)}`,
+  );
 }
 
 export function postAdminCreateProduct(body: { name: string; description?: string }) {

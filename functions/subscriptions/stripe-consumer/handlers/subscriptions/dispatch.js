@@ -1,4 +1,5 @@
 const { callStripeGateway } = require('../../lib/callStripeGateway');
+const { mergeGatewayPayload } = require('../../lib/mergeGatewayPayload');
 
 const LOCAL_HANDLERS = {
   get: require('./get'),
@@ -34,6 +35,6 @@ module.exports = async ({ req, res, log, error, payload }) => {
     );
   }
 
-  const result = await callStripeGateway(action, p.payload || p, log, error);
+  const result = await callStripeGateway(action, mergeGatewayPayload(p), log, error);
   return res.json(result);
 };

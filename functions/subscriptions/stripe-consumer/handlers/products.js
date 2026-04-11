@@ -1,4 +1,5 @@
 const { callStripeGateway } = require('../lib/callStripeGateway');
+const { mergeGatewayPayload } = require('../lib/mergeGatewayPayload');
 const ensureAdmin = require('../lib/ensureAdmin');
 
 module.exports = async ({ req, res, log, error, payload }) => {
@@ -18,7 +19,7 @@ module.exports = async ({ req, res, log, error, payload }) => {
       }
     }
 
-    const result = await callStripeGateway(action, p.payload || p, log, error);
+    const result = await callStripeGateway(action, mergeGatewayPayload(p), log, error);
     return res.json(result);
   } catch (err) {
     error(`stripe products error: ${err.message}`);

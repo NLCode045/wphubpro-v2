@@ -7,6 +7,7 @@ import type { BillingAdminStats } from '@/types/stripe';
 import type { StripeAdminDashboardStats } from '@/types/stripeAdmin';
 
 import { getStripeFromEnv } from './client';
+import { getSubscription } from './subscriptions';
 
 function recurringAmountToMonthlyCents(price: Stripe.Price, quantity: number): number {
   if (price.unit_amount == null || !price.recurring) return 0;
@@ -112,13 +113,12 @@ export async function listStripeSubscriptionsForAdmin(): Promise<{ subscriptions
 export async function getStripeSubscriptionForAdmin(
   subscriptionId: string,
 ): Promise<{ subscription: import('stripe').Stripe.Subscription; customer: import('stripe').Stripe.Customer | null }> {
-  const stripe = getStripeFromEnv();
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
-    expand: ['customer', 'items.data.price.product', 'default_payment_method'],
-  });
+  /** Single retrieve path — `subscriptions.ts#getSubscription` (expand + server-only Stripe). */
+  const subscription = await getSubscription(subscriptionId);
   const cust = subscription.customer;
   let customer: import('stripe').Stripe.Customer | null = null;
   if (typeof cust === 'string') {
+    const stripe = getStripeFromEnv();
     const c = await stripe.customers.retrieve(cust);
     customer = 'deleted' in c && c.deleted ? null : c;
   } else if (cust && !('deleted' in cust && cust.deleted)) {

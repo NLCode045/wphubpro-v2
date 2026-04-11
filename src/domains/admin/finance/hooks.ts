@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
 import { executeFunction, type ExecuteFunctionOptions } from '@/integrations/appwrite/executeFunction'
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite'
-import type { StripePlan, SubscriptionDetailsResponse } from '@/types'
+import { fetchAdminSubscription } from '@/lib/stripeAdminApi'
+import type { StripePlan } from '@/types'
 import type {
   AdminFinanceDashboardResponse,
   AdminFinanceSummary,
@@ -151,17 +152,18 @@ export function useAdminSubscriptionList(
   })
 }
 
+export type AdminSubscriptionDetailFromApi = Awaited<ReturnType<typeof fetchAdminSubscription>>
+
+/**
+ * Admin subscription detail via `GET /api/stripe/admin/subscriptions/:id`, implemented server-side with
+ * `src/api/stripe/subscriptions.ts#getSubscription` (see `getStripeSubscriptionForAdmin` in `admin.ts`).
+ * Does not use Appwrite Functions.
+ */
 export function useAdminSubscriptionDetails(subscriptionId: string | undefined) {
   const enabled = useFinanceAdminEnabled() && Boolean(subscriptionId)
-  return useQuery<SubscriptionDetailsResponse, Error>({
-    queryKey: ['admin', 'finance', 'subscription', subscriptionId],
-    queryFn: async () => {
-      return await executeAdminFunction<SubscriptionDetailsResponse>(SUBS_FN, {
-        action: 'admin-get-details',
-        subscriptionId,
-        subscription_id: subscriptionId,
-      })
-    },
+  return useQuery<AdminSubscriptionDetailFromApi, Error>({
+    queryKey: ['admin', 'finance', 'subscription', 'api', subscriptionId],
+    queryFn: async () => fetchAdminSubscription(subscriptionId!),
     enabled,
     staleTime: 30_000,
   })

@@ -1,5 +1,6 @@
 const sdk = require('node-appwrite');
 const { callStripeGateway } = require('../lib/callStripeGateway');
+const { mergeGatewayPayload } = require('../lib/mergeGatewayPayload');
 const { getAppwriteBootstrap, hasAppwriteBootstrap } = require('../lib/appwriteEnv');
 
 /**
@@ -45,7 +46,7 @@ module.exports = async ({ req, res, log, error, payload }) => {
       return res.json(result);
     }
 
-    const result = await callStripeGateway(action, p.payload || p, log, error);
+    const result = await callStripeGateway(action, mergeGatewayPayload(p), log, error);
     return res.json(result);
   } catch (err) {
     error(`stripe invoices error: ${err.message}`);

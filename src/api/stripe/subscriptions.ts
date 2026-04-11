@@ -26,6 +26,7 @@ export async function listSubscriptionsForCustomer(customerId: string): Promise<
   });
 }
 
+/** Used by admin subscription detail via `admin.ts` → `getStripeSubscriptionForAdmin`. */
 export async function getSubscription(
   subscriptionId: string,
 ): Promise<Stripe.Response<Stripe.Subscription>> {

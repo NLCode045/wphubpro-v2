@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffectiveIsAdmin } from '@/context/useEffectiveIsAdmin'
-import { executeFunction } from '@/integrations/appwrite/executeFunction'
+import { executeFunction, type ExecuteFunctionOptions } from '@/integrations/appwrite/executeFunction'
 import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite'
 import type { StripePlan, SubscriptionDetailsResponse } from '@/types'
 import type {
@@ -11,6 +11,18 @@ import type {
   AdminSubscriptionRow,
   FinanceDashboardPeriod,
 } from './types'
+
+/** Admin finance must attribute executions to the signed-in operator, not an impersonated user. */
+function executeAdminFunction<TResponse = unknown, TPayload = unknown>(
+  functionId: string,
+  payload?: TPayload,
+  options?: ExecuteFunctionOptions,
+): Promise<TResponse> {
+  return executeFunction<TResponse, TPayload>(functionId, payload, {
+    ...options,
+    omitImpersonationHeaders: true,
+  })
+}
 
 const SUBS_FN = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS
 const PRODUCTS_FN = APPWRITE_FUNCTION_IDS.STRIPE_PRODUCTS
@@ -25,7 +37,7 @@ export function useFinanceSummary() {
   return useQuery<AdminFinanceSummary, Error>({
     queryKey: ['admin', 'finance', 'summary'],
     queryFn: async () => {
-      const res = await executeFunction<AdminFinanceSummary>(SUBS_FN, {
+      const res = await executeAdminFunction<AdminFinanceSummary>(SUBS_FN, {
         action: 'admin-finance-summary',
       })
       if (!res?.success) throw new Error((res as { error?: string })?.error || 'Summary failed')
@@ -42,7 +54,7 @@ export function useFinanceDashboard(period: FinanceDashboardPeriod) {
     queryKey: ['admin', 'finance', 'dashboard', period],
     queryFn: async () => {
       // Use optimized sync dashboard that returns fast (< 5 seconds)
-      const res = await executeFunction<AdminFinanceDashboardResponse>(SUBS_FN, {
+      const res = await executeAdminFunction<AdminFinanceDashboardResponse>(SUBS_FN, {
         action: 'admin-finance-dashboard',
         period,
       })
@@ -80,7 +92,7 @@ export function useFinanceDashboardDetails(
     queryKey: ['admin', 'finance', 'dashboard-details', period, 'start'],
     queryFn: async () => {
       // Start async execution - returns immediately with execution ID
-      const res = await executeFunction<{ executionId: string }>(SUBS_FN, {
+      const res = await executeAdminFunction<{ executionId: string }>(SUBS_FN, {
         action: 'admin-finance-dashboard-details',
         period,
         async: true,  // Request async execution
@@ -119,7 +131,7 @@ export function useAdminSubscriptionList(
   return useQuery<{ subscriptions: AdminSubscriptionRow[]; fetchedPages: number }, Error>({
     queryKey: ['admin', 'finance', 'subscriptions', params],
     queryFn: async () => {
-      const res = await executeFunction<{
+      const res = await executeAdminFunction<{
         success: boolean
         subscriptions?: AdminSubscriptionRow[]
         fetchedPages?: number
@@ -144,7 +156,7 @@ export function useAdminSubscriptionDetails(subscriptionId: string | undefined) 
   return useQuery<SubscriptionDetailsResponse, Error>({
     queryKey: ['admin', 'finance', 'subscription', subscriptionId],
     queryFn: async () => {
-      return await executeFunction<SubscriptionDetailsResponse>(SUBS_FN, {
+      return await executeAdminFunction<SubscriptionDetailsResponse>(SUBS_FN, {
         action: 'admin-get-details',
         subscriptionId,
       })
@@ -170,7 +182,7 @@ export function useAdminStripePlansList(options?: UseAdminStripePlansListOptions
   return useQuery<AdminStripePlansListData, Error>({
     queryKey: ['admin', 'finance', 'plans'],
     queryFn: async () => {
-      const res = await executeFunction<{
+      const res = await executeAdminFunction<{
         plans?: StripePlan[]
         subscriptionCountsTruncated?: boolean
       }>(PRODUCTS_FN, {
@@ -231,7 +243,7 @@ export function useAdminPlanDetail(productId: string | undefined) {
   return useQuery<AdminPlanDetailResponse, Error>({
     queryKey: ['admin', 'finance', 'plan', productId],
     queryFn: async () => {
-      const res = await executeFunction<AdminPlanDetailResponse>(PRODUCTS_FN, {
+      const res = await executeAdminFunction<AdminPlanDetailResponse>(PRODUCTS_FN, {
         action: 'get',
         productId,
       })
@@ -254,7 +266,7 @@ export function useAdminPaymentsList(params: AdminPaymentsListParams) {
   return useQuery<{ orders: AdminPaymentIntentRow[] }, Error>({
     queryKey: ['admin', 'finance', 'payments', params],
     queryFn: async () => {
-      const res = await executeFunction<{ success?: boolean; orders?: AdminPaymentIntentRow[]; message?: string }>(
+      const res = await executeAdminFunction<{ success?: boolean; orders?: AdminPaymentIntentRow[]; message?: string }>(
         INVOICES_FN,
         {
           action: 'admin-list-payment-intents',
@@ -282,7 +294,7 @@ export function useAdminRecentInvoicesList(params: AdminRecentInvoicesParams = {
   return useQuery<{ invoices: Record<string, unknown>[] }, Error>({
     queryKey: ['admin', 'finance', 'invoices-recent', limit],
     queryFn: async () => {
-      const res = await executeFunction<{
+      const res = await executeAdminFunction<{
         success?: boolean
         invoices?: Record<string, unknown>[]
         message?: string
@@ -306,7 +318,7 @@ export function useAdminStripeInvoice(invoiceId: string | undefined) {
   return useQuery<{ invoice: Record<string, unknown> }, Error>({
     queryKey: ['admin', 'finance', 'invoice', invoiceId],
     queryFn: async () => {
-      const res = await executeFunction<{
+      const res = await executeAdminFunction<{
         success?: boolean
         invoice?: Record<string, unknown>
         message?: string
@@ -329,7 +341,7 @@ export function useAdminPaymentDetail(paymentIntentId: string | undefined) {
   return useQuery<AdminPaymentIntentDetail, Error>({
     queryKey: ['admin', 'finance', 'payment', paymentIntentId],
     queryFn: async () => {
-      const res = await executeFunction<AdminPaymentIntentDetail>(INVOICES_FN, {
+      const res = await executeAdminFunction<AdminPaymentIntentDetail>(INVOICES_FN, {
         action: 'admin-get-payment-intent',
         paymentIntentId,
       })
@@ -358,7 +370,7 @@ export function useAdminUpdatePlan() {
     }
   >({
     mutationFn: async (body) => {
-      const res = await executeFunction<{ success?: boolean; message?: string }>(PRODUCTS_FN, {
+      const res = await executeAdminFunction<{ success?: boolean; message?: string }>(PRODUCTS_FN, {
         action: 'update',
         ...body,
       })
@@ -376,7 +388,7 @@ export function useAdminSetPlanActive() {
   const qc = useQueryClient()
   return useMutation<{ success: boolean }, Error, { productId: string; active: boolean }>({
     mutationFn: async ({ productId, active }) => {
-      const res = await executeFunction<{ success?: boolean; message?: string }>(PRODUCTS_FN, {
+      const res = await executeAdminFunction<{ success?: boolean; message?: string }>(PRODUCTS_FN, {
         action: 'set-active',
         productId,
         active,
@@ -395,7 +407,7 @@ export function useAdminSetPriceActive() {
   const qc = useQueryClient()
   return useMutation<{ success: boolean }, Error, { priceId: string; active: boolean }>({
     mutationFn: async ({ priceId, active }) => {
-      const res = await executeFunction<{ success?: boolean; message?: string }>(PRODUCTS_FN, {
+      const res = await executeAdminFunction<{ success?: boolean; message?: string }>(PRODUCTS_FN, {
         action: 'set-price-active',
         priceId,
         active,
@@ -433,7 +445,7 @@ export function useAdminDeletePlan() {
     }
   >({
     mutationFn: async (body) => {
-      const res = await executeFunction<AdminDeletePlanResponse>(
+      const res = await executeAdminFunction<AdminDeletePlanResponse>(
         PRODUCTS_FN,
         {
           action: 'delete-plan',
@@ -461,7 +473,7 @@ export function useAdminCreatePrice() {
     { productId: string; amount: number; interval: 'month' | 'year'; currency?: string }
   >({
     mutationFn: async (body) => {
-      const res = await executeFunction<{ success?: boolean; priceId?: string; message?: string }>(
+      const res = await executeAdminFunction<{ success?: boolean; priceId?: string; message?: string }>(
         PRODUCTS_FN,
         {
           action: 'create-price',
@@ -485,7 +497,7 @@ export function useAdminCancelSubscription() {
   const qc = useQueryClient()
   return useMutation<{ success: boolean }, Error, { subscriptionId: string; immediate?: boolean }>({
     mutationFn: async ({ subscriptionId, immediate }) => {
-      const res = await executeFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
+      const res = await executeAdminFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
         action: 'admin-cancel-subscription',
         subscriptionId,
         immediate: Boolean(immediate),
@@ -504,7 +516,7 @@ export function useAdminPauseSubscription() {
   return useMutation<{ success: boolean }, Error, { subscriptionId: string; behavior?: 'void' | 'mark_uncollectible' }>(
     {
       mutationFn: async ({ subscriptionId, behavior }) => {
-        const res = await executeFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
+        const res = await executeAdminFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
           action: 'admin-pause-subscription',
           subscriptionId,
           behavior: behavior ?? 'mark_uncollectible',
@@ -523,7 +535,7 @@ export function useAdminResumeSubscription() {
   const qc = useQueryClient()
   return useMutation<{ success: boolean }, Error, { subscriptionId: string }>({
     mutationFn: async ({ subscriptionId }) => {
-      const res = await executeFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
+      const res = await executeAdminFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
         action: 'admin-resume-subscription',
         subscriptionId,
       })
@@ -544,7 +556,7 @@ export function useAdminArchiveSubscription() {
     { subscriptionId: string; cancelAtPeriodEnd?: boolean; immediate?: boolean }
   >({
     mutationFn: async (body) => {
-      const res = await executeFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
+      const res = await executeAdminFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
         action: 'admin-archive-subscription',
         ...body,
       })
@@ -570,7 +582,7 @@ export function useAdminUpdateSubscriptionPrice() {
     }
   >({
     mutationFn: async (body) => {
-      const res = await executeFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
+      const res = await executeAdminFunction<{ success?: boolean; error?: string }>(SUBS_FN, {
         action: 'admin-update-subscription-price',
         subscriptionId: body.subscriptionId,
         newPriceId: body.newPriceId,

@@ -7,17 +7,25 @@ function json(res: ServerResponse, data: unknown, status = 200) {
   res.end(JSON.stringify(data));
 }
 
-function notFound(res: ServerResponse) {
-  json(res, { error: 'stripe_admin_dev_mock', message: 'Route not mocked; add handler in vite/stripeAdminDevMockPlugin.ts' }, 404);
+function notFound(res: ServerResponse, message: string) {
+  json(res, { error: 'stripe_api_dev_mock', message }, 404);
 }
 
 /**
- * When `VITE_STRIPE_ADMIN_DEV_MOCK` is set, short-circuit `/api/stripe/admin/*` so the SPA gets JSON
- * instead of HTML (e.g. Appwrite/router fallback) during `npm run dev`.
+ * When `VITE_STRIPE_ADMIN_DEV_MOCK` is `1` or `true`, handle `/api/stripe/*` in dev **before** the Vite
+ * proxy (`/api` → `api.wphub.pro`). Without this, legacy `fetchStripeJson('/plans')` etc. hit a non-JSON
+ * route and return HTML (often 401), which triggers confusing errors.
+ *
+ * Stubs:
+ * - `/api/stripe/plans`, `/billing`, `/subscriptions` — member REST used by `hooks/usePlans` & friends
+ * - `/api/stripe/admin/*` — admin REST from `stripeAdminApi.ts`
+ *
+ * Finance admin UIs use Appwrite `executeFunction` (not these URLs). Enable this mock only for local
+ * JSON stubs, or add `http://localhost:5173` under Appwrite Platforms for real API + Functions.
  */
 export function stripeAdminDevMockPlugin(enabled: boolean): Plugin {
   return {
-    name: 'stripe-admin-dev-mock',
+    name: 'stripe-api-dev-mock',
     apply: 'serve',
     enforce: 'pre',
     configureServer(server) {
@@ -25,12 +33,37 @@ export function stripeAdminDevMockPlugin(enabled: boolean): Plugin {
 
       server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const raw = req.url?.split('?')[0] ?? '';
-        if (!raw.startsWith('/api/stripe/admin')) {
+        if (!raw.startsWith('/api/stripe')) {
           next();
           return;
         }
 
         const method = req.method ?? 'GET';
+
+        /** Legacy member REST (`src/hooks/usePlans.ts`, `useInvoices.ts`, `useSubscription.ts`). */
+        if (method === 'GET' && raw === '/api/stripe/plans') {
+          json(res, { plans: [] });
+          return;
+        }
+        if (method === 'GET' && raw.startsWith('/api/stripe/billing')) {
+          json(res, { invoices: [] });
+          return;
+        }
+        if (raw === '/api/stripe/subscriptions') {
+          if (method === 'GET') {
+            json(res, { subscriptions: [] });
+            return;
+          }
+          if (method === 'POST') {
+            json(res, { success: true, subscription: { id: 'sub_dev_mock', status: 'active' } });
+            return;
+          }
+        }
+
+        if (!raw.startsWith('/api/stripe/admin')) {
+          notFound(res, `No dev mock for ${method} ${raw}. Add a handler in vite/stripeAdminDevMockPlugin.ts`);
+          return;
+        }
 
         if (method === 'GET' && raw === '/api/stripe/admin/stats') {
           json(res, {
@@ -104,7 +137,7 @@ export function stripeAdminDevMockPlugin(enabled: boolean): Plugin {
           return;
         }
 
-        notFound(res);
+        notFound(res, `No dev mock for admin route ${method} ${raw}`);
       });
     },
   };

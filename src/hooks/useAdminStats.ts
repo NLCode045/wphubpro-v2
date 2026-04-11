@@ -37,9 +37,13 @@ export function useAdminStats() {
   return useQuery({
     queryKey: adminStatsQueryKey,
     queryFn: async () => {
-      const res = await executeFunction<AdminFinanceSummary>(SUBS_FN, {
-        action: 'admin-finance-summary',
-      });
+      const res = await executeFunction<AdminFinanceSummary>(
+        SUBS_FN,
+        {
+          action: 'admin-finance-summary',
+        },
+        { omitImpersonationHeaders: true },
+      );
       if (!res?.success) {
         throw new Error((res as { error?: string; message?: string } | null)?.error ?? 'Admin stats failed');
       }

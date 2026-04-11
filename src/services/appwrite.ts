@@ -4,9 +4,26 @@ export { OAuthProvider };
 
 const viteEnv = (import.meta as any).env as Record<string, string | undefined>;
 
-function envString(key: string, fallback: string): string {
-  const v = viteEnv[key];
-  return typeof v === 'string' && v.trim() !== '' ? v.trim() : fallback;
+/**
+ * Reads client env with fallbacks (short `.env` keys first):
+ * `_${suffix}` → `VITE_${suffix}` → `APPWRITE_${suffix}`,
+ * where `suffix` is everything after the `APPWRITE_` prefix of `appwriteKey`.
+ *
+ * Examples: `APPWRITE_ENDPOINT` tries `_ENDPOINT`, `VITE_ENDPOINT`, `APPWRITE_ENDPOINT`.
+ */
+function envString(appwriteKey: string, fallback: string): string {
+  const keys: string[] = [];
+  if (appwriteKey.startsWith('APPWRITE_')) {
+    const suffix = appwriteKey.slice('APPWRITE_'.length);
+    keys.push(`_${suffix}`, `VITE_${suffix}`, appwriteKey);
+  } else {
+    keys.push(appwriteKey);
+  }
+  for (const k of keys) {
+    const v = viteEnv[k];
+    if (typeof v === 'string' && v.trim() !== '') return v.trim();
+  }
+  return fallback;
 }
 
 /**
@@ -21,13 +38,78 @@ export const APPWRITE_HEARTBEAT_URL = envString('APPWRITE_HEARTBEAT_URL', '');
 
 if (!APPWRITE_PROJECT_ID || APPWRITE_PROJECT_ID.trim() === '') {
   throw new Error(
-    'Appwrite project ID ontbreekt. Zet APPWRITE_PROJECT_ID in .env en herstart de dev server.',
+    'Appwrite project ID ontbreekt. Zet _PROJECT_ID, VITE_PROJECT_ID of APPWRITE_PROJECT_ID in .env en herstart de dev server.',
   );
 }
 
 const client = new Client()
   .setEndpoint(APPWRITE_ENDPOINT)
   .setProject(APPWRITE_PROJECT_ID);
+
+/** sessionStorage key — reapplied on load so impersonation survives refresh. */
+export const WPHUB_IMPERSONATE_USER_ID_STORAGE_KEY = 'wphub_impersonate_user_id';
+
+const HEADER_IMPERSONATE_USER_ID = 'X-Appwrite-Impersonate-User-Id';
+const HEADER_IMPERSONATE_USER_EMAIL = 'X-Appwrite-Impersonate-User-Email';
+const HEADER_IMPERSONATE_USER_PHONE = 'X-Appwrite-Impersonate-User-Phone';
+
+export function getStoredImpersonationUserId(): string | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const v = sessionStorage.getItem(WPHUB_IMPERSONATE_USER_ID_STORAGE_KEY);
+    return v && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearImpersonationFromStorage(): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.removeItem(WPHUB_IMPERSONATE_USER_ID_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Sets or clears REST impersonation headers on the shared Appwrite client.
+ * Web SDK 17 has no `setImpersonateUserId()`; headers match Appwrite REST docs.
+ */
+export function setImpersonationTargetOnClient(userId: string | null): void {
+  const h = client.headers as Record<string, string>;
+  delete h[HEADER_IMPERSONATE_USER_EMAIL];
+  delete h[HEADER_IMPERSONATE_USER_PHONE];
+  if (userId && userId.trim()) {
+    h[HEADER_IMPERSONATE_USER_ID] = userId.trim();
+  } else {
+    delete h[HEADER_IMPERSONATE_USER_ID];
+  }
+}
+
+export function persistImpersonationUserId(userId: string | null): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    if (userId && userId.trim()) {
+      sessionStorage.setItem(WPHUB_IMPERSONATE_USER_ID_STORAGE_KEY, userId.trim());
+    } else {
+      sessionStorage.removeItem(WPHUB_IMPERSONATE_USER_ID_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Call before `account.get()` on bootstrap so a full reload keeps impersonation. */
+export function applyStoredImpersonationHeaders(): void {
+  const id = getStoredImpersonationUserId();
+  setImpersonationTargetOnClient(id);
+}
+
+export function clearImpersonationClientAndStorage(): void {
+  setImpersonationTargetOnClient(null);
+  clearImpersonationFromStorage();
+}
 
 export const account = new Account(client);
 export const databases = new Databases(client);
@@ -66,6 +148,10 @@ export const TICKETS_COLLECTION_ID = envString('APPWRITE_TICKETS_COLLECTION_ID',
 export const TICKET_MESSAGES_COLLECTION_ID = envString(
   'APPWRITE_TICKET_MESSAGES_COLLECTION_ID',
   'ticket_messages',
+);
+export const TICKET_ACTIVITIES_COLLECTION_ID = envString(
+  'APPWRITE_TICKET_ACTIVITIES_COLLECTION_ID',
+  'ticket_activities',
 );
 export const MESSAGES_COLLECTION_ID = envString('APPWRITE_MESSAGES_COLLECTION_ID', 'messages');
 export const CONVERSATIONS_COLLECTION_ID = envString('APPWRITE_CONVERSATIONS_COLLECTION_ID', 'conversations');
@@ -128,6 +214,7 @@ export const COLLECTIONS = {
   NOTIFICATIONS: NOTIFICATIONS_COLLECTION_ID,
   TICKETS: TICKETS_COLLECTION_ID,
   TICKET_MESSAGES: TICKET_MESSAGES_COLLECTION_ID,
+  TICKET_ACTIVITIES: TICKET_ACTIVITIES_COLLECTION_ID,
   MESSAGES: MESSAGES_COLLECTION_ID,
   CONVERSATIONS: CONVERSATIONS_COLLECTION_ID,
   CONVERSATION_MESSAGES: CONVERSATION_MESSAGES_COLLECTION_ID,

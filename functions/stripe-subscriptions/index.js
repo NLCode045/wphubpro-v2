@@ -17,11 +17,18 @@ const handlers = {
   "admin-update-subscription-price": require("./handlers/admin-update-subscription-price"),
   "admin-archive-subscription": require("./handlers/admin-archive-subscription"),
   "admin-finance-summary": require("./handlers/admin-finance-summary"),
+  "admin-finance-dashboard": require("./handlers/admin-finance-dashboard"),
 };
 
 const valid = Object.keys(handlers);
 
 module.exports = async ({ req, res, log, error }) => {
+  const _m = (req.method || "POST").toString().toUpperCase();
+  const _p = (req.path || req.url || "").split("?")[0];
+  if (_m === "POST" && typeof _p === "string" && _p.includes("errors/not-found")) {
+    return res.json({ success: true }, 200);
+  }
+
   let action = null;
   let payload = {};
   try {

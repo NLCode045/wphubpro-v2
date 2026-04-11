@@ -18,9 +18,16 @@ module.exports = async function buildSubscriptionDetailsPayload(stripe, subscrip
   let upcomingInvoice = null;
   if (subscription.status === "active" || subscription.status === "trialing") {
     try {
-      upcomingInvoice = await stripe.invoices.retrieveUpcoming({
-        subscription: subscriptionId,
-      });
+      const customerId =
+        typeof subscription.customer === "string"
+          ? subscription.customer
+          : subscription.customer?.id;
+      if (customerId) {
+        upcomingInvoice = await stripe.invoices.createPreview({
+          customer: customerId,
+          subscription: subscriptionId,
+        });
+      }
     } catch (e) {
       if (log) log("No upcoming invoice: " + e.message);
     }

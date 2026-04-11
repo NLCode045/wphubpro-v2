@@ -15,6 +15,8 @@ export type User = Models.User<Models.Preferences> & {
   isAdmin?: boolean;
   /** Appwrite account MFA flag when returned from `account.get()`. */
   mfa?: boolean;
+  /** Present on `account.get()` when an impersonator is acting as this user. */
+  impersonatorUserId?: string;
 };
 
 export type BillingInterval = 'monthly' | 'yearly';
@@ -40,6 +42,8 @@ export interface StripePlan {
   id: string;
   name: string;
   description: string;
+  /** From `stripe-products` list: product `active` → `active` / `inactive`. */
+  status: string;
   /** Major currency units (euros), not cents — matches `stripe-products` (`unit_amount / 100`). */
   monthlyPrice: number;
   /** Major currency units (euros), not cents. */
@@ -50,6 +54,8 @@ export interface StripePlan {
   metadata: StripePlanMetadata[];
   /** All prices for the product when returned by `stripe-products` `list`. */
   allPrices?: StripePlanAllPrice[];
+  /** Admin list only: active + trialing + past_due + paused subs on any price of this product (deduped). */
+  activeSubscriptionsCount?: number;
 }
 
 export interface UsageMetrics {
@@ -709,6 +715,23 @@ export interface AdminPaymentIntentRow {
 // --- Ticketing / Helpdesk ---
 export type TicketStatus = 'open' | 'in_progress' | 'waiting' | 'resolved' | 'closed';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type SupportTicketCategory = 'account' | 'site_manager' | 'library' | 'billing' | 'other';
+export type TicketNotifyChannel = 'platform' | 'email' | 'both';
+
+/** Optional JSON context from the page where “Contact support” was opened (serialized on the ticket). */
+export interface SupportTicketContext {
+  sourcePath: string;
+  sourceLabel?: string;
+  siteId?: string;
+  siteName?: string;
+  pluginId?: string;
+  themeId?: string;
+  libraryItemKind?: 'plugin' | 'theme';
+  libraryItemSlug?: string;
+  subscriptionId?: string;
+  invoiceId?: string;
+  paymentIntentId?: string;
+}
 
 export interface Ticket {
   $id: string;
@@ -716,8 +739,14 @@ export interface Ticket {
   subject: string;
   status: TicketStatus;
   priority: TicketPriority;
-  category?: string;
+  category?: SupportTicketCategory | string;
   siteId?: string;
+  assignedToUserId?: string | null;
+  contextJson?: string | null;
+  notifyChannel?: TicketNotifyChannel | string;
+  followerIds?: string[];
+  /** Present on admin list responses only (reporter profile). */
+  reporter?: TicketUserSummary | null;
   $createdAt: string;
   $updatedAt: string;
 }
@@ -729,6 +758,22 @@ export interface TicketMessage {
   body: string;
   isStaff: boolean;
   $createdAt: string;
+}
+
+export interface TicketActivity {
+  $id: string;
+  ticketId: string;
+  actorUserId: string;
+  action: string;
+  summary: string;
+  detailJson?: string | null;
+  $createdAt: string;
+}
+
+export interface TicketUserSummary {
+  id: string;
+  name: string;
+  email: string;
 }
 
 // --- Messages (view model; backed by `conversations` + `conversation_messages` via function) ---

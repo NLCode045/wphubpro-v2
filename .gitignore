@@ -4,6 +4,7 @@ node_modules
 .env
 .env.local
 .env.*.local
+.env.migration
 functions/.env
 functions/.env.local
 !*.env.example
@@ -25,7 +26,9 @@ out/
 .vercel
 .env*.local
 
-.cursor
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**
 .cursorignore
 .cursor/agents/
 .cursor/rules/

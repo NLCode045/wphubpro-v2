@@ -15,6 +15,8 @@ type DataTableProps<TData> = {
    * form controls, or elements inside `[data-row-click-ignore]` do not trigger this.
    */
   onRowClick?: (row: TData) => void
+  /** Optional extra class on each `<tr>` (e.g. highlight archived rows). */
+  rowClassName?: (row: TData) => string | undefined
   /**
    * Optional class name for the table container
    */
@@ -43,6 +45,7 @@ const DataTable = <TData,>({
   showHeaders = true,
   dashboardUniformRows = false,
   onRowClick,
+  rowClassName,
 }: DataTableProps<TData>) => {
   const columns = table.getAllColumns()
 
@@ -88,7 +91,7 @@ const DataTable = <TData,>({
             table.getRowModel().rows.map((row) => (
               <tr
                 key={row.id}
-                className={clsx(onRowClick && 'cursor-pointer')}
+                className={clsx(onRowClick && 'cursor-pointer', rowClassName?.(row.original))}
                 onClick={(e) => {
                   if (!onRowClick) return;
                   const el = e.target as HTMLElement;

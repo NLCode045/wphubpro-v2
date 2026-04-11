@@ -5,10 +5,14 @@ import {
   TbCoin,
   TbLayoutDashboard,
   TbLibrary,
+  TbLifebuoy,
+  TbListDetails,
   TbLogout2,
+  TbPackages,
   TbSettings,
   TbUserCircle,
   TbUsers,
+  TbWallet,
   TbWorld,
 } from 'react-icons/tb'
 
@@ -20,6 +24,8 @@ type UserDropdownItemType = {
   isHeader?: boolean
   /** When true, `UserProfile` runs Appwrite logout instead of navigating. */
   isLogout?: boolean
+  /** If true, only shown to admins (support queue, etc.). */
+  adminOnly?: boolean
   class?: string
 }
 
@@ -32,6 +38,17 @@ export const userDropdownItems: UserDropdownItemType[] = [
     label: 'Profile',
     icon: TbUserCircle,
     url: ROUTE_PATHS.PROFILE,
+  },
+  {
+    label: 'Support',
+    icon: TbLifebuoy,
+    url: ROUTE_PATHS.SUPPORT,
+  },
+  {
+    label: 'Support queue',
+    icon: TbLifebuoy,
+    url: ROUTE_PATHS.ADMIN_SUPPORT,
+    adminOnly: true,
   },
   {
     label: 'Log Out',
@@ -61,6 +78,12 @@ export const menuItems: MenuItemType[] = [
     icon: TbLibrary,
     url: '/library',
   },
+  {
+    key: 'support',
+    label: 'Support',
+    icon: TbLifebuoy,
+    url: ROUTE_PATHS.SUPPORT,
+  },
 ]
 
 export const horizontalMenuItems: MenuItemType[] = [
@@ -81,6 +104,12 @@ export const horizontalMenuItems: MenuItemType[] = [
     label: 'Library',
     icon: TbLibrary,
     url: '/library',
+  },
+  {
+    key: 'support',
+    label: 'Support',
+    icon: TbLifebuoy,
+    url: ROUTE_PATHS.SUPPORT,
   },
 ]
 
@@ -109,7 +138,38 @@ export const adminMenuItems: MenuItemType[] = [
     key: 'admin-finance',
     label: 'Finance',
     icon: TbCoin,
-    url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
+    children: [
+      {
+        key: 'admin-finance-dashboard',
+        label: 'Dashboard',
+        icon: TbLayoutDashboard,
+        url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
+      },
+      {
+        key: 'admin-finance-subscriptions',
+        label: 'Subscriptions',
+        icon: TbListDetails,
+        url: ROUTE_PATHS.ADMIN_FINANCE_SUBSCRIPTIONS,
+      },
+      {
+        key: 'admin-finance-plans',
+        label: 'Plans',
+        icon: TbPackages,
+        url: ROUTE_PATHS.ADMIN_FINANCE_PLANS,
+      },
+      {
+        key: 'admin-finance-payments',
+        label: 'Payments',
+        icon: TbWallet,
+        url: ROUTE_PATHS.ADMIN_FINANCE_PAYMENTS,
+      },
+    ],
+  },
+  {
+    key: 'admin-support',
+    label: 'Support',
+    icon: TbLifebuoy,
+    url: ROUTE_PATHS.ADMIN_SUPPORT,
   },
 ]
 
@@ -136,6 +196,37 @@ export const horizontalAdminMenuItems: MenuItemType[] = [
     key: 'admin-finance',
     label: 'Finance',
     icon: TbCoin,
-    url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
+    children: [
+      {
+        key: 'admin-finance-dashboard',
+        label: 'Dashboard',
+        icon: TbLayoutDashboard,
+        url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
+      },
+      {
+        key: 'admin-finance-subscriptions',
+        label: 'Subscriptions',
+        icon: TbListDetails,
+        url: ROUTE_PATHS.ADMIN_FINANCE_SUBSCRIPTIONS,
+      },
+      {
+        key: 'admin-finance-plans',
+        label: 'Plans',
+        icon: TbPackages,
+        url: ROUTE_PATHS.ADMIN_FINANCE_PLANS,
+      },
+      {
+        key: 'admin-finance-payments',
+        label: 'Payments',
+        icon: TbWallet,
+        url: ROUTE_PATHS.ADMIN_FINANCE_PAYMENTS,
+      },
+    ],
+  },
+  {
+    key: 'admin-support',
+    label: 'Support',
+    icon: TbLifebuoy,
+    url: ROUTE_PATHS.ADMIN_SUPPORT,
   },
 ]

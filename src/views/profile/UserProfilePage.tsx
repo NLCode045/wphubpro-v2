@@ -1,4 +1,5 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
+import { ContactSupportButton } from '@/components/support/ContactSupportButton';
 import { TabNavLabel } from '@/components/TabNavLabel';
 import { useAuth } from '@/domains/auth';
 import { USER_PROFILE_TAB_CONFIG } from '@/views/profile/userProfileNavTabs';
@@ -74,6 +75,9 @@ const UserProfilePage = () => {
   return (
     <Container fluid>
       <PageBreadcrumb title={title} subtitle="Account" />
+      <div className="d-flex justify-content-end mb-2">
+        <ContactSupportButton category="account" context={{ sourceLabel: 'Profile' }} />
+      </div>
 
       <Row className="justify-content-center">
         <Col xxl={12}>

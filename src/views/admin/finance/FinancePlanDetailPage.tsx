@@ -272,24 +272,27 @@ const FinancePlanDetailPage = () => {
           </thead>
           <tbody>
             {/* plan from get doesn't include allPrices list — use monthly/yearly ids from detail */}
-            {[
-              plan.monthlyPriceId && {
-                id: plan.monthlyPriceId,
-                label: 'Monthly',
-                amount: plan.monthlyPrice,
-              },
-              plan.yearlyPriceId && {
-                id: plan.yearlyPriceId,
-                label: 'Yearly',
-                amount: plan.yearlyPrice,
-              },
-            ]
-              .filter(Boolean)
-              .map((row) => (
-                <tr key={row!.id}>
-                  <td className="font-monospace small">{row!.id}</td>
-                  <td>{row!.amount}</td>
-                  <td>{row!.label}</td>
+            {(() => {
+              const priceRows: Array<{ id: string; label: string; amount: number }> = []
+              if (plan.monthlyPriceId) {
+                priceRows.push({
+                  id: plan.monthlyPriceId,
+                  label: 'Monthly',
+                  amount: plan.monthlyPrice,
+                })
+              }
+              if (plan.yearlyPriceId) {
+                priceRows.push({
+                  id: plan.yearlyPriceId,
+                  label: 'Yearly',
+                  amount: plan.yearlyPrice,
+                })
+              }
+              return priceRows.map((row) => (
+                <tr key={row.id}>
+                  <td className="font-monospace small">{row.id}</td>
+                  <td>{row.amount}</td>
+                  <td>{row.label}</td>
                   <td>
                     <Button
                       size="sm"
@@ -298,7 +301,7 @@ const FinancePlanDetailPage = () => {
                       onClick={async () => {
                         if (!window.confirm('Deactivate this price in Stripe?')) return
                         try {
-                          await setPriceActiveMut.mutateAsync({ priceId: row!.id, active: false })
+                          await setPriceActiveMut.mutateAsync({ priceId: row.id, active: false })
                           notifyOk('Price', 'Price deactivated.')
                           void refetch()
                         } catch (e) {
@@ -310,7 +313,8 @@ const FinancePlanDetailPage = () => {
                     </Button>
                   </td>
                 </tr>
-              ))}
+              ))
+            })()}
           </tbody>
         </Table>
       </div>

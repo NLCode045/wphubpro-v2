@@ -1,5 +1,20 @@
 import type { StripePlan } from '@/types';
 
+/** Subscriptions that cannot be updated in place; user must create a new subscription (reactivate). */
+const TERMINAL_SUBSCRIPTION_STATUSES = new Set([
+  'canceled',
+  'ended',
+  'incomplete_expired',
+]);
+
+/**
+ * When false, treat like no active subscription for checkout: new subscription flow, no proration preview.
+ */
+export function subscriptionStatusAllowsInPlacePlanChange(status: string | undefined): boolean {
+  if (!status) return false;
+  return !TERMINAL_SUBSCRIPTION_STATUSES.has(status.toLowerCase());
+}
+
 export function findPlanSelectionByPriceId(
   priceId: string,
   plans: StripePlan[]

@@ -1,6 +1,6 @@
 import type { AdminUser } from '@/domains/admin/useAdminUsers';
 import { Card, CardBody, Dropdown, DropdownItem, DropdownMenu, DropdownToggle } from 'react-bootstrap';
-import { TbDotsVertical, TbMail, TbShieldCheck, TbUserCheck } from 'react-icons/tb';
+import { TbDotsVertical, TbMail, TbShieldCheck, TbUserCheck, TbUserShare } from 'react-icons/tb';
 
 function initials(name: string, email: string): string {
   const s = name.trim() || email;
@@ -12,11 +12,11 @@ function initials(name: string, email: string): string {
 type AdminUserCardProps = {
   user: AdminUser;
   onEdit: (user: AdminUser) => void;
-  onLoginAs: (userId: string) => void;
-  loginAsPending: boolean;
+  onImpersonate: (userId: string) => void;
+  impersonateBusyId: string | null;
 };
 
-const AdminUserCard = ({ user, onEdit, onLoginAs, loginAsPending }: AdminUserCardProps) => {
+const AdminUserCard = ({ user, onEdit, onImpersonate, impersonateBusyId }: AdminUserCardProps) => {
   const roleVariant = user.role === 'Admin' ? 'primary' : 'secondary';
   const statusVariant = user.status === 'Active' ? 'success' : 'warning';
 
@@ -24,28 +24,32 @@ const AdminUserCard = ({ user, onEdit, onLoginAs, loginAsPending }: AdminUserCar
     <Card className="h-100">
       <CardBody className="text-center">
         <div className="position-relative">
-          <Dropdown align="end">
-            <DropdownToggle
-              variant="link"
-              className="position-absolute top-0 end-0 p-1 text-muted link-reset"
-              aria-label="User actions"
+          <div className="position-absolute top-0 end-0 d-flex align-items-center gap-1 p-1">
+            <button
+              type="button"
+              className="btn btn-default btn-icon btn-sm text-muted"
+              aria-label="Log in as user"
+              title="Log in as user"
+              disabled={impersonateBusyId !== null}
+              onClick={() => onImpersonate(user.id)}
             >
-              <TbDotsVertical className="fs-xl" />
-            </DropdownToggle>
-            <DropdownMenu>
-              <DropdownItem as="button" type="button" onClick={() => onEdit(user)}>
-                Edit
-              </DropdownItem>
-              <DropdownItem
-                as="button"
-                type="button"
-                disabled={loginAsPending}
-                onClick={() => onLoginAs(user.id)}
-              >
-                Login as…
-              </DropdownItem>
-            </DropdownMenu>
-          </Dropdown>
+              {impersonateBusyId === user.id ? (
+                <span className="spinner-border spinner-border-sm" role="status" aria-hidden />
+              ) : (
+                <TbUserShare className="fs-xl" />
+              )}
+            </button>
+            <Dropdown align="end">
+              <DropdownToggle variant="link" className="p-1 text-muted link-reset" aria-label="User actions">
+                <TbDotsVertical className="fs-xl" />
+              </DropdownToggle>
+              <DropdownMenu>
+                <DropdownItem as="button" type="button" onClick={() => onEdit(user)}>
+                  Edit
+                </DropdownItem>
+              </DropdownMenu>
+            </Dropdown>
+          </div>
         </div>
 
         {user.avatar ? (

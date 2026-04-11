@@ -8,9 +8,16 @@ const sdk = require("node-appwrite");
 module.exports = async ({ req, res, log, error }) => {
   const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
   const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-  const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const DATABASE_ID = process.env.DATABASE_ID || process.env.APPWRITE_DATABASE_ID || "platform_db";
   const ACCOUNTS_COLLECTION_ID =
     process.env.ACCOUNTS_COLLECTION_ID || process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || "accounts";

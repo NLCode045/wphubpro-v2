@@ -141,7 +141,7 @@ function boolFromAuthRecord(v: Record<string, string>, key: string, defaultVal: 
 
 const AdminPlatformSettingsPage = () => {
   const { isAdmin, user } = useAuth();
-  const { setMode } = useDashboardNav();
+  const { mode } = useDashboardNav();
   const navigate = useNavigate();
   const { showNotification } = useNotificationContext();
   const userId = user?.$id;
@@ -174,8 +174,10 @@ const AdminPlatformSettingsPage = () => {
       navigate(ROUTE_PATHS.DASHBOARD, { replace: true });
       return;
     }
-    setMode('admin');
-  }, [isAdmin, navigate, setMode]);
+    if (mode !== 'admin') {
+      navigate(ROUTE_PATHS.DASHBOARD, { replace: true });
+    }
+  }, [isAdmin, mode, navigate]);
 
   useEffect(() => {
     if (!items.length) return;
@@ -329,7 +331,7 @@ const AdminPlatformSettingsPage = () => {
     }
   };
 
-  if (!isAdmin) {
+  if (!isAdmin || mode !== 'admin') {
     return null;
   }
 

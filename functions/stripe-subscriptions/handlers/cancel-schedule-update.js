@@ -10,9 +10,20 @@ module.exports = async ({ req, res, log, error }) => {
   const env =
     req && req.variables && Object.keys(req.variables).length ? req.variables : process.env;
   const stripeKey = env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
-  const APPWRITE_ENDPOINT = env.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = env.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = env.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const DATABASE_ID =
     env.APPWRITE_DATABASE_ID || process.env.APPWRITE_DATABASE_ID || process.env.DATABASE_ID;
   const ACCOUNTS_COLLECTION_ID =

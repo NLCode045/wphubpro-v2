@@ -1,11 +1,16 @@
+import DataTable from '@/components/table/DataTable'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useAdminPaymentsList } from '@/domains/admin/finance/hooks'
 import type { AdminPaymentIntentRow } from '@/domains/admin/finance/types'
+import {
+  createColumnHelper,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
-import { Form, Spinner, Table } from 'react-bootstrap'
+import { Form, Spinner } from 'react-bootstrap'
 import { useNavigate } from 'react-router'
-
-type SortKey = 'date' | 'amount' | 'status' | 'customer'
 
 function formatMoney(amount: number, currency: string) {
   return new Intl.NumberFormat(undefined, {
@@ -14,62 +19,70 @@ function formatMoney(amount: number, currency: string) {
   }).format(amount / 100)
 }
 
+const columnHelper = createColumnHelper<AdminPaymentIntentRow>()
+
 const FinancePaymentsPage = () => {
   const navigate = useNavigate()
   const [status, setStatus] = useState('')
-  const [sortKey, setSortKey] = useState<SortKey>('date')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const { data, isLoading, error } = useAdminPaymentsList({
     limit: 100,
     status: status || undefined,
   })
 
-  const orders = useMemo(() => {
-    const list = [...(data?.orders ?? [])]
-    list.sort((a, b) => {
-      let va: string | number = 0
-      let vb: string | number = 0
-      switch (sortKey) {
-        case 'amount':
-          va = a.amount
-          vb = b.amount
-          break
-        case 'status':
-          va = a.status
-          vb = b.status
-          break
-        case 'customer':
-          va = a.customer || ''
-          vb = b.customer || ''
-          break
-        case 'date':
-        default:
-          va = a.date
-          vb = b.date
-      }
-      let c = 0
-      if (typeof va === 'number' && typeof vb === 'number') c = va - vb
-      else c = String(va).localeCompare(String(vb))
-      return sortDir === 'asc' ? c : -c
-    })
-    return list
-  }, [data?.orders, sortDir, sortKey])
+  const orders = data?.orders ?? []
 
-  const toggleSort = (k: SortKey) => {
-    if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else {
-      setSortKey(k)
-      setSortDir(k === 'date' || k === 'amount' ? 'desc' : 'asc')
-    }
-  }
-
-  const Th = ({ k, label }: { k: SortKey; label: string }) => (
-    <th role="button" className="user-select-none" onClick={() => toggleSort(k)}>
-      {label}
-      {sortKey === k ? (sortDir === 'asc' ? ' \u2191' : ' \u2193') : ''}
-    </th>
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('date', {
+        id: 'date',
+        header: 'Date',
+        cell: ({ getValue }) => (
+          <span className="small">{new Date(getValue() * 1000).toLocaleString()}</span>
+        ),
+      }),
+      columnHelper.accessor('amount', {
+        id: 'amount',
+        header: 'Amount',
+        cell: ({ row }) => (
+          <span className="small">{formatMoney(row.original.amount, row.original.currency)}</span>
+        ),
+      }),
+      columnHelper.accessor('status', {
+        id: 'status',
+        header: 'Status',
+        cell: ({ getValue }) => <span className="small">{getValue()}</span>,
+      }),
+      columnHelper.accessor('customer', {
+        id: 'customer',
+        header: 'Customer',
+        cell: ({ getValue }) => (
+          <span className="small font-monospace text-truncate d-inline-block" style={{ maxWidth: 140 }}>
+            {getValue() ?? '—'}
+          </span>
+        ),
+        sortingFn: (a, b) =>
+          String(a.original.customer ?? '').localeCompare(String(b.original.customer ?? '')),
+      }),
+      columnHelper.accessor('email', {
+        id: 'email',
+        header: 'Email',
+        enableSorting: false,
+        cell: ({ getValue }) => <span className="small">{getValue() ?? '—'}</span>,
+      }),
+    ],
+    [],
   )
+
+  const table = useReactTable({
+    data: orders,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    initialState: {
+      sorting: [{ id: 'date', desc: true }],
+    },
+  })
 
   const open = (r: AdminPaymentIntentRow) => {
     navigate(ROUTE_PATHS.adminFinancePaymentPath(r.id))
@@ -92,39 +105,11 @@ const FinancePaymentsPage = () => {
         </Form.Select>
       </div>
 
-      <div className="table-responsive">
-        <Table hover size="sm" className="align-middle">
-          <thead>
-            <tr>
-              <Th k="date" label="Date" />
-              <Th k="amount" label="Amount" />
-              <Th k="status" label="Status" />
-              <Th k="customer" label="Customer" />
-              <th>Email</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((r) => (
-              <tr key={r.id} role="button" onClick={() => open(r)}>
-                <td className="small">{new Date(r.date * 1000).toLocaleString()}</td>
-                <td className="small">{formatMoney(r.amount, r.currency)}</td>
-                <td className="small">{r.status}</td>
-                <td className="small font-monospace text-truncate" style={{ maxWidth: 140 }}>
-                  {r.customer ?? '—'}
-                </td>
-                <td className="small">{r.email ?? '—'}</td>
-              </tr>
-            ))}
-            {orders.length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-center text-muted py-4">
-                  No payment intents found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </Table>
-      </div>
+      <DataTable
+        table={table}
+        onRowClick={open}
+        emptyMessage="No payment intents found."
+      />
     </div>
   )
 }

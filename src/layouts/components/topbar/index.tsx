@@ -5,6 +5,7 @@ import LanguageDropdown from '@/layouts/components/topbar/components/LanguageDro
 import AdminAreaNav from '@/layouts/components/topbar/components/AdminAreaNav'
 import MessageDropdown from '@/layouts/components/topbar/components/MessageDropdown'
 import ThemeToggler from '@/layouts/components/topbar/components/ThemeToggler'
+import ImpersonationExitButton from '@/layouts/components/topbar/components/ImpersonationExitButton'
 import UserProfile from '@/layouts/components/topbar/components/UserProfile'
 
 import {Link} from "react-router";
@@ -84,6 +85,8 @@ const Topbar = () => {
           <FullscreenToggle />
 
           <MonochromeThemeModeToggler />
+
+          <ImpersonationExitButton />
 
           <UserProfile />
 

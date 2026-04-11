@@ -1,4 +1,5 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
+import { ContactSupportButton } from '@/components/support/ContactSupportButton';
 import { TabNavLabel } from '@/components/TabNavLabel';
 import { ROUTE_PATHS } from '@/config/routePaths';
 import {
@@ -260,13 +261,22 @@ const SiteExtensionDetailPage = () => {
     <Container fluid>
       <PageBreadcrumb title={displayName} subtitle="Sites" />
 
-      <div className="mb-3">
+      <div className="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
         <Link
           to={`${ROUTE_PATHS.siteDetailPath(site.$id)}?tab=${backListTab}`}
           className="btn btn-link p-0 text-decoration-none"
         >
           ← Back to site · {site.siteName?.trim() || 'Site'}
         </Link>
+        <ContactSupportButton
+          category="site_manager"
+          context={{
+            siteId: site.$id,
+            siteName: site.siteName ?? undefined,
+            sourceLabel: `${kind === 'plugin' ? 'Plugin' : 'Theme'} on site`,
+            ...(kind === 'plugin' ? { pluginId: extensionKey } : { themeId: extensionKey }),
+          }}
+        />
       </div>
 
       <Row className="justify-content-center">

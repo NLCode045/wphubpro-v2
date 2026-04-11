@@ -1,18 +1,22 @@
 const sdk = require("node-appwrite");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { mergedEnv, createStripeFromReq } = require("../lib/stripeClient");
 
 module.exports = async ({ req, res, log, error }) => {
+  const env = mergedEnv(req);
+  const stripe = createStripeFromReq(req);
   const client = new sdk.Client();
   const databases = new sdk.Databases(client);
 
-  const {
-    APPWRITE_ENDPOINT,
-    APPWRITE_PROJECT_ID,
-    APPWRITE_API_KEY,
-    STRIPE_SECRET_KEY,
-    DATABASE_ID,
-    ACCOUNTS_COLLECTION_ID,
-  } = process.env;
+  const STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
+  const APPWRITE_ENDPOINT =
+    env.APPWRITE_ENDPOINT ||
+    env.APPWRITE_FUNCTION_ENDPOINT ||
+    env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID = env.APPWRITE_PROJECT_ID || env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    env.APPWRITE_API_KEY || env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_KEY;
+  const DATABASE_ID = env.APPWRITE_DATABASE_ID || env.DATABASE_ID;
+  const ACCOUNTS_COLLECTION_ID = env.APPWRITE_ACCOUNTS_COLLECTION_ID || env.ACCOUNTS_COLLECTION_ID;
 
   const missingVars = [];
   if (!APPWRITE_ENDPOINT) missingVars.push("APPWRITE_ENDPOINT");
@@ -28,11 +32,19 @@ module.exports = async ({ req, res, log, error }) => {
     return res.json({ error: errorMsg }, 500);
   }
 
+  if (!stripe) {
+    error("Missing STRIPE_SECRET_KEY");
+    return res.json({ error: "Missing STRIPE_SECRET_KEY" }, 500);
+  }
+
   client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
 
   try {
     // Get user ID from environment
-    let userId = process.env.APPWRITE_FUNCTION_USER_ID || req.headers["x-appwrite-user-id"];
+    let userId =
+      env.APPWRITE_FUNCTION_USER_ID ||
+      req.headers?.["x-appwrite-user-id"] ||
+      req.headers?.["X-Appwrite-User-Id"];
 
     log("User ID: " + userId);
 

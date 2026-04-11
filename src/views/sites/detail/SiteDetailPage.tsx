@@ -1,4 +1,5 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb.tsx';
+import { ContactSupportButton } from '@/components/support/ContactSupportButton';
 import { TabNavLabel } from '@/components/TabNavLabel';
 import { useNotificationContext } from '@/context/useNotificationContext';
 import { useFetchSiteMetaIfNeeded, useSite, useRequestSiteHealthRefresh, useSitesStatusPoll } from '@/domains/sites';
@@ -301,6 +302,15 @@ const SiteDetailPage = () => {
                         );
                       })}
                     </Nav>
+                    <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                    <ContactSupportButton
+                      category="site_manager"
+                      context={{
+                        siteId: site.$id,
+                        siteName: site.siteName ?? undefined,
+                        sourceLabel: `Site: ${site.siteName?.trim() || site.$id}`,
+                      }}
+                    />
                     <Button
                       type="button"
                       variant="light"
@@ -333,6 +343,7 @@ const SiteDetailPage = () => {
                     >
                       <TbStethoscope className="fs-lg" aria-hidden />
                     </Button>
+                    </div>
                   </div>
                 </CardBody>
                 <CardBody className="pt-4 pb-4">

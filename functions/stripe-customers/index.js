@@ -2,13 +2,26 @@ const sdk = require("node-appwrite");
 const Stripe = require("stripe");
 
 module.exports = async ({ req, res, log, error }) => {
+  const _m = (req.method || "POST").toString().toUpperCase();
+  const _p = (req.path || req.url || "").split("?")[0];
+  if (_m === "POST" && typeof _p === "string" && _p.includes("errors/not-found")) {
+    return res.json({ success: true }, 200);
+  }
+
   const client = new sdk.Client();
   const databases = new sdk.Databases(client);
 
-  const env = req?.variables || process.env;
-  const APPWRITE_ENDPOINT = env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = env.APPWRITE_API_KEY;
+  const env = {
+    ...process.env,
+    ...(req?.variables && typeof req.variables === 'object' ? req.variables : {}),
+  };
+  const APPWRITE_ENDPOINT =
+    env.APPWRITE_ENDPOINT ||
+    env.APPWRITE_FUNCTION_ENDPOINT ||
+    env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID = env.APPWRITE_PROJECT_ID || env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    env.APPWRITE_API_KEY || env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_KEY;
   const STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
   const DATABASE_ID = env.APPWRITE_DATABASE_ID || env.DATABASE_ID;
   const ACCOUNTS_COLLECTION_ID = env.ACCOUNTS_COLLECTION_ID; // pragma: allowlist secret

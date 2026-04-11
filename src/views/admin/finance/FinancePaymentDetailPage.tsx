@@ -59,14 +59,14 @@ const FinancePaymentDetailPage = () => {
         </dd>
       </dl>
 
-      {pi.last_payment_error && (
+      {pi.last_payment_error != null ? (
         <div className="alert alert-warning small">
           <strong>Last payment error</strong>
           <pre className="mb-0 mt-2 small overflow-auto">
             {JSON.stringify(pi.last_payment_error, null, 2)}
           </pre>
         </div>
-      )}
+      ) : null}
 
       {ch && (
         <>

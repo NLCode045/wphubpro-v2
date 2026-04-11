@@ -14,9 +14,20 @@ function parsePayload(req) {
 
 async function handleListInvoices(req, res, log, error) {
   const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    req.variables?.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    req.variables?.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    req.variables?.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const userId =
     req.variables?.APPWRITE_FUNCTION_USER_ID ||
     req.variables?.APPWRITE_USER_ID ||
@@ -82,9 +93,20 @@ async function handleListInvoices(req, res, log, error) {
 }
 
 async function resolveUserStripeCustomerId(req) {
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    req.variables?.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    req.variables?.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    req.variables?.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const userId =
     req.variables?.APPWRITE_FUNCTION_USER_ID ||
     req.variables?.APPWRITE_USER_ID ||
@@ -308,9 +330,20 @@ async function handleAdminGetPaymentIntent(req, res, log, error) {
 
 async function handlePreparePayInvoice(req, res, log, error) {
   const STRIPE_SECRET_KEY = req.variables?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
+  const APPWRITE_ENDPOINT =
+    req.variables?.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_ENDPOINT ||
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
+  const APPWRITE_PROJECT_ID =
+    req.variables?.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_PROJECT_ID ||
+    process.env.APPWRITE_FUNCTION_PROJECT_ID;
+  const APPWRITE_API_KEY =
+    req.variables?.APPWRITE_API_KEY ||
+    process.env.APPWRITE_API_KEY ||
+    process.env.APPWRITE_FUNCTION_API_KEY ||
+    process.env.APPWRITE_KEY;
   const userId =
     req.variables?.APPWRITE_FUNCTION_USER_ID ||
     process.env.APPWRITE_FUNCTION_USER_ID ||
@@ -441,6 +474,12 @@ async function handlePreparePayInvoice(req, res, log, error) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
+  const _m = (req.method || "POST").toString().toUpperCase();
+  const _p = (req.path || req.url || "").split("?")[0];
+  if (_m === "POST" && typeof _p === "string" && _p.includes("errors/not-found")) {
+    return res.json({ success: true }, 200);
+  }
+
   try {
     const payload = parsePayload(req);
     const actionRaw = (req.query?.action || payload.action || "list-invoices").toString().toLowerCase();

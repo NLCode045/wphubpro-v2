@@ -37,7 +37,7 @@ export async function getSubscription(
 export interface CreateSubscriptionBody {
   customerId: string;
   priceId: string;
-  paymentBehavior?: Stripe.SubscriptionCreateParams['payment_behavior'];
+  paymentBehavior?: St.Stripe.SubscriptionCreateParams['payment_behavior'];
 }
 
 export interface UpdateSubscriptionBody {
@@ -50,7 +50,7 @@ export interface UpdateSubscriptionBody {
  */
 export async function createSubscription(
   body: CreateSubscriptionBody,
-): Promise<Stripe.Response<Stripe.Subscription>> {
+): Promise<St.Stripe.Response<St.Stripe.Subscription>> {
   const stripe = getStripeFromEnv();
   return stripe.subscriptions.create({
     customer: body.customerId,

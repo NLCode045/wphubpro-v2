@@ -1,8 +1,10 @@
 import clsx from 'clsx';
 
+import type { StripePaymentMethod } from '@/types/stripe';
+
 export interface PaymentMethodProps {
   /** Expanded `default_payment_method` from Subscription or dedicated PM fetch. */
-  paymentMethod: Record<string, unknown> | string | null;
+  paymentMethod: Record<string, unknown> | string | StripePaymentMethod | null;
   className?: string;
 }
 

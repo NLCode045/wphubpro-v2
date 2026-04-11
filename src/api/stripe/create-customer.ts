@@ -64,17 +64,15 @@ export async function createStripeCustomerAndSavePrefs(
     }
   }
 
-  const customer = await stripe.customers.create(
-    {
-      email: params.email,
-      name: params.name,
-      metadata: {
-        appwrite_user_id: params.userId,
-        ...params.metadata,
-      },
+  const customer = await stripe.customers.create({
+    email: params.email,
+    name: params.name,
+    metadata: {
+      appwrite_user_id: params.userId,
+      ...params.metadata,
     },
-    { expand: ['invoice_settings.default_payment_method'] },
-  );
+    expand: ['invoice_settings.default_payment_method'],
+  });
 
   await users.updatePrefs({
     userId: params.userId,

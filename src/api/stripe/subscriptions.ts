@@ -51,14 +51,12 @@ export async function createSubscription(
   body: CreateSubscriptionBody,
 ): Promise<Stripe.Response<Stripe.Subscription>> {
   const stripe = getStripeFromEnv();
-  return stripe.subscriptions.create(
-    {
-      customer: body.customerId,
-      items: [{ price: body.priceId }],
-      payment_behavior: body.paymentBehavior ?? 'default_incomplete',
-    },
-    { expand: SUBSCRIPTION_EXPAND },
-  );
+  return stripe.subscriptions.create({
+    customer: body.customerId,
+    items: [{ price: body.priceId }],
+    payment_behavior: body.paymentBehavior ?? 'default_incomplete',
+    expand: SUBSCRIPTION_EXPAND,
+  });
 }
 
 /**
@@ -76,12 +74,9 @@ export async function updateSubscriptionPrice(
     throw new Error('Subscription has no line items to update');
   }
 
-  return stripe.subscriptions.update(
-    body.subscriptionId,
-    {
-      items: [{ id: itemId, price: body.priceId }],
-      proration_behavior: 'create_prorations',
-    },
-    { expand: SUBSCRIPTION_EXPAND },
-  );
+  return stripe.subscriptions.update(body.subscriptionId, {
+    items: [{ id: itemId, price: body.priceId }],
+    proration_behavior: 'create_prorations',
+    expand: SUBSCRIPTION_EXPAND,
+  });
 }

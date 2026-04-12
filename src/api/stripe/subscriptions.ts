@@ -71,9 +71,12 @@ export async function updateSubscriptionPrice(
   body: UpdateSubscriptionBody,
 ): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['update']>>> {
   const stripe = getStripeFromEnv();
-  const current = await stripe.subscriptions.retrieve(body.subscriptionId, {
-    expand: ['items.data.price'],
-  });
+  const current: Stripe.Subscription = await stripe.subscriptions.retrieve(
+    body.subscriptionId,
+    {
+      expand: ['items.data.price'],
+    },
+  );
   const itemId = current.items.data[0]?.id;
   if (!itemId) {
     throw new Error('Subscription has no line items to update');

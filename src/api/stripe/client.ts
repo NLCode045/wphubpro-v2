@@ -1,11 +1,10 @@
 /**
  * Server-only — Stripe secret must never ship to the browser. Do not import from React components.
  */
-import type * as StripeTypes from 'stripe';
 import Stripe from 'stripe';
 
 /** Typed server config; extends Stripe SDK options for a single source of truth. */
-export interface StripeServerConfig extends StripeTypes.Stripe.StripeConfig {
+export interface StripeServerConfig extends Stripe.StripeConfig {
   typescript: true;
 }
 

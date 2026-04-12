@@ -3,7 +3,7 @@
  */
 import type { StripePlan as AdminStripePlanRow } from '@/types';
 import type { StripePlan as ProductPricePlan } from '@/types/stripe';
-import type * as StripeTypes from 'stripe';
+import Stripe from 'stripe';
 
 import { getStripeFromEnv } from './client';
 
@@ -31,8 +31,8 @@ export type AdminPlanDetailPayload = {
 };
 
 function buildPlanFromProduct(
-  product: StripeTypes.Stripe.Product,
-  pricesData: StripeTypes.Stripe.Price[],
+  product: Stripe.Product,
+  pricesData: Stripe.Price[],
 ): AdminStripePlanRow {
   const metadata = Object.entries(product.metadata || {}).map(([key, value]) => ({
     key,

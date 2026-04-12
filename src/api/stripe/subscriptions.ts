@@ -8,13 +8,14 @@ import { getStripeFromEnv } from './client';
 
 type StripeInstance = InstanceType<typeof StripeNode>;
 
-const SUBSCRIPTION_EXPAND = [
+/** Stripe `expand` expects `string[]`, not a readonly tuple (TS4104). */
+const SUBSCRIPTION_EXPAND: string[] = [
   'latest_invoice',
   'latest_invoice.payment_intent',
   'items.data.price.product',
   'default_payment_method',
   'customer',
-] as const;
+];
 
 /**
  * Live subscriptions for a Stripe customer id (from Appwrite `prefs.stripe_customer_id`).
@@ -35,7 +36,7 @@ export async function listSubscriptionsForCustomer(
 export async function getSubscription(subscriptionId: string): Promise<StripeSubscription> {
   const stripe = getStripeFromEnv();
   return (await stripe.subscriptions.retrieve(subscriptionId, {
-    expand: [...SUBSCRIPTION_EXPAND],
+    expand: SUBSCRIPTION_EXPAND,
   })) as StripeSubscription;
 }
 

@@ -197,7 +197,7 @@ export const useSubscription = (ctx?: BillingAccountContext) => {
         const responseBody = await postStripeJsonAuthed<Record<string, unknown>>('/user-billing', {
           action: 'get-subscription',
         });
-        if (responseBody && responseBody.status !== 'canceled') {
+        if (responseBody && responseBody['status'] !== 'canceled') {
           const b = responseBody as Record<string, unknown>;
           return {
             ...responseBody,

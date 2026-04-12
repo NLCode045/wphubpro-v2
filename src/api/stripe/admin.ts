@@ -88,62 +88,62 @@ export async function getStripeAdminDashboardStats(): Promise<StripeAdminDashboa
   let livePayments24h = 0;
   let piCursor: string | undefined;
   for (let p = 0; p < 5; p++) {
-    const page = await stripe.paymentIntents.list({
+    const piPage24h = await stripe.paymentIntents.list({
       limit: 100,
       created: { gte: dayAgo },
       starting_after: piCursor,
     });
-    for (const pi of page.data) {
+    for (const pi of piPage24h.data) {
       if (pi.status === 'succeeded') livePayments24h += 1;
     }
-    if (!page.has_more || page.data.length === 0) break;
-    piCursor = page.data[page.data.length - 1].id;
+    if (!piPage24h.has_more || piPage24h.data.length === 0) break;
+    piCursor = piPage24h.data[piPage24h.data.length - 1].id;
   }
 
   let totalSubscriptions = 0;
   let subCursor: string | undefined;
   for (let p = 0; p < 15; p++) {
-    const page = await stripe.subscriptions.list({
+    const subPage = await stripe.subscriptions.list({
       status: 'all',
       limit: 100,
       starting_after: subCursor,
     });
-    totalSubscriptions += page.data.length;
-    if (!page.has_more || page.data.length === 0) break;
-    subCursor = page.data[page.data.length - 1].id;
+    totalSubscriptions += subPage.data.length;
+    if (!subPage.has_more || subPage.data.length === 0) break;
+    subCursor = subPage.data[subPage.data.length - 1].id;
   }
 
   const sevenDaysAgo = now - 7 * 86400;
   let recentFailedPaymentIntents7d = 0;
-  piCursor = undefined;
+  let failedPiCursor: string | undefined;
   for (let p = 0; p < 5; p++) {
-    const page = await stripe.paymentIntents.list({
+    const failedPiPage = await stripe.paymentIntents.list({
       limit: 100,
       created: { gte: sevenDaysAgo },
-      starting_after: piCursor,
+      starting_after: failedPiCursor,
     });
-    for (const pi of page.data) {
+    for (const pi of failedPiPage.data) {
       if (pi.last_payment_error || pi.status === 'requires_payment_method') recentFailedPaymentIntents7d += 1;
     }
-    if (!page.has_more || page.data.length === 0) break;
-    piCursor = page.data[page.data.length - 1].id;
+    if (!failedPiPage.has_more || failedPiPage.data.length === 0) break;
+    failedPiCursor = failedPiPage.data[failedPiPage.data.length - 1].id;
   }
 
   const thirtyDaysAgo = now - 30 * 86400;
   let revenueFromLast30PaidInvoicesCents = 0;
   let invCursor: string | undefined;
   for (let p = 0; p < 10; p++) {
-    const page = await stripe.invoices.list({
+    const paidInvPage = await stripe.invoices.list({
       status: 'paid',
       created: { gte: thirtyDaysAgo },
       limit: 100,
       starting_after: invCursor,
     });
-    for (const inv of page.data) {
+    for (const inv of paidInvPage.data) {
       revenueFromLast30PaidInvoicesCents += inv.amount_paid ?? 0;
     }
-    if (!page.has_more || page.data.length === 0) break;
-    invCursor = page.data[page.data.length - 1].id;
+    if (!paidInvPage.has_more || paidInvPage.data.length === 0) break;
+    invCursor = paidInvPage.data[paidInvPage.data.length - 1].id;
   }
 
   return {

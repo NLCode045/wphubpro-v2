@@ -2,6 +2,8 @@
  * Server-only — admin payment intent list/detail (Stripe SDK).
  */
 import type { AdminPaymentIntentDetail, AdminPaymentIntentRow } from '@/domains/admin/finance/types';
+import type { StripePaymentIntent } from '@/types/stripe';
+
 import { getStripeFromEnv } from './client';
 
 export async function listAdminPaymentIntentRows(params: {
@@ -9,18 +11,21 @@ export async function listAdminPaymentIntentRows(params: {
   customer?: string;
   status?: string;
 }): Promise<{ orders: AdminPaymentIntentRow[] }> {
-  const stripeClient = getStripeFromEnv() as any;
+  const stripeClient = getStripeFromEnv();
   const lim = Math.min(Math.max(params.limit ?? 50, 1), 100);
-  /** Stripe v17+ list params omit `status`; filter after fetch when needed. */
+  /** Stripe v17+ `PaymentIntentListParams` has no `status` — filter results after list. */
   const list = await stripeClient.paymentIntents.list({
     limit: lim,
     customer: params.customer,
     expand: ['data.customer', 'data.invoice'],
   });
 
-  const data = params.status ? list.data.filter((pi: any) => pi.status === params.status) : list.data;
+  const listData = list.data as StripePaymentIntent[];
+  const data = params.status
+    ? listData.filter((pi: StripePaymentIntent) => pi.status === params.status)
+    : listData;
 
-  const orders: AdminPaymentIntentRow[] = data.map((pi: any) => {
+  const orders: AdminPaymentIntentRow[] = data.map((pi: StripePaymentIntent) => {
     const cust = pi.customer;
     const customer = typeof cust === 'string' ? cust : cust && 'id' in cust ? cust.id : null;
     let email: string | null = null;
@@ -56,7 +61,7 @@ export async function listAdminPaymentIntentRows(params: {
 }
 
 export async function getAdminPaymentIntentDetail(paymentIntentId: string): Promise<AdminPaymentIntentDetail> {
-  const stripeClient = getStripeFromEnv() as any;
+  const stripeClient = getStripeFromEnv();
   const pi = await stripeClient.paymentIntents.retrieve(paymentIntentId, {
     expand: ['customer', 'latest_charge', 'invoice'],
   });

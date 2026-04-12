@@ -6,7 +6,7 @@ import { createApiLogger } from '../appwrite/logger';
 import { getAppwriteServerEnv } from '../appwrite/serverEnv';
 import { requireAuthenticatedUser } from '../appwrite/userSession';
 import { assertBodySizeWithinLimit } from './validate';
-import { runWpProxy, type WpProxyRequestBody } from './wpProxy';
+import { runWpProxyForUser, type WpProxyRequestBody } from './wpProxy';
 
 function normalizeBridgePath(pathname: string): string {
   let p = pathname.trim() || '/';
@@ -56,7 +56,7 @@ export async function handleBridgeRequest(input: {
       throw new ApiError(400, 'INVALID_JSON', 'Invalid JSON body');
     }
 
-    const { status, json } = await runWpProxy({ userId, payload, log });
+    const { status, json } = await runWpProxyForUser(userId, payload);
     return jsonResponse(json, status);
   } catch (e) {
     log.error('bridge handler error', {

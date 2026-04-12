@@ -1,5 +1,7 @@
 import { loadStripe, type Stripe as StripeJs } from '@stripe/stripe-js';
 
+import { account } from '@/services/appwrite';
+
 /** Proxied REST base (`vite` → backend). */
 export const STRIPE_API_BASE = '/api/stripe' as const;
 
@@ -88,6 +90,44 @@ export async function patchStripeJson<T>(path: string, body: unknown): Promise<T
   return fetchStripeJson<T>(path, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function jwtAuthHeader(): Promise<Record<string, string>> {
+  const jwtRes = await account.createJWT();
+  const jwt = typeof jwtRes === 'string' ? jwtRes : (jwtRes as { jwt?: string }).jwt ?? '';
+  if (!jwt) return {};
+  return { Authorization: `Bearer ${jwt}` };
+}
+
+/**
+ * Same as `fetchStripeJson` but sends `Authorization: Bearer` from `account.createJWT()` (API host verifies user).
+ */
+export async function fetchStripeJsonAuthed<T>(path: string, init?: RequestInit): Promise<T> {
+  const auth = await jwtAuthHeader();
+  return fetchStripeJson<T>(path, {
+    ...init,
+    headers: {
+      ...auth,
+      ...init?.headers,
+    },
+  });
+}
+
+/**
+ * POST JSON with Appwrite JWT — for `/api/stripe/user-billing` and other user-scoped routes.
+ */
+export async function postStripeJsonAuthed<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
+  const auth = await jwtAuthHeader();
+  return fetchStripeJson<T>(path, {
+    ...init,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...auth,
+      ...init?.headers,
+    },
     body: JSON.stringify(body),
   });
 }

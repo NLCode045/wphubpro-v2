@@ -26,9 +26,6 @@
     "paths": {
       "@/*": [
         "src/*"
-      ],
-      "stripe": [
-        "./src/shims/stripe"
       ]
     }
   },

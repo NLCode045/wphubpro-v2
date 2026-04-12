@@ -8,6 +8,7 @@ import {
   databases,
   DATABASE_ID,
 } from '../../services/appwrite';
+import { postBridgeApiJsonWithMeta } from '@/lib/platform-api';
 import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
 import type {
   HealthAiDryRunAnalyzeResponse,
@@ -44,8 +45,6 @@ const STATUS_POLL_INTERVAL_MS = 60_000;
 const SITE_HEARTBEAT_POKE_FUNCTION_ID = 'site-heartbeat-poke';
 
 const HEALTH_AI_AGENT_FUNCTION_ID = APPWRITE_FUNCTION_IDS.HEALTH_AI_AGENT;
-
-const WP_PROXY_FUNCTION_ID = APPWRITE_FUNCTION_IDS.WP_PROXY;
 
 function jwtFromCreateResponse(jwtRes: unknown): string {
   if (typeof jwtRes === 'string') return jwtRes;
@@ -103,22 +102,28 @@ export const useRequestSiteHealthRefresh = () => {
 
   return useMutation<{ message: string }, Error, string>({
     mutationFn: async (siteId: string) => {
-      const { statusCode, data } = await executeFunctionWithMeta<Record<string, unknown>>(
-        WP_PROXY_FUNCTION_ID,
+      const { statusCode, data } = await postBridgeApiJsonWithMeta<Record<string, unknown>>(
+        '/wp-proxy',
         {
           siteId,
           endpoint: 'wphubpro/v1/health/push',
           method: 'POST',
           body: {},
         },
-        { throwOnHttpError: false, longRunning: true, maxAsyncWaitMs: 120_000 },
+        { timeoutMs: 120_000, throwOnHttpError: false },
       );
       if (statusCode < 200 || statusCode >= 300) {
         const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+        const nested =
+          raw.error && typeof raw.error === 'object'
+            ? (raw.error as { message?: string }).message
+            : undefined;
         const msg =
-          typeof raw.message === 'string' && raw.message.trim()
+          (typeof raw.message === 'string' && raw.message.trim()
             ? raw.message.trim()
-            : `Request failed (${statusCode})`;
+            : typeof nested === 'string' && nested.trim()
+              ? nested.trim()
+              : null) ?? `Request failed (${statusCode})`;
         throw new Error(msg);
       }
       const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};

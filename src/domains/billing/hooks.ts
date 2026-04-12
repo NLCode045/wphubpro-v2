@@ -13,16 +13,8 @@ import type {
   SubscriptionDetailsResponse,
 } from '@/types';
 import { useAuth } from '@/domains/auth';
-import { executeFunction } from '@/integrations/appwrite/executeFunction';
-import { APPWRITE_FUNCTION_IDS, COLLECTIONS, DATABASE_ID, databases } from '@/services/appwrite';
-
-const STRIPE_LIST_PRODUCTS_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_PRODUCTS;
-const STRIPE_CREATE_CHECKOUT_SESSION_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_ORDER_PAYMENTS;
-const STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS;
-const LIST_INVOICES_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_INVOICES;
-const GET_SUBSCRIPTION_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_SUBSCRIPTIONS;
-const STRIPE_PAYMENT_METHODS_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_PAYMENT_METHODS;
-const STRIPE_CREATE_CUSTOMER_FUNCTION_ID = APPWRITE_FUNCTION_IDS.STRIPE_CREATE_CUSTOMER;
+import { postStripeJsonAuthed } from '@/lib/stripe-loader';
+import { COLLECTIONS, DATABASE_ID, databases } from '@/services/appwrite';
 
 /** Pass from profile after `useMyAccountDoc` resolves to avoid duplicate account reads and unnecessary Stripe calls. */
 export type BillingAccountContext = {
@@ -62,8 +54,8 @@ export const useInvoices = (ctx?: BillingAccountContext) => {
     queryKey: ['invoices', user?.$id, ctx?.stripeCustomerId],
     queryFn: async () => {
       if (!user) return [];
-      const result = await executeFunction<{ invoices: StripeInvoice[] }>(LIST_INVOICES_FUNCTION_ID, {
-        stripeScope: 'invoices',
+      const result = await postStripeJsonAuthed<{ invoices: StripeInvoice[] }>('/user-billing', {
+        action: 'list-invoices',
       });
       return result?.invoices ?? [];
     },
@@ -83,8 +75,8 @@ export const useStripePlans = (ctx?: BillingAccountContext, options?: UseStripeP
   return useQuery<StripePlan[], Error>({
     queryKey: ['stripePlans', user?.$id, ctx?.stripeCustomerId, listAll],
     queryFn: async () => {
-      const response = await executeFunction<{ plans: StripePlan[] }>(STRIPE_LIST_PRODUCTS_FUNCTION_ID, {
-        action: 'list',
+      const response = await postStripeJsonAuthed<{ plans: StripePlan[] }>('/user-billing', {
+        action: 'list-plans',
         exclude_hidden: !listAll,
         exclude_non_sellable: !listAll,
       });
@@ -111,15 +103,13 @@ export const useCreateCheckoutSession = () => {
   >({
     mutationFn: async ({ priceId, returnUrl, updateType, paymentMethodId }) => {
       const baseUrl = returnUrl ?? window.location.origin;
-      const result = await executeFunction<CheckoutSessionResult>(
-        STRIPE_CREATE_CHECKOUT_SESSION_FUNCTION_ID,
-        {
-          priceId,
-          returnUrl: baseUrl,
-          updateType,
-          ...(paymentMethodId ? { paymentMethodId } : {}),
-        }
-      );
+      const result = await postStripeJsonAuthed<CheckoutSessionResult>('/user-billing', {
+        action: 'create-checkout-session',
+        priceId,
+        returnUrl: baseUrl,
+        updateType,
+        ...(paymentMethodId ? { paymentMethodId } : {}),
+      });
       return result ?? {};
     },
     onSuccess: (data) => {
@@ -153,8 +143,8 @@ export const useCancelSubscription = () => {
   const notify = useBillingNotify();
   return useMutation<CancelSubscriptionResult, Error, void>({
     mutationFn: async () => {
-      return await executeFunction<CancelSubscriptionResult>(STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID, {
-        action: 'cancel',
+      return await postStripeJsonAuthed<CancelSubscriptionResult>('/user-billing', {
+        action: 'cancel-subscription',
       });
     },
     onSuccess: (data) => {
@@ -204,8 +194,8 @@ export const useSubscription = (ctx?: BillingAccountContext) => {
       if (!stripeCustomerId) return null;
 
       try {
-        const responseBody = await executeFunction<Record<string, unknown>>(GET_SUBSCRIPTION_FUNCTION_ID, {
-          action: 'get',
+        const responseBody = await postStripeJsonAuthed<Record<string, unknown>>('/user-billing', {
+          action: 'get-subscription',
         });
         if (responseBody && responseBody.status !== 'canceled') {
           const b = responseBody as Record<string, unknown>;
@@ -251,9 +241,9 @@ export const useStripeCustomerProfile = (
   return useQuery<StripeCustomerBilling | null, Error>({
     queryKey: ['stripeCustomerProfile', user?.$id, ctx?.stripeCustomerId],
     queryFn: async () => {
-      const result = await executeFunction<{ success?: boolean; customer?: StripeCustomerBilling }>(
-        STRIPE_PAYMENT_METHODS_FUNCTION_ID,
-        { action: 'get-customer' }
+      const result = await postStripeJsonAuthed<{ success?: boolean; customer?: StripeCustomerBilling }>(
+        '/user-billing',
+        { action: 'get-customer' },
       );
       return result?.customer ?? null;
     },
@@ -276,10 +266,10 @@ export const usePaymentMethods = (ctx?: BillingAccountContext) => {
       if (!user) {
         return { paymentMethods: [], defaultPaymentMethodId: null };
       }
-      const result = await executeFunction<{
+      const result = await postStripeJsonAuthed<{
         paymentMethods: StripePaymentMethod[];
         defaultPaymentMethodId?: string | null;
-      }>(STRIPE_PAYMENT_METHODS_FUNCTION_ID, { action: 'list' });
+      }>('/user-billing', { action: 'list-payment-methods' });
       return {
         paymentMethods: result?.paymentMethods ?? [],
         defaultPaymentMethodId: result?.defaultPaymentMethodId ?? null,
@@ -295,10 +285,9 @@ export const useCreateSetupIntent = () => {
   const notify = useBillingNotify();
   return useMutation<{ clientSecret: string }, Error, void>({
     mutationFn: async () => {
-      const result = await executeFunction<{ clientSecret: string }>(
-        STRIPE_PAYMENT_METHODS_FUNCTION_ID,
-        { action: 'create-setup-intent' }
-      );
+      const result = await postStripeJsonAuthed<{ clientSecret: string }>('/user-billing', {
+        action: 'create-setup-intent',
+      });
       if (!result?.clientSecret) throw new Error('No client secret returned');
       return { clientSecret: result.clientSecret };
     },
@@ -316,8 +305,8 @@ export const useAttachPaymentMethod = () => {
   const notify = useBillingNotify();
   return useMutation<void, Error, { paymentMethodId: string; setAsDefault?: boolean }>({
     mutationFn: async ({ paymentMethodId, setAsDefault }) => {
-      await executeFunction(STRIPE_PAYMENT_METHODS_FUNCTION_ID, {
-        action: 'attach',
+      await postStripeJsonAuthed('/user-billing', {
+        action: 'attach-payment-method',
         paymentMethodId,
         setAsDefault: setAsDefault ?? true,
       });
@@ -339,7 +328,7 @@ export const useDetachPaymentMethod = () => {
   const notify = useBillingNotify();
   return useMutation<void, Error, string>({
     mutationFn: async (paymentMethodId) => {
-      await executeFunction(STRIPE_PAYMENT_METHODS_FUNCTION_ID, { action: 'detach', paymentMethodId });
+      await postStripeJsonAuthed('/user-billing', { action: 'detach-payment-method', paymentMethodId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['paymentMethods'] });
@@ -358,7 +347,7 @@ export const useSetDefaultPaymentMethod = () => {
   const notify = useBillingNotify();
   return useMutation<void, Error, string>({
     mutationFn: async (paymentMethodId) => {
-      await executeFunction(STRIPE_PAYMENT_METHODS_FUNCTION_ID, { action: 'set-default', paymentMethodId });
+      await postStripeJsonAuthed('/user-billing', { action: 'set-default-payment-method', paymentMethodId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['paymentMethods'] });
@@ -381,8 +370,8 @@ export const useSubscriptionDetails = (
     queryKey: ['subscriptionDetails', user?.$id, subscriptionId, ctx?.stripeCustomerId],
     queryFn: async () => {
       if (!subscriptionId) throw new Error('No subscription ID');
-      return await executeFunction<SubscriptionDetailsResponse>(GET_SUBSCRIPTION_FUNCTION_ID, {
-        action: 'get-details',
+      return await postStripeJsonAuthed<SubscriptionDetailsResponse>('/user-billing', {
+        action: 'get-subscription-details',
         subscriptionId,
       });
     },
@@ -399,7 +388,7 @@ export const usePreviewProration = () => {
     { subscriptionId: string; newPriceId: string }
   >({
     mutationFn: async ({ subscriptionId, newPriceId }) => {
-      return await executeFunction<StripeProrationPreviewResponse>(GET_SUBSCRIPTION_FUNCTION_ID, {
+      return await postStripeJsonAuthed<StripeProrationPreviewResponse>('/user-billing', {
         action: 'preview-proration',
         subscriptionId,
         newPriceId,
@@ -416,7 +405,7 @@ export const usePreparePayInvoice = () => {
   const notify = useBillingNotify();
   return useMutation<PreparePayInvoiceResponse, Error, { invoiceId: string }>({
     mutationFn: async ({ invoiceId }) => {
-      return await executeFunction<PreparePayInvoiceResponse>(LIST_INVOICES_FUNCTION_ID, {
+      return await postStripeJsonAuthed<PreparePayInvoiceResponse>('/user-billing', {
         action: 'prepare-pay-invoice',
         invoiceId,
       });
@@ -447,7 +436,7 @@ export const useUpdateBillingDetails = () => {
   const notify = useBillingNotify();
   return useMutation<void, Error, UpdateBillingDetailsPayload>({
     mutationFn: async (body) => {
-      await executeFunction(STRIPE_PAYMENT_METHODS_FUNCTION_ID, {
+      await postStripeJsonAuthed('/user-billing', {
         action: 'update-customer',
         ...body,
       });
@@ -476,8 +465,8 @@ export const useEnsureStripeCustomer = () => {
   const { user } = useAuth();
   return useMutation<EnsureStripeCustomerResult, Error, void>({
     mutationFn: async () => {
-      return await executeFunction<EnsureStripeCustomerResult>(STRIPE_CREATE_CUSTOMER_FUNCTION_ID, {
-        action: 'ensure',
+      return await postStripeJsonAuthed<EnsureStripeCustomerResult>('/user-billing', {
+        action: 'ensure-customer',
       });
     },
     onSuccess: (data) => {
@@ -502,10 +491,10 @@ export const useCancelScheduledPlanChange = () => {
     { scheduleId?: string; subscriptionId?: string }
   >({
     mutationFn: async (payload) => {
-      return await executeFunction<{ success: boolean; scheduleId?: string }>(
-        STRIPE_CANCEL_SUBSCRIPTION_FUNCTION_ID,
-        { action: 'cancel-schedule-update', ...payload }
-      );
+      return await postStripeJsonAuthed<{ success: boolean; scheduleId?: string }>('/user-billing', {
+        action: 'cancel-schedule-update',
+        ...payload,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscription'] });

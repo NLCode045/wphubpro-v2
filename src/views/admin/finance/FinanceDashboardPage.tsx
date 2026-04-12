@@ -2,7 +2,6 @@ import CustomChartJs from '@/components/CustomChartJs'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useFinanceDashboard } from '@/domains/admin/finance/hooks'
 import type { FinanceDashboardPeriod } from '@/domains/admin/finance/types'
-import { AppwriteFunctionError } from '@/integrations/appwrite/errors'
 import { getColor } from '@/helpers/color'
 import type { ChartJSOptionsType } from '@/types'
 import {
@@ -158,15 +157,14 @@ const FinanceDashboardPage = () => {
   }
 
   if (error || !data) {
-    const hint =
-      error instanceof AppwriteFunctionError &&
-      (String(error.message).includes('Invalid') || String(error.rawBody).includes('admin-finance-dashboard'))
-        ? ' Deploy the latest `stripe-consumer` Appwrite function so it includes the `admin-finance-dashboard` action.'
-        : ''
     return (
       <div className="border border-danger border-opacity-25 rounded p-3 bg-danger-subtle">
         <p className="text-danger mb-1 fw-semibold">Could not load finance dashboard</p>
-        <p className="text-danger small mb-0">{error?.message ?? 'Unknown error.'}{hint}</p>
+        <p className="text-danger small mb-0">
+          {error?.message ?? 'Unknown error.'} Ensure the API host implements{' '}
+          <code className="small">GET /api/stripe/admin/finance-dashboard</code> and{' '}
+          <code className="small">STRIPE_SECRET_KEY</code> is set server-side.
+        </p>
       </div>
     )
   }
@@ -176,8 +174,8 @@ const FinanceDashboardPage = () => {
       <div className="border border-warning border-opacity-25 rounded p-3 bg-warning-subtle">
         <p className="text-warning-emphasis mb-1 fw-semibold">Incomplete dashboard response</p>
         <p className="small text-muted mb-0">
-          The function returned success but no <code className="small">stats</code>. Check the{' '}
-          <code className="small">admin-finance-dashboard</code> handler in <code className="small">stripe-gateway</code>.
+          The API returned success but no <code className="small">stats</code>. Check{' '}
+          <code className="small">getAdminFinanceDashboard</code> in <code className="small">src/api/stripe/financeDashboard.ts</code>.
         </p>
       </div>
     )

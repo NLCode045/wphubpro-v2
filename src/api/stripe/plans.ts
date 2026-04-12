@@ -2,9 +2,7 @@
  * Server-only — Stripe catalog (live). Do not import from React components.
  */
 import type { StripePlan as AdminStripePlanRow } from '@/types';
-import type { StripePlan as ProductPricePlan } from '@/types/stripe';
-import type { Stripe as StripeNs } from 'stripe';
-
+import type { StripePlan as ProductPricePlan, StripePrice, StripeProduct } from '@/types/stripe';
 import { getStripeFromEnv } from './client';
 
 export type AdminPlanDetailPayload = {
@@ -30,10 +28,7 @@ export type AdminPlanDetailPayload = {
   }>;
 };
 
-function buildPlanFromProduct(
-  product: StripeSdk.Product,
-  pricesData: StripeSdk.Price[],
-): AdminStripePlanRow {
+function buildPlanFromProduct(product: StripeProduct, pricesData: StripePrice[]): AdminStripePlanRow {
   const metadata = Object.entries(product.metadata || {}).map(([key, value]) => ({
     key,
     value: String(value),
@@ -277,6 +272,60 @@ export async function getPlanDetailForAdmin(productId: string): Promise<AdminPla
   };
 
   return { plan, stats, subscribers };
+}
+
+export async function updateAdminPlanProduct(
+  productId: string,
+  body: {
+    name?: string;
+    description?: string;
+    sites_limit?: number;
+    library_limit?: number;
+    storage_limit?: number;
+    non_sellable?: boolean;
+    hidden?: boolean;
+  },
+): Promise<StripeProduct> {
+  const stripe = getStripeFromEnv();
+  const product = await stripe.products.retrieve(productId);
+  const meta: Record<string, string> = { ...(product.metadata ?? {}) };
+  if (body.sites_limit !== undefined) meta.sites_limit = String(body.sites_limit);
+  if (body.library_limit !== undefined) meta.library_limit = String(body.library_limit);
+  if (body.storage_limit !== undefined) meta.storage_limit = String(body.storage_limit);
+  if (body.non_sellable !== undefined) meta.non_sellable = body.non_sellable ? 'true' : 'false';
+  if (body.hidden !== undefined) meta.hidden = body.hidden ? 'true' : 'false';
+
+  return stripe.products.update(productId, {
+    name: body.name ?? product.name,
+    description: body.description !== undefined ? body.description : product.description ?? undefined,
+    metadata: meta,
+  });
+}
+
+export async function setAdminProductActive(productId: string, active: boolean): Promise<StripeProduct> {
+  const stripe = getStripeFromEnv();
+  return stripe.products.update(productId, { active });
+}
+
+export async function setAdminPriceActive(priceId: string, active: boolean): Promise<StripePrice> {
+  const stripe = getStripeFromEnv();
+  return stripe.prices.update(priceId, { active });
+}
+
+export async function createAdminPriceForProduct(params: {
+  product_id: string;
+  amount: number;
+  interval: 'month' | 'year';
+  currency?: string;
+}): Promise<StripePrice> {
+  const stripe = getStripeFromEnv();
+  const unit_amount = Math.round(params.amount * 100);
+  return stripe.prices.create({
+    product: params.product_id,
+    unit_amount,
+    currency: (params.currency ?? 'eur').toLowerCase(),
+    recurring: { interval: params.interval },
+  });
 }
 
 /**

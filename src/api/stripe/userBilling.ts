@@ -6,7 +6,6 @@
  */
 // @ts-nocheck
 import { Client, Users } from 'node-appwrite';
-import type { Stripe as StripeNs } from 'stripe';
 
 import { ApiError } from '../appwrite/apiResponse';
 import { assertServerConfigured, getAppwriteServerEnv } from '../appwrite/serverEnv';
@@ -50,7 +49,7 @@ async function requireCustomer(userId: string): Promise<string> {
   return id;
 }
 
-function mapInvoice(inv: StripeSdk.Invoice): StripeInvoice {
+function mapInvoice(inv: import('stripe').Stripe.Invoice): StripeInvoice {
   return {
     id: inv.id,
     created: inv.created,
@@ -68,7 +67,7 @@ function mapInvoice(inv: StripeSdk.Invoice): StripeInvoice {
 }
 
 function mapStripeStatus(
-  s: StripeSdk.Subscription.Status,
+  s: import('stripe').Stripe.Subscription.Status,
 ): 'active' | 'trialing' | 'canceled' | 'past_due' {
   switch (s) {
     case 'active':
@@ -87,7 +86,7 @@ function mapStripeStatus(
   }
 }
 
-function limitsFromProductMeta(meta: StripeSdk.Metadata | null | undefined): {
+function limitsFromProductMeta(meta: import('stripe').Stripe.Metadata | null | undefined): {
   sitesLimit: number;
   libraryLimit: number;
   storageLimit: number;
@@ -100,12 +99,12 @@ function limitsFromProductMeta(meta: StripeSdk.Metadata | null | undefined): {
   };
 }
 
-function mapStripeSubscriptionToSubscription(sub: StripeSdk.Subscription, userId: string): Subscription {
+function mapStripeSubscriptionToSubscription(sub: import('stripe').Stripe.Subscription, userId: string): Subscription {
   const item = sub.items.data[0];
   const price = item?.price;
   const product =
     price?.product && typeof price.product === 'object' && !('deleted' in price.product)
-      ? (price.product as StripeSdk.Product)
+      ? (price.product as import('stripe').Stripe.Product)
       : null;
   const meta = product?.metadata ?? {};
   const { sitesLimit, libraryLimit, storageLimit } = limitsFromProductMeta(meta);
@@ -130,7 +129,7 @@ function mapStripeSubscriptionToSubscription(sub: StripeSdk.Subscription, userId
   };
 }
 
-function pmCard(pm: StripeSdk.PaymentMethod): StripePaymentMethod['card'] {
+function pmCard(pm: import('stripe').Stripe.PaymentMethod): StripePaymentMethod['card'] {
   if (pm.type !== 'card' || !pm.card) return null;
   return {
     brand: pm.card.brand,
@@ -157,7 +156,7 @@ async function buildSubscriptionDetailsResponse(
   const price = item?.price;
   const product =
     price?.product && typeof price.product === 'object' && !('deleted' in price.product)
-      ? (price.product as StripeSdk.Product)
+      ? (price.product as import('stripe').Stripe.Product)
       : null;
   const meta = product?.metadata ?? {};
   const { sitesLimit, libraryLimit, storageLimit } = limitsFromProductMeta(meta);
@@ -194,7 +193,7 @@ async function buildSubscriptionDetailsResponse(
   const dpm = customer.invoice_settings?.default_payment_method;
   let payment_method: SubscriptionDetailsResponse['payment_method'] = null;
   if (dpm && typeof dpm === 'object' && 'type' in dpm) {
-    const pm = dpm as StripeSdk.PaymentMethod;
+    const pm = dpm as import('stripe').Stripe.PaymentMethod;
     payment_method = {
       id: pm.id,
       type: pm.type,
@@ -243,7 +242,7 @@ async function buildSubscriptionDetailsResponse(
         const p = await stripe.prices.retrieve(nextPhase.items[0].price as string, {
           expand: ['product'],
         });
-        const pr = p.product as StripeSdk.Product;
+        const pr = p.product as import('stripe').Stripe.Product;
         pending_update = {
           date: nextPhase.start_date,
           plan_name: pr?.name ?? '',
@@ -365,9 +364,9 @@ export async function runUserBillingAction(userId: string, body: UserBillingBody
       });
 
       const inv = updated.latest_invoice;
-      const invObj = typeof inv === 'object' && inv && !('deleted' in inv) ? (inv as StripeSdk.Invoice) : null;
+      const invObj = typeof inv === 'object' && inv && !('deleted' in inv) ? (inv as import('stripe').Stripe.Invoice) : null;
       const pi = invObj?.payment_intent;
-      const piObj = typeof pi === 'object' && pi && 'client_secret' in pi ? (pi as StripeSdk.PaymentIntent) : null;
+      const piObj = typeof pi === 'object' && pi && 'client_secret' in pi ? (pi as import('stripe').Stripe.PaymentIntent) : null;
 
       if (piObj?.client_secret && invObj && invObj.amount_due > 0) {
         return {
@@ -449,7 +448,7 @@ export async function runUserBillingAction(userId: string, body: UserBillingBody
       let defaultPaymentMethodId: string | null = null;
       const dpm = customer.invoice_settings?.default_payment_method;
       if (typeof dpm === 'string') defaultPaymentMethodId = dpm;
-      else if (dpm && typeof dpm === 'object' && 'id' in dpm) defaultPaymentMethodId = (dpm as StripeSdk.PaymentMethod).id;
+      else if (dpm && typeof dpm === 'object' && 'id' in dpm) defaultPaymentMethodId = (dpm as import('stripe').Stripe.PaymentMethod).id;
 
       const paymentMethods: StripePaymentMethod[] = list.data.map((pm) => ({
         id: pm.id,
@@ -554,7 +553,7 @@ export async function runUserBillingAction(userId: string, body: UserBillingBody
         current = await stripe.invoices.finalizeInvoice(current.id, { expand: ['payment_intent'] });
       }
       const pi = current.payment_intent;
-      const piObj = typeof pi === 'object' && pi && 'client_secret' in pi ? (pi as StripeSdk.PaymentIntent) : null;
+      const piObj = typeof pi === 'object' && pi && 'client_secret' in pi ? (pi as import('stripe').Stripe.PaymentIntent) : null;
       return {
         success: true,
         paid: false,

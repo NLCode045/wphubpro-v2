@@ -129,3 +129,12 @@ export async function runWpProxyForUser(
 
   return { status: res.status, json };
 }
+
+/** Alias for `runWpProxyForUser` — used by `handler.ts` (`/api/bridge/wp-proxy`). */
+export async function runWpProxy(input: {
+  userId: string;
+  payload: WpProxyRequestBody;
+  log?: unknown;
+}): Promise<{ status: number; json: unknown }> {
+  return runWpProxyForUser(input.userId, input.payload);
+}

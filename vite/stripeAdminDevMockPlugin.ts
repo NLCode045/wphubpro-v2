@@ -72,7 +72,7 @@ export function stripeAdminDevMockPlugin(options: StripeApiDevPluginOptions | bo
             {
               error: 'stripe_rest_not_configured',
               message:
-                'No local `/api/stripe` JSON backend. Use Appwrite `executeFunction` for Stripe (production parity), set `VITE_STRIPE_ADMIN_DEV_MOCK=1` for stubs, or set `VITE_STRIPE_API_PROXY_TARGET` to an origin that implements these routes.',
+                'No local `/api/stripe` JSON backend. Set `VITE_STRIPE_ADMIN_DEV_MOCK=1` for stubs, or `VITE_STRIPE_API_PROXY_TARGET` to an origin that implements these routes (see `src/api/stripe/admin.ts`).',
             },
             501,
           );
@@ -113,7 +113,128 @@ export function stripeAdminDevMockPlugin(options: StripeApiDevPluginOptions | bo
             currency: 'eur',
             livePayments24h: 0,
             totalSubscriptions: 0,
+            recentFailedPaymentIntents7d: 0,
+            revenueFromLast30PaidInvoicesCents: 0,
           });
+          return;
+        }
+
+        if (method === 'GET' && raw.startsWith('/api/stripe/admin/finance-dashboard')) {
+          const now = Math.floor(Date.now() / 1000);
+          json(res, {
+            success: true,
+            period: 'week',
+            rangeLabel: 'Mock',
+            windowStart: now - 7 * 86400,
+            windowEnd: now,
+            recentPaidInvoices: [],
+            recentSubscriptionChanges: [],
+            stats: {
+              buckets: [
+                {
+                  label: 'Mock',
+                  start: now - 86400,
+                  end: now,
+                  revenueCents: 0,
+                  newSubscriptions: 0,
+                  cancellations: 0,
+                  upgrades: 0,
+                  downgrades: 0,
+                  cumulativeNetSubscriptions: 0,
+                },
+              ],
+              kpis: {
+                activeSubscriptionsNow: 0,
+                newInPeriod: 0,
+                canceledInPeriod: 0,
+                revenueInPeriodCents: 0,
+                revenueAllTimeCents: 0,
+                revenueAllTimeTruncated: true,
+                upgradesInPeriod: 0,
+                downgradesInPeriod: 0,
+              },
+              byPlan: [],
+              truncated: true,
+              upgradeDowngradeNote: '',
+              rangeLabel: 'Mock',
+            },
+          });
+          return;
+        }
+
+        if (method === 'GET' && raw.startsWith('/api/stripe/admin/subscription-rows')) {
+          json(res, { subscriptions: [], fetchedPages: 0 });
+          return;
+        }
+
+        const piDetail = raw.match(/^\/api\/stripe\/admin\/payment-intents\/([^/]+)$/);
+        if (method === 'GET' && piDetail) {
+          const id = piDetail[1];
+          json(res, {
+            success: true,
+            paymentIntent: {
+              id,
+              amount: 1000,
+              amount_received: 1000,
+              currency: 'eur',
+              status: 'succeeded',
+              created: Math.floor(Date.now() / 1000),
+              description: null,
+              receipt_email: null,
+              customer: null,
+              metadata: {},
+              last_payment_error: null,
+            },
+            charge: null,
+          });
+          return;
+        }
+
+        if (method === 'GET' && raw.startsWith('/api/stripe/admin/payment-intents')) {
+          json(res, { orders: [] });
+          return;
+        }
+
+        if (method === 'GET' && raw.startsWith('/api/stripe/admin/invoices/recent')) {
+          json(res, { invoices: [] });
+          return;
+        }
+
+        const subCancel = raw.match(/^\/api\/stripe\/admin\/subscriptions\/([^/]+)\/cancel$/);
+        if (method === 'POST' && subCancel) {
+          json(res, { success: true });
+          return;
+        }
+        const subPause = raw.match(/^\/api\/stripe\/admin\/subscriptions\/([^/]+)\/pause$/);
+        if (method === 'POST' && subPause) {
+          json(res, { success: true });
+          return;
+        }
+        const subResume = raw.match(/^\/api\/stripe\/admin\/subscriptions\/([^/]+)\/resume$/);
+        if (method === 'POST' && subResume) {
+          json(res, { success: true });
+          return;
+        }
+        const subPrice = raw.match(/^\/api\/stripe\/admin\/subscriptions\/([^/]+)\/change-price$/);
+        if (method === 'POST' && subPrice) {
+          json(res, { success: true });
+          return;
+        }
+
+        if (method === 'POST' && raw === '/api/stripe/admin/plans/catalog-metadata') {
+          json(res, { product: { id: 'prod_dev_mock' } });
+          return;
+        }
+        if (method === 'POST' && raw === '/api/stripe/admin/plans/product-active') {
+          json(res, { product: { id: 'prod_dev_mock', active: true } });
+          return;
+        }
+        if (method === 'POST' && raw === '/api/stripe/admin/plans/price-active') {
+          json(res, { price: { id: 'price_dev_mock', active: true } });
+          return;
+        }
+        if (method === 'POST' && raw === '/api/stripe/admin/plans/prices-major') {
+          json(res, { price: { id: 'price_dev_mock' } });
           return;
         }
 

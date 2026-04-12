@@ -4,9 +4,8 @@ import { fetchStripeJson, postStripeJsonAuthed } from '@/lib/stripe-loader';
 let stripePublishableKeyCache: string | null = null;
 
 /**
- * Fetch Stripe configuration from stripe-config consumer function
- * The frontend calls stripe-config, which calls stripe-gateway to get the publishable key
- * Sensitive data never reaches the frontend
+ * Fetch Stripe publishable key from `GET /api/stripe/config` (implemented by your API host; see `publishableConfig.ts`).
+ * The secret key stays on the server.
  */
 export async function getStripeConfig(): Promise<{ stripe_publishable_key: string }> {
   if (stripePublishableKeyCache) {

@@ -76,28 +76,82 @@ export async function getBillingAdminStats(): Promise<BillingAdminStats> {
 }
 
 /**
- * Dashboard KPIs + live payment volume (24h) + total subscription count (capped).
+ * Dashboard KPIs + live payment volume (24h) + subscription totals + failed-PI + 30d invoice revenue.
+ * Served at `GET /api/stripe/admin/stats` (Stripe secret on API host only — not Appwrite).
  */
 export async function getStripeAdminDashboardStats(): Promise<StripeAdminDashboardStats> {
   const base = await getBillingAdminStats();
   const stripe = getStripeFromEnv();
-  const gte = Math.floor(Date.now() / 1000) - 86400;
+  const now = Math.floor(Date.now() / 1000);
+  const dayAgo = now - 86400;
+
   let livePayments24h = 0;
-  for await (const pi of stripe.paymentIntents.list({ limit: 100, created: { gte } })) {
-    if (pi.status === 'succeeded') livePayments24h += 1;
+  let piCursor: string | undefined;
+  for (let p = 0; p < 5; p++) {
+    const page = await stripe.paymentIntents.list({
+      limit: 100,
+      created: { gte: dayAgo },
+      starting_after: piCursor,
+    });
+    for (const pi of page.data) {
+      if (pi.status === 'succeeded') livePayments24h += 1;
+    }
+    if (!page.has_more || page.data.length === 0) break;
+    piCursor = page.data[page.data.length - 1].id;
   }
 
   let totalSubscriptions = 0;
-  const MAX_TOTAL = 1000;
-  for await (const _ of stripe.subscriptions.list({ status: 'all', limit: 100 })) {
-    totalSubscriptions += 1;
-    if (totalSubscriptions >= MAX_TOTAL) break;
+  let subCursor: string | undefined;
+  for (let p = 0; p < 15; p++) {
+    const page = await stripe.subscriptions.list({
+      status: 'all',
+      limit: 100,
+      starting_after: subCursor,
+    });
+    totalSubscriptions += page.data.length;
+    if (!page.has_more || page.data.length === 0) break;
+    subCursor = page.data[page.data.length - 1].id;
+  }
+
+  const sevenDaysAgo = now - 7 * 86400;
+  let recentFailedPaymentIntents7d = 0;
+  piCursor = undefined;
+  for (let p = 0; p < 5; p++) {
+    const page = await stripe.paymentIntents.list({
+      limit: 100,
+      created: { gte: sevenDaysAgo },
+      starting_after: piCursor,
+    });
+    for (const pi of page.data) {
+      if (pi.last_payment_error || pi.status === 'requires_payment_method') recentFailedPaymentIntents7d += 1;
+    }
+    if (!page.has_more || page.data.length === 0) break;
+    piCursor = page.data[page.data.length - 1].id;
+  }
+
+  const thirtyDaysAgo = now - 30 * 86400;
+  let revenueFromLast30PaidInvoicesCents = 0;
+  let invCursor: string | undefined;
+  for (let p = 0; p < 10; p++) {
+    const page = await stripe.invoices.list({
+      status: 'paid',
+      created: { gte: thirtyDaysAgo },
+      limit: 100,
+      starting_after: invCursor,
+    });
+    for (const inv of page.data) {
+      revenueFromLast30PaidInvoicesCents += inv.amount_paid ?? 0;
+    }
+    if (!page.has_more || page.data.length === 0) break;
+    invCursor = page.data[page.data.length - 1].id;
   }
 
   return {
     ...base,
     livePayments24h,
     totalSubscriptions,
+    recentFailedPaymentIntents7d,
+    revenueFromLast30PaidInvoicesCents,
   };
 }
 
@@ -237,3 +291,30 @@ export async function getStripeInvoiceForAdmin(invoiceId: string): Promise<Strip
     expand: ['customer', 'payment_intent', 'lines.data.price.product'],
   });
 }
+
+export async function listAdminInvoicesRecent(limit: number): Promise<{ invoices: StripeInvoice[] }> {
+  const stripe = getStripeFromEnv();
+  const lim = Math.min(Math.max(limit, 1), 100);
+  const list = await stripe.invoices.list({
+    limit: lim,
+    expand: ['data.customer', 'data.lines.data.price.product'],
+  });
+  return { invoices: list.data };
+}
+
+export { getAdminFinanceDashboard } from './financeDashboard';
+export { listAdminSubscriptionRows } from './adminSubscriptionList';
+export { listAdminPaymentIntentRows, getAdminPaymentIntentDetail } from './adminPaymentIntents';
+export {
+  adminCancelSubscription,
+  adminPauseSubscription,
+  adminResumeSubscription,
+  adminArchiveSubscription,
+  adminUpdateSubscriptionPrice,
+} from './adminSubscriptionActions';
+export {
+  updateAdminPlanProduct,
+  setAdminProductActive,
+  setAdminPriceActive,
+  createAdminPriceForProduct,
+} from './plans';

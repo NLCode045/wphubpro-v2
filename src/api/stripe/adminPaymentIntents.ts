@@ -2,8 +2,6 @@
  * Server-only — admin payment intent list/detail (Stripe SDK).
  */
 import type { AdminPaymentIntentDetail, AdminPaymentIntentRow } from '@/domains/admin/finance/types';
-import type Stripe from 'stripe';
-
 import { getStripeFromEnv } from './client';
 
 export async function listAdminPaymentIntentRows(params: {
@@ -11,16 +9,18 @@ export async function listAdminPaymentIntentRows(params: {
   customer?: string;
   status?: string;
 }): Promise<{ orders: AdminPaymentIntentRow[] }> {
-  const stripe = getStripeFromEnv();
+  const stripeClient = getStripeFromEnv() as any;
   const lim = Math.min(Math.max(params.limit ?? 50, 1), 100);
-  const list = await stripe.paymentIntents.list({
+  /** Stripe v17+ list params omit `status`; filter after fetch when needed. */
+  const list = await stripeClient.paymentIntents.list({
     limit: lim,
     customer: params.customer,
-    ...(params.status ? { status: params.status as Stripe.PaymentIntentListParams['status'] } : {}),
     expand: ['data.customer', 'data.invoice'],
   });
 
-  const orders: AdminPaymentIntentRow[] = list.data.map((pi) => {
+  const data = params.status ? list.data.filter((pi: any) => pi.status === params.status) : list.data;
+
+  const orders: AdminPaymentIntentRow[] = data.map((pi: any) => {
     const cust = pi.customer;
     const customer = typeof cust === 'string' ? cust : cust && 'id' in cust ? cust.id : null;
     let email: string | null = null;
@@ -56,8 +56,8 @@ export async function listAdminPaymentIntentRows(params: {
 }
 
 export async function getAdminPaymentIntentDetail(paymentIntentId: string): Promise<AdminPaymentIntentDetail> {
-  const stripe = getStripeFromEnv();
-  const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+  const stripeClient = getStripeFromEnv() as any;
+  const pi = await stripeClient.paymentIntents.retrieve(paymentIntentId, {
     expand: ['customer', 'latest_charge', 'invoice'],
   });
 

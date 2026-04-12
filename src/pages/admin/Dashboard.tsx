@@ -9,7 +9,7 @@ function formatMoney(cents: number, currency: string) {
 }
 
 /**
- * Admin finance dashboard — KPIs from Appwrite `admin-finance-summary` (live Stripe via gateway).
+ * Admin finance dashboard — KPIs from `GET /api/stripe/admin/stats` (server-side Stripe SDK).
  */
 const AdminStripeDashboardPage = () => {
   const { data, isLoading, error } = useAdminStats();
@@ -27,7 +27,7 @@ const AdminStripeDashboardPage = () => {
       <p className="text-danger mb-0">
         {error instanceof Error
           ? error.message
-          : 'Could not load admin stats. Check Appwrite stripe-consumer and admin-finance-summary.'}
+          : 'Could not load admin stats. Ensure `/api/stripe/admin/stats` is implemented and `STRIPE_SECRET_KEY` is set on the API host.'}
       </p>
     );
   }
@@ -38,8 +38,8 @@ const AdminStripeDashboardPage = () => {
   return (
     <div>
       <p className="text-muted small mb-4">
-        Live Stripe data via Appwrite (<code className="small">admin-finance-summary</code>). MRR is normalized to
-        monthly; status counts paginate up to 5×100 per status on the server.
+        Live Stripe data via <code className="small">GET /api/stripe/admin/stats</code>. MRR is normalized to monthly;
+        failed-PI and 30-day invoice revenue are computed on the API host.
       </p>
       <Row className="g-3">
         <Col md={6} xl={3}>

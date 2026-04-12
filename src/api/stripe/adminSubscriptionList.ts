@@ -2,8 +2,6 @@
  * Server-only — admin subscription table rows (Stripe SDK). Do not import from React components.
  */
 import type { AdminSubscriptionRow } from '@/domains/admin/finance/types';
-import type Stripe from 'stripe';
-
 import { getStripeFromEnv } from './client';
 
 export type AdminSubscriptionListParams = {
@@ -16,7 +14,7 @@ export type AdminSubscriptionListParams = {
   maxPages?: number;
 };
 
-function mapSubscription(sub: Stripe.Subscription): AdminSubscriptionRow {
+function mapSubscription(sub: any): AdminSubscriptionRow {
   const item = sub.items.data[0];
   const price = item?.price;
   const product = price?.product;
@@ -115,19 +113,25 @@ function sortKey(row: AdminSubscriptionRow, field: string): string | number {
 export async function listAdminSubscriptionRows(
   params: AdminSubscriptionListParams,
 ): Promise<{ subscriptions: AdminSubscriptionRow[]; fetchedPages: number }> {
-  const stripe = getStripeFromEnv();
+  const stripeClient = getStripeFromEnv() as any;
   const maxPages = Math.min(Math.max(params.maxPages ?? 5, 1), 20);
   const rows: AdminSubscriptionRow[] = [];
   let startingAfter: string | undefined;
   let pages = 0;
 
   for (let p = 0; p < maxPages; p++) {
-    const batch = await stripe.subscriptions.list({
-      status: params.status && params.status !== 'all' ? (params.status as Stripe.SubscriptionListParams['status']) : 'all',
+    const listParams: Record<string, unknown> = {
       limit: 100,
       starting_after: startingAfter,
       expand: ['data.customer', 'data.items.data.price.product'],
-    });
+    };
+    if (params.status && params.status !== 'all') {
+      listParams.status = params.status;
+    }
+    const batch = (await stripeClient.subscriptions.list(listParams)) as {
+      data: any[];
+      has_more: boolean;
+    };
     pages += 1;
     for (const sub of batch.data) {
       const row = mapSubscription(sub);

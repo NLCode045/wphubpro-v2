@@ -903,38 +903,6 @@
             "runtimeSpecification": "s-8vcpu-8gb"
         },
         {
-            "$id": "stripe-consumer",
-            "name": "stripe-consumer",
-            "runtime": "node-20.0",
-            "path": "functions/stripe/stripe-consumer",
-            "entrypoint": "index.js",
-            "execute": [
-                "any",
-                "users",
-                "team:admin"
-            ],
-            "enabled": true,
-            "logging": true,
-            "events": [
-                "users.create"
-            ],
-            "schedule": "",
-            "timeout": 180,
-            "commands": "npm install",
-            "scopes": [
-                "teams.read",
-                "users.read",
-                "databases.read",
-                "databases.write",
-                "documents.read",
-                "documents.write",
-                "collections.read",
-                "collections.write"
-            ],
-            "buildSpecification": "s-1vcpu-512mb",
-            "runtimeSpecification": "s-8vcpu-8gb"
-        },
-        {
             "$id": "gateway-utils",
             "name": "gateway-utils",
             "runtime": "node-20.0",

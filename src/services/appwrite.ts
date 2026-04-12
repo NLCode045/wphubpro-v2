@@ -233,7 +233,10 @@ export const STORAGE_BUCKET_BRIDGE_ID = envString('APPWRITE_STORAGE_BUCKET_BRIDG
 /** Admin team `$id` — `teams` in `appwrite.config.json`. */
 export const ADMIN_TEAM_ID = envString('APPWRITE_ADMIN_TEAM_ID', 'admin');
 
-/** Default Appwrite function id for `functions/stripe/stripe-consumer` (merged Stripe consumers). */
+/**
+ * Legacy default id for removed `stripe-consumer` (Stripe admin/catalog now uses `GET/POST /api/stripe/admin/*`).
+ * Override only if you still route a custom Appwrite function id.
+ */
 const STRIPE_CONSUMER_FUNCTION_ID = envString('APPWRITE_FUNCTION_STRIPE', 'stripe-consumer');
 
 /**
@@ -247,7 +250,7 @@ export const APPWRITE_FUNCTION_IDS = {
   MANAGE_SETTINGS: envString('APPWRITE_FUNCTION_MANAGE_SETTINGS', 'manage-settings'),
   MANAGE_VAULT_PROVIDERS: envString('APPWRITE_FUNCTION_MANAGE_VAULT_PROVIDERS', 'manage-vault-providers'),
   PUBLIC_AUTH_CONFIG: envString('APPWRITE_FUNCTION_PUBLIC_AUTH_CONFIG', 'public-auth-config'),
-  /** Unified Stripe consumer; same deployment as STRIPE_CONFIG / STRIPE_PRODUCTS / … unless overridden per key. */
+  /** Legacy — prefer `/api/stripe` JSON routes on your API host instead of Appwrite Stripe functions. */
   STRIPE: STRIPE_CONSUMER_FUNCTION_ID,
   STRIPE_CONFIG: envString('APPWRITE_FUNCTION_STRIPE_CONFIG', STRIPE_CONSUMER_FUNCTION_ID),
   ADMIN_MANAGE_USERS: envString('APPWRITE_FUNCTION_ADMIN_MANAGE_USERS', 'admin-manage-users'),

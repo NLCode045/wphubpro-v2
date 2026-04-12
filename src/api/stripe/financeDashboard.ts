@@ -5,8 +5,9 @@ import type {
   AdminFinanceDashboardResponse,
   FinanceDashboardPeriod,
 } from '@/domains/admin/finance/types';
-
 import { getStripeFromEnv } from './client';
+
+type StripeListPage<T> = { data: T[]; has_more: boolean };
 
 function windowForPeriod(period: FinanceDashboardPeriod): {
   windowStart: number;
@@ -103,7 +104,7 @@ function bucketIndexFor(
 export async function getAdminFinanceDashboard(
   period: FinanceDashboardPeriod,
 ): Promise<AdminFinanceDashboardResponse> {
-  const stripe = getStripeFromEnv();
+  const stripeClient = getStripeFromEnv() as any;
   const { windowStart, windowEnd, rangeLabel, bucketCount, bucketLabel } = windowForPeriod(period);
   const bounds = buildBuckets(windowStart, windowEnd, bucketCount, bucketLabel);
 
@@ -113,12 +114,12 @@ export async function getAdminFinanceDashboard(
 
   let invStart: string | undefined;
   for (let p = 0; p < 30; p++) {
-    const page = await stripe.invoices.list({
+    const page = (await stripeClient.invoices.list({
       status: 'paid',
       created: { gte: windowStart, lte: windowEnd },
       limit: 100,
       starting_after: invStart,
-    });
+    })) as StripeListPage<any>;
     for (const inv of page.data) {
       const t = inv.status_transitions?.paid_at ?? inv.created;
       const bi = bucketIndexFor(t, bounds);
@@ -130,12 +131,12 @@ export async function getAdminFinanceDashboard(
 
   let subStart: string | undefined;
   for (let page = 0; page < 20; page++) {
-    const batch = await stripe.subscriptions.list({
+    const batch = (await stripeClient.subscriptions.list({
       status: 'all',
       limit: 100,
       starting_after: subStart,
       expand: ['data.customer', 'data.items.data.price.product'],
-    });
+    })) as StripeListPage<any>;
     for (const sub of batch.data) {
       const c = sub.created;
       if (c >= windowStart && c <= windowEnd) {
@@ -178,11 +179,11 @@ export async function getAdminFinanceDashboard(
   let activeSubscriptionsNow = 0;
   let actStart: string | undefined;
   for (let page = 0; page < 5; page++) {
-    const batch = await stripe.subscriptions.list({
+    const batch = (await stripeClient.subscriptions.list({
       status: 'active',
       limit: 100,
       starting_after: actStart,
-    });
+    })) as StripeListPage<any>;
     activeSubscriptionsNow += batch.data.length;
     if (!batch.has_more || batch.data.length === 0) break;
     actStart = batch.data[batch.data.length - 1].id;
@@ -194,7 +195,7 @@ export async function getAdminFinanceDashboard(
   let revenueAllTimeCents = 0;
   let invAll: string | undefined;
   for (let p = 0; p < 5; p++) {
-    const page = await stripe.invoices.list({ status: 'paid', limit: 100, starting_after: invAll });
+    const page = (await stripeClient.invoices.list({ status: 'paid', limit: 100, starting_after: invAll })) as StripeListPage<any>;
     for (const inv of page.data) {
       revenueAllTimeCents += inv.amount_paid ?? 0;
     }
@@ -205,12 +206,12 @@ export async function getAdminFinanceDashboard(
   const productCounts = new Map<string, { name: string; count: number }>();
   let prodStart: string | undefined;
   for (let page = 0; page < 8; page++) {
-    const batch = await stripe.subscriptions.list({
+    const batch = (await stripeClient.subscriptions.list({
       status: 'active',
       limit: 100,
       starting_after: prodStart,
       expand: ['data.items.data.price.product'],
-    });
+    })) as StripeListPage<any>;
     for (const sub of batch.data) {
       const item = sub.items.data[0];
       const pr = item?.price?.product;
@@ -235,12 +236,12 @@ export async function getAdminFinanceDashboard(
   const recentPaidInvoices: AdminFinanceDashboardResponse['recentPaidInvoices'] = [];
   let recentStart: string | undefined;
   for (let p = 0; p < 5; p++) {
-    const page = await stripe.invoices.list({
+    const page = (await stripeClient.invoices.list({
       status: 'paid',
       created: { gte: windowStart, lte: windowEnd },
       limit: 25,
       starting_after: recentStart,
-    });
+    })) as StripeListPage<any>;
     for (const inv of page.data) {
       const cust = inv.customer;
       const customerId = typeof cust === 'string' ? cust : cust && 'id' in cust ? cust.id : null;

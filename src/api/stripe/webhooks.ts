@@ -1,11 +1,12 @@
 /**
  * Server-only — raw body + signing secret. Do not import from React components.
  */
-import Stripe from 'stripe';
+import type { Stripe as StripeNs } from 'stripe';
+import StripeNode from 'stripe';
 
 import { getStripeFromEnv } from './client';
 
-type StripeInstance = InstanceType<typeof Stripe>;
+type StripeInstance = InstanceType<typeof StripeNode>;
 
 export interface VerifyWebhookParams {
   rawBody: string | Buffer;
@@ -33,7 +34,7 @@ export function verifyStripeWebhookEvent(
  * Baseline handlers — extend with email/receipt logic; billing state stays live in Stripe.
  */
 export async function handleStripeWebhookEvent(
-  event: Stripe.Event,
+  event: StripeSdk.Event,
 ): Promise<{ ok: boolean; detail: string }> {
   switch (event.type) {
     case 'invoice.paid':

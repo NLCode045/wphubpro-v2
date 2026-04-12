@@ -1,13 +1,14 @@
 /**
  * Server-only — live subscription reads/writes in Stripe. Do not import from React components.
  */
-import Stripe from 'stripe';
+import type { Stripe as StripeNs } from 'stripe';
+import StripeNode from 'stripe';
 
 import { getStripeFromEnv } from './client';
 
-type StripeInstance = InstanceType<typeof Stripe>;
+type StripeInstance = InstanceType<typeof StripeNode>;
 
-const SUBSCRIPTION_EXPAND: Stripe.SubscriptionRetrieveParams['expand'] = [
+const SUBSCRIPTION_EXPAND: StripeNs.SubscriptionRetrieveParams['expand'] = [
   'latest_invoice',
   'latest_invoice.payment_intent',
   'items.data.price.product',
@@ -41,7 +42,7 @@ export async function getSubscription(
 export interface CreateSubscriptionBody {
   customerId: string;
   priceId: string;
-  paymentBehavior?: Stripe.SubscriptionCreateParams['payment_behavior'];
+  paymentBehavior?: StripeNs.SubscriptionCreateParams['payment_behavior'];
 }
 
 export interface UpdateSubscriptionBody {
@@ -71,7 +72,7 @@ export async function updateSubscriptionPrice(
   body: UpdateSubscriptionBody,
 ): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['update']>>> {
   const stripe = getStripeFromEnv();
-  const current: Stripe.Subscription = await stripe.subscriptions.retrieve(
+  const current: StripeNs.Subscription = await stripe.subscriptions.retrieve(
     body.subscriptionId,
     {
       expand: ['items.data.price'],
@@ -85,6 +86,27 @@ export async function updateSubscriptionPrice(
   return stripe.subscriptions.update(body.subscriptionId, {
     items: [{ id: itemId, price: body.priceId }],
     proration_behavior: 'create_prorations',
+    expand: SUBSCRIPTION_EXPAND,
+  });
+}
+
+/** Admin plan change — optional proration behavior (defaults to create_prorations). */
+export async function updateSubscriptionPriceAdmin(
+  body: UpdateSubscriptionBody & { proration_behavior?: 'always_invoice' | 'none' },
+): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['update']>>> {
+  const stripe = getStripeFromEnv();
+  const current: Stripe.Subscription = await stripe.subscriptions.retrieve(body.subscriptionId, {
+    expand: ['items.data.price'],
+  });
+  const itemId = current.items.data[0]?.id;
+  if (!itemId) {
+    throw new Error('Subscription has no line items to update');
+  }
+  const proration =
+    body.proration_behavior === 'none' ? 'none' : ('create_prorations' as const);
+  return stripe.subscriptions.update(body.subscriptionId, {
+    items: [{ id: itemId, price: body.priceId }],
+    proration_behavior: proration,
     expand: SUBSCRIPTION_EXPAND,
   });
 }

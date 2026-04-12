@@ -1,11 +1,11 @@
 /**
  * Server-only — live invoices from Stripe. Do not import from React components.
  */
-import Stripe from 'stripe';
+import StripeNode from 'stripe';
 
 import { getStripeFromEnv } from './client';
 
-type StripeInstance = InstanceType<typeof Stripe>;
+type StripeInstance = InstanceType<typeof StripeNode>;
 
 /**
  * GET: invoices for a Stripe customer id (newest first).

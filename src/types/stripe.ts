@@ -2,19 +2,19 @@
  * Stripe billing types — aligned with stripe-node SDK shapes (Stripe-as-a-Source).
  * Prefer `import type` from here in UI code; never import server API modules in React.
  */
-import Stripe from 'stripe';
+import type { Stripe as StripeSdk } from 'stripe';
 
-export type StripeCustomer = Stripe.Customer;
+export type StripeCustomer = StripeSdk.Customer;
 
-export type StripeSubscription = Stripe.Subscription;
+export type StripeSubscription = StripeSdk.Subscription;
 
-export type StripeInvoice = Stripe.Invoice;
+export type StripeInvoice = StripeSdk.Invoice;
 
-export type StripePaymentIntent = Stripe.PaymentIntent;
+export type StripePaymentIntent = StripeSdk.PaymentIntent;
 
-export type StripePrice = Stripe.Price;
+export type StripePrice = StripeSdk.Price;
 
-export type StripeProduct = Stripe.Product;
+export type StripeProduct = StripeSdk.Product;
 
 /**
  * Catalog row: one active product with a chosen recurring (or default) price.
@@ -24,7 +24,7 @@ export interface StripePlan {
   price: StripePrice;
 }
 
-export type StripePaymentMethod = Stripe.PaymentMethod;
+export type StripePaymentMethod = StripeSdk.PaymentMethod;
 
 export interface BillingAdminStats {
   /** Normalized monthly recurring revenue in smallest currency unit (e.g. cents). */

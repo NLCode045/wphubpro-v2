@@ -1,6 +1,7 @@
 const sdk = require('node-appwrite');
 const { callStripeGateway } = require('../lib/callStripeGateway');
-const { getAppwriteBootstrap, hasAppwriteBootstrap } = require('../lib/appwriteEnv');
+const { hasAppwriteBootstrap } = require('../lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../../database/fetchAppwriteCredentialsFromGateway');
 
 async function getStripeCustomerId(databases, userId) {
   const DATABASE_ID = process.env.DATABASE_ID || process.env.APPWRITE_DATABASE_ID || 'platform_db';
@@ -31,9 +32,7 @@ module.exports = async ({ req, res, log, error, payload }) => {
     return res.json({ success: false, error: 'Appwrite configuration missing' }, 500);
   }
 
-  const { endpoint, projectId, apiKey } = getAppwriteBootstrap();
-  const client = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-  const databases = new sdk.Databases(client);
+  const { databases } = await createServerClientAndDatabases(log, error);
 
   const p = payload && typeof payload === 'object' ? payload : {};
   const action = (p.action || req.query?.action || 'list').toString().toLowerCase();

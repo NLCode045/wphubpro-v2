@@ -5,6 +5,8 @@
  */
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -58,18 +60,13 @@ async function tryReconnect(endpoint, projectId, apiKey, siteId, userId) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
-
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     error(`[site-heartbeat-check] Missing env.`);
     return fail(res, 'Function environment is not configured.', 500);
   }
 
   try {
-    const client = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-    const databases = new sdk.Databases(client);
+    const { databases, endpoint, projectId, apiKey } = await createServerClientAndDatabases(log, error);
 
     const sites = await databases.listDocuments('platform_db', 'sites', [sdk.Query.limit(500)]);
     const now = Date.now();

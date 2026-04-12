@@ -9,6 +9,8 @@
  */
 const sdk = require("node-appwrite");
 const crypto = require("crypto");
+const { hasAppwriteBootstrap } = require("../../subscriptions/stripe-consumer/lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../database/fetchAppwriteCredentialsFromGateway");
 
 /**
  * Derive a consistent 32-byte key from the encryption key string using SHA256
@@ -113,24 +115,23 @@ module.exports = async ({ req, res, log, error }) => {
   try {
     const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
     const VAULT_DB_ID = process.env.VAULT_DB_ID || "69d2ecf3000f449c752f";
-    const APPWRITE_ENDPOINT =
-      process.env.APPWRITE_ENDPOINT ||
-      process.env.APPWRITE_FUNCTION_ENDPOINT ||
-      process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-    const APPWRITE_PROJECT_ID =
-      process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-    const APPWRITE_API_KEY =
-      process.env.APPWRITE_API_KEY ||
-      process.env.APPWRITE_FUNCTION_API_KEY ||
-      process.env.APPWRITE_KEY;
-
     if (!ENCRYPTION_KEY) {
       error("ENCRYPTION_KEY not configured");
       return res.json({ success: false, message: "Server configuration error" }, 500);
     }
 
-    if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) {
+    if (!hasAppwriteBootstrap()) {
       error("Appwrite configuration missing");
+      return res.json({ success: false, message: "Server configuration error" }, 500);
+    }
+
+    let databases;
+    let endpoint;
+    let projectId;
+    try {
+      ({ databases, endpoint, projectId } = await createServerClientAndDatabases(log, error));
+    } catch (e) {
+      error(e.message);
       return res.json({ success: false, message: "Server configuration error" }, 500);
     }
 
@@ -152,8 +153,8 @@ module.exports = async ({ req, res, log, error }) => {
     let user;
     try {
       const jwtClient = new sdk.Client()
-        .setEndpoint(APPWRITE_ENDPOINT)
-        .setProject(APPWRITE_PROJECT_ID)
+        .setEndpoint(endpoint)
+        .setProject(projectId)
         .setJWT(headerToken);
       const account = new sdk.Account(jwtClient);
       user = await account.get();
@@ -169,13 +170,6 @@ module.exports = async ({ req, res, log, error }) => {
     // Parse request body to determine which credentials to return
     const payload = parsePayload(req);
     const credential = String(payload.credential || "stripe").toLowerCase().trim();
-
-    // Get credentials from vault
-    const adminClient = new sdk.Client()
-      .setEndpoint(APPWRITE_ENDPOINT)
-      .setProject(APPWRITE_PROJECT_ID)
-      .setKey(APPWRITE_API_KEY);
-    const databases = new sdk.Databases(adminClient);
 
     if (credential === "stripe") {
       try {

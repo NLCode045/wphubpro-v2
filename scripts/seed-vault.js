@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Client, Databases, ID } = require('node-appwrite');
-const { encryptPayload } = require('../functions/_shared/vault-client.js');
+const { encryptPayload } = require('../functions/database/appwrite-gateway/lib/vault-crypto.js');
 
 // Load .env file
 function loadEnv(envPath) {
@@ -113,10 +113,14 @@ async function seedVault() {
     console.log('✓ Prepared Google API credentials');
   }
 
-  if (entries.length === 0) {
-    console.warn('⚠ No credentials found in .env file');
-    return;
-  }
+  // Canonical Appwrite server API key (read by appwrite-gateway)
+  entries.push({
+    provider: 'appwrite',
+    payload: {
+      APPWRITE_API_KEY: env.APPWRITE_API_KEY,
+    },
+  });
+  console.log('✓ Prepared Appwrite server key (vault connector appwrite)');
 
   console.log(`\nEncrypting and inserting ${entries.length} credential entries...\n`);
 

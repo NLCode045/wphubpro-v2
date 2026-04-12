@@ -1,26 +1,25 @@
-const sdk = require("node-appwrite");
 const { mergedEnv } = require("./mergedEnv");
-const { getAppwriteBootstrapFromEnv } = require("./appwriteEnv");
+const { hasAppwriteBootstrap } = require("./appwriteEnv");
+const { createServerClientAndDatabases } = require("../../../database/fetchAppwriteCredentialsFromGateway");
 
 module.exports = async function ensureAdmin(req) {
   const env = mergedEnv(req);
-  const { endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, apiKey: APPWRITE_API_KEY } =
-    getAppwriteBootstrapFromEnv(env);
   const userId =
     env.APPWRITE_FUNCTION_USER_ID ||
     req.headers?.["x-appwrite-user-id"] ||
     req.headers?.["X-Appwrite-User-Id"];
 
-  if (!userId || !APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) {
+  if (!userId || !hasAppwriteBootstrap()) {
     return false;
   }
 
-  const client = new sdk.Client()
-    .setEndpoint(APPWRITE_ENDPOINT)
-    .setProject(APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  const teams = new sdk.Teams(client);
-  const users = new sdk.Users(client);
+  let teams;
+  let users;
+  try {
+    ({ teams, users } = await createServerClientAndDatabases(null, null));
+  } catch {
+    return false;
+  }
 
   try {
     const memberships = await teams.listMemberships("admin");

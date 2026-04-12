@@ -2,6 +2,8 @@
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
 
 function parsePayload(req) {
   if (!req) return {};
@@ -14,12 +16,6 @@ function parsePayload(req) {
     return JSON.parse(trimmed);
   }
   return {};
-}
-
-function createClient(sdkLib, { endpoint, projectId, apiKey }) {
-  const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
-  if (apiKey) client.setKey(apiKey);
-  return client;
 }
 
 function ok(res, payload = {}, statusCode = 200) {
@@ -203,21 +199,22 @@ async function handleUpdate(req, res, error, { databases }) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
-
-  if (!endpoint || !projectId || !apiKey) {
-    const missing = [];
-    if (!endpoint) missing.push('APPWRITE_ENDPOINT');
-    if (!projectId) missing.push('APPWRITE_PROJECT_ID');
-    if (!apiKey) missing.push('APPWRITE_API_KEY');
-    error(`[wphub-sites] Missing env: ${missing.join(', ')}. Set in Appwrite Console: Functions > wphub-sites > Variables.`);
-    return fail(res, `Function environment is not configured. Missing: ${missing.join(', ')}. Add these in Appwrite Console under Functions > wphub-sites > Variables.`, 500);
+  if (!hasAppwriteBootstrap()) {
+    error('[wphub-sites] Missing APPWRITE bootstrap (endpoint, project, API key for gateway execution).');
+    return fail(
+      res,
+      'Function environment is not configured. Set APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, APPWRITE_API_KEY.',
+      500,
+    );
   }
 
-  const client = createClient(sdk, { endpoint, projectId, apiKey });
-  const databases = new sdk.Databases(client);
+  let databases;
+  try {
+    ({ databases } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(`[wphub-sites] ${e.message}`);
+    return fail(res, 'Could not resolve Appwrite credentials from appwrite-gateway.', 500);
+  }
 
   let payloadObj = {};
   try {

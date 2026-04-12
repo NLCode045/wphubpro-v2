@@ -1,7 +1,8 @@
 const sdk = require('node-appwrite');
 const { callStripeGateway } = require('../lib/callStripeGateway');
 const { mergeGatewayPayload } = require('../lib/mergeGatewayPayload');
-const { getAppwriteBootstrap, hasAppwriteBootstrap } = require('../lib/appwriteEnv');
+const { hasAppwriteBootstrap } = require('../lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../../database/fetchAppwriteCredentialsFromGateway');
 
 /**
  * Invoice + payment-intent admin/member flows (replaces stripe-invoices).
@@ -22,9 +23,7 @@ module.exports = async ({ req, res, log, error, payload }) => {
       if (!userId || !hasAppwriteBootstrap()) {
         return res.json({ success: false, message: 'action required' }, 400);
       }
-      const { endpoint, projectId, apiKey } = getAppwriteBootstrap();
-      const client = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-      const databases = new sdk.Databases(client);
+      const { databases } = await createServerClientAndDatabases(log, error);
       const DATABASE_ID = process.env.DATABASE_ID || process.env.APPWRITE_DATABASE_ID || 'platform_db';
       const ACCOUNTS_COLLECTION_ID =
         process.env.ACCOUNTS_COLLECTION_ID || process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || 'accounts';

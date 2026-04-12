@@ -6,6 +6,8 @@
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || 'platform_db';
 const SITES_COLLECTION_ID = process.env.APPWRITE_SITES_COLLECTION_ID || 'sites';
@@ -130,12 +132,9 @@ async function pokeSingleSite(site, ENCRYPTION_KEY, log) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
   const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     error('[site-heartbeat-poke] Missing env.');
     return fail(res, 'Function environment is not configured.', 500);
   }
@@ -151,6 +150,16 @@ module.exports = async ({ req, res, log, error }) => {
     return fail(res, 'Invalid JSON body.', 400);
   }
 
+  let databases;
+  let endpoint;
+  let projectId;
+  try {
+    ({ databases, endpoint, projectId } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(`[site-heartbeat-poke] ${e.message}`);
+    return fail(res, 'Could not resolve Appwrite credentials.', 500);
+  }
+
   const siteIdManual = body.siteId || body.site_id;
   const authHeader =
     req.headers?.authorization ||
@@ -161,9 +170,6 @@ module.exports = async ({ req, res, log, error }) => {
   const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
   const bodyToken = typeof body.jwt === 'string' ? body.jwt.trim() : '';
   const token = isValidJwtFormat(bodyToken) ? bodyToken : isValidJwtFormat(headerToken) ? headerToken : headerToken || bodyToken;
-
-  const adminClient = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-  const databases = new sdk.Databases(adminClient);
 
   if (siteIdManual) {
     if (!token || !isValidJwtFormat(token)) {

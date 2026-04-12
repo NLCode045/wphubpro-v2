@@ -1,6 +1,8 @@
 /* eslint-disable no-unused-vars */
 const sdk = require('node-appwrite');
 const crypto = require('crypto');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 /**
  * Derive a consistent 32-byte key from the encryption key string using SHA256
@@ -82,12 +84,6 @@ function parsePayload(req) {
   return {};
 }
 
-function createClient(sdkLib, { endpoint, projectId, apiKey }) {
-  const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
-  if (apiKey) client.setKey(apiKey);
-  return client;
-}
-
 function ok(res, payload = {}, statusCode = 200) {
   return res.json(payload, statusCode);
 }
@@ -137,15 +133,11 @@ async function userIsAdmin(users, teams, userId, log) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint =
-    process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
   const encryptionKey = process.env.ENCRYPTION_KEY;
   const vaultDbId = process.env.VAULT_DB_ID || '69d2ecf3000f449c752f';
   const collectionId = 'connectors';
 
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     error('Function environment variables are not configured correctly.');
     return fail(res, 'Function environment is not configured.', 500);
   }
@@ -155,10 +147,15 @@ module.exports = async ({ req, res, log, error }) => {
     return fail(res, 'Server encryption key is not configured.', 500);
   }
 
-  const client = createClient(sdk, { endpoint, projectId, apiKey });
-  const databases = new sdk.Databases(client);
-  const users = new sdk.Users(client);
-  const teams = new sdk.Teams(client);
+  let databases;
+  let users;
+  let teams;
+  try {
+    ({ databases, users, teams } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(e.message);
+    return fail(res, 'Could not resolve Appwrite credentials.', 500);
+  }
 
   let payload = {};
   try {

@@ -11,6 +11,8 @@
  */
 const sdk = require('node-appwrite');
 const crypto = require('crypto');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 /**
  * Derive a consistent 32-byte key from the encryption key string using SHA256
@@ -97,23 +99,17 @@ async function getProviderCredentials(provider, encryptionKey, databases, vaultD
  * Validate environment configuration for gateway functions
  */
 function validateGatewayEnvironment() {
-  const required = [
-    'ENCRYPTION_KEY',
-    'APPWRITE_ENDPOINT',
-    'APPWRITE_PROJECT_ID',
-    'APPWRITE_API_KEY',
-  ];
-
-  const missing = required.filter(key => !process.env[key]);
-  if (missing.length > 0) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  if (!process.env.ENCRYPTION_KEY) {
+    throw new Error('Missing required environment variables: ENCRYPTION_KEY');
+  }
+  if (!hasAppwriteBootstrap()) {
+    throw new Error(
+      'Missing Appwrite bootstrap: APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID and APPWRITE_API_KEY (for appwrite-gateway)',
+    );
   }
 
   return {
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
-    APPWRITE_ENDPOINT: process.env.APPWRITE_ENDPOINT,
-    APPWRITE_PROJECT_ID: process.env.APPWRITE_PROJECT_ID,
-    APPWRITE_API_KEY: process.env.APPWRITE_API_KEY,
     VAULT_DB_ID: process.env.VAULT_DB_ID || '69d2ecf3000f449c752f',
   };
 }
@@ -248,11 +244,7 @@ async function runPsi(url, psiKey, strategy, log) {
 module.exports = async ({ req, res, log, error }) => {
   try {
     const config = validateGatewayEnvironment();
-    const client = new sdk.Client()
-      .setEndpoint(config.APPWRITE_ENDPOINT)
-      .setProject(config.APPWRITE_PROJECT_ID)
-      .setKey(config.APPWRITE_API_KEY);
-    const databases = new sdk.Databases(client);
+    const { databases } = await createServerClientAndDatabases(log, error);
 
     const payload = parsePayload(req);
     const action = String(payload.action || '').toLowerCase().trim();

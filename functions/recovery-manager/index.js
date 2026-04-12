@@ -1,6 +1,10 @@
-import { Client, Databases } from 'node-appwrite';
+import { createRequire } from 'module';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+
+const require = createRequire(import.meta.url);
+const { hasAppwriteBootstrap } = require('../subscriptions/stripe-consumer/lib/appwriteEnv.js');
+const { createServerClientAndDatabases } = require('../database/fetchAppwriteCredentialsFromGateway.js');
 
 /**
  * Decryptie helper functie (Matcht exact jouw encrypt logica)
@@ -29,12 +33,17 @@ function decrypt(encryptedData, encryptionKey) {
 }
 
 export default async ({ req, res, log, error }) => {
-  const client = new Client()
-    .setEndpoint(process.env.APPWRITE_FUNCTION_ENDPOINT)
-    .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-    .setKey(process.env.APPWRITE_API_KEY);
+  if (!hasAppwriteBootstrap()) {
+    return res.json({ success: false, message: 'Function environment is not configured' }, 500);
+  }
 
-  const databases = new Databases(client);
+  let databases;
+  try {
+    ({ databases } = await createServerClientAndDatabases(log, error));
+  } catch (err) {
+    error(`recovery-manager: ${err.message}`);
+    return res.json({ success: false, message: err.message || 'Appwrite credentials failed' }, 500);
+  }
 
   // 1. Request body parsen
   let body;

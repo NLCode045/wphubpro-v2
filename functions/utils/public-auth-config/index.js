@@ -1,4 +1,6 @@
 const sdk = require("node-appwrite");
+const { hasAppwriteBootstrap } = require("../../subscriptions/stripe-consumer/lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../database/fetchAppwriteCredentialsFromGateway");
 
 function parsePayload(req) {
   if (!req) return {};
@@ -35,13 +37,18 @@ const COLLECTION_ID = "platform_settings";
 const AUTH_KEY = "auth";
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
-
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     error("Function environment variables are not configured correctly.");
     return fail(res, "Function environment is not configured.", 500);
+  }
+
+  let databases;
+  let users;
+  try {
+    ({ databases, users } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(e.message);
+    return fail(res, "Could not resolve Appwrite credentials.", 500);
   }
 
   let payload = {};
@@ -52,10 +59,6 @@ module.exports = async ({ req, res, log, error }) => {
   }
 
   const actionRaw = (payload.action || "").toString().toLowerCase().replace(/-/g, "_");
-
-  const client = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-  const databases = new sdk.Databases(client);
-  const users = new sdk.Users(client);
 
   async function readAuthSettings() {
     const existing = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [sdk.Query.equal("key", AUTH_KEY)]);

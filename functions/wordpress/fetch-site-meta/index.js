@@ -5,6 +5,8 @@
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 function parsePayload(req) {
   if (!req) return {};
@@ -67,18 +69,11 @@ function encrypt(text, key) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
   const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
-  if (!endpoint || !projectId || !apiKey) {
-    const missing = [];
-    if (!endpoint) missing.push('APPWRITE_ENDPOINT');
-    if (!projectId) missing.push('APPWRITE_PROJECT_ID');
-    if (!apiKey) missing.push('APPWRITE_API_KEY');
-    error(`[fetch-site-meta] Missing env: ${missing.join(', ')}`);
-    return fail(res, `Function environment is not configured. Missing: ${missing.join(', ')}`, 500);
+  if (!hasAppwriteBootstrap()) {
+    error('[fetch-site-meta] Missing Appwrite bootstrap env.');
+    return fail(res, 'Function environment is not configured.', 500);
   }
   if (!ENCRYPTION_KEY) {
     error('[fetch-site-meta] Missing ENCRYPTION_KEY.');
@@ -117,6 +112,8 @@ module.exports = async ({ req, res, log, error }) => {
   }
 
   try {
+    const { databases, endpoint, projectId } = await createServerClientAndDatabases(log, error);
+
     const jwtClient = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setJWT(token);
     const account = new sdk.Account(jwtClient);
     let jwtUser;
@@ -130,9 +127,6 @@ module.exports = async ({ req, res, log, error }) => {
     if (!userId) {
       return fail(res, 'Could not determine user from JWT.', 401);
     }
-
-    const adminClient = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-    const databases = new sdk.Databases(adminClient);
 
     const siteDoc = await databases.getDocument('platform_db', 'sites', siteId);
     const siteUserId = siteDoc.user_id || siteDoc.userId;

@@ -12,6 +12,7 @@
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 /**
  * Derive a consistent 32-byte key from the encryption key string using SHA256
@@ -349,13 +350,7 @@ module.exports = async ({ req, res, log, error }) => {
   try {
     const config = validateGatewayEnvironment();
 
-    // Initialize Appwrite admin client
-    const adminClient = new sdk.Client()
-      .setEndpoint(config.APPWRITE_ENDPOINT)
-      .setProject(config.APPWRITE_PROJECT_ID)
-      .setKey(config.APPWRITE_API_KEY);
-
-    const databases = new sdk.Databases(adminClient);
+    const { databases } = await createServerClientAndDatabases(log, error);
 
     // Initialize AI credentials
     const credentials = await initializeAICredentials(databases, config);

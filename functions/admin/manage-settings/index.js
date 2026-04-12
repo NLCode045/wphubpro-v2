@@ -1,5 +1,7 @@
 /* eslint-disable no-unused-vars */
 const sdk = require("node-appwrite");
+const { hasAppwriteBootstrap } = require("../../subscriptions/stripe-consumer/lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../database/fetchAppwriteCredentialsFromGateway");
 
 function parsePayload(req) {
   if (!req) return {};
@@ -12,12 +14,6 @@ function parsePayload(req) {
     return JSON.parse(trimmed);
   }
   return {};
-}
-
-function createClient(sdkLib, { endpoint, projectId, apiKey }) {
-  const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
-  if (apiKey) client.setKey(apiKey);
-  return client;
 }
 
 function ok(res, payload = {}, statusCode = 200) {
@@ -66,22 +62,20 @@ async function userIsAdmin(users, teams, userId, log) {
 
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint =
-    process.env.APPWRITE_ENDPOINT ||
-    process.env.APPWRITE_FUNCTION_ENDPOINT ||
-    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
-
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     error("Function environment variables are not configured correctly.");
     return fail(res, "Function environment is not configured.", 500);
   }
 
-  const client = createClient(sdk, { endpoint, projectId, apiKey });
-  const databases = new sdk.Databases(client);
-  const users = new sdk.Users(client);
-  const teams = new sdk.Teams(client);
+  let databases;
+  let users;
+  let teams;
+  try {
+    ({ databases, users, teams } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(e.message);
+    return fail(res, "Could not resolve Appwrite credentials.", 500);
+  }
 
   let payload = {};
 

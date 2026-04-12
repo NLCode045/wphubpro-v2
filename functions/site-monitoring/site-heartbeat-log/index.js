@@ -3,6 +3,8 @@
  * Called by site-heartbeat after successful validation.
  */
 const sdk = require('node-appwrite');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 function parsePayload(req) {
   if (!req) return {};
@@ -42,11 +44,7 @@ function parsePayload(req) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
-
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     error('[site-heartbeat-log] Missing env.');
     return res.json({ success: false, message: 'Function not configured' }, 500);
   }
@@ -67,8 +65,7 @@ module.exports = async ({ req, res, log, error }) => {
   }
 
   try {
-    const client = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-    const databases = new sdk.Databases(client);
+    const { databases } = await createServerClientAndDatabases(log, error);
 
     const siteDoc = await databases.getDocument('platform_db', 'sites', siteId);
     const raw = siteDoc.log_data || siteDoc.incoming_log || '{}';

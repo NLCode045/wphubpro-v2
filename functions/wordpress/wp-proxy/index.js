@@ -10,6 +10,8 @@
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
 
 function parsePayload(req) {
   if (!req) return {};
@@ -22,12 +24,6 @@ function parsePayload(req) {
     return JSON.parse(trimmed);
   }
   return {};
-}
-
-function createClient(sdkLib, { endpoint, projectId, apiKey }) {
-  const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
-  if (apiKey) client.setKey(apiKey);
-  return client;
 }
 
 function ok(res, payload = {}, statusCode = 200) {
@@ -99,20 +95,22 @@ function redactRequestBodyForLog(bodyStr) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
   const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     return fail(res, 'Function environment is not configured.', 500);
   }
   if (!ENCRYPTION_KEY) {
     return fail(res, 'Function environment is not configured. Missing: ENCRYPTION_KEY.', 500);
   }
 
-  const client = createClient(sdk, { endpoint, projectId, apiKey });
-  const databases = new sdk.Databases(client);
+  let databases;
+  try {
+    ({ databases } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(`[wp-proxy] ${e.message}`);
+    return fail(res, 'Could not resolve Appwrite credentials.', 500);
+  }
 
   let payload = {};
   try {

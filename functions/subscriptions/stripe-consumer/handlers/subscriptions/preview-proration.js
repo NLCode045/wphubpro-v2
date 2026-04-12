@@ -1,6 +1,7 @@
 const sdk = require("node-appwrite");
 const { mergedEnv } = require("../../lib/mergedEnv");
-const { getAppwriteBootstrapFromEnv, hasAppwriteBootstrap } = require("../../lib/appwriteEnv");
+const { hasAppwriteBootstrap } = require("../../lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../../database/fetchAppwriteCredentialsFromGateway");
 const { callStripeGateway } = require("../../lib/callStripeGateway");
 
 function parsePayload(req) {
@@ -15,7 +16,6 @@ function parsePayload(req) {
 
 module.exports = async ({ req, res, log, error }) => {
   const env = mergedEnv(req);
-  const { endpoint, projectId, apiKey } = getAppwriteBootstrapFromEnv(env);
   const DATABASE_ID = env.APPWRITE_DATABASE_ID || env.DATABASE_ID;
   const ACCOUNTS_COLLECTION_ID =
     env.APPWRITE_ACCOUNTS_COLLECTION_ID || env.ACCOUNTS_COLLECTION_ID;
@@ -52,9 +52,7 @@ module.exports = async ({ req, res, log, error }) => {
         ? subscription.customer
         : subscription.customer?.id;
 
-    const client = new sdk.Client();
-    client.setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-    const databases = new sdk.Databases(client);
+    const { databases } = await createServerClientAndDatabases(log, error);
 
     const accountDocs = await databases.listDocuments(DATABASE_ID, ACCOUNTS_COLLECTION_ID, [
       sdk.Query.equal("user_id", userId),

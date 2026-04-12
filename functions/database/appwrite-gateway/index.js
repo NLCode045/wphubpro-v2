@@ -10,6 +10,7 @@
  * Consumers: admin-manage-users, bulk-operations, system functions
  */
 const sdk = require('node-appwrite');
+const { resolveServerCredentials } = require('./lib/resolveServerCredentials');
 
 /**
  * Validate environment configuration for gateway functions
@@ -240,14 +241,13 @@ async function updateUserLabels(users, res, log, error, payload) {
 module.exports = async ({ req, res, log, error }) => {
   try {
     const config = validateGatewayEnvironment();
+    const resolved = await resolveServerCredentials(config, log);
 
-    // Initialize Appwrite admin client
     const adminClient = new sdk.Client()
-      .setEndpoint(config.APPWRITE_ENDPOINT)
-      .setProject(config.APPWRITE_PROJECT_ID)
-      .setKey(config.APPWRITE_API_KEY);
+      .setEndpoint(resolved.endpoint)
+      .setProject(resolved.projectId)
+      .setKey(resolved.apiKey);
 
-    // Parse action from request
     const payload = parsePayload(req);
     const action = String(payload.action || req.query?.action || '').toLowerCase().trim();
 
@@ -255,7 +255,14 @@ module.exports = async ({ req, res, log, error }) => {
       return fail(res, 'action parameter required', 400);
     }
 
-    // Route to appropriate handler
+    if (action === 'get-appwrite-credentials') {
+      return success(res, {
+        endpoint: resolved.endpoint,
+        projectId: resolved.projectId,
+        apiKey: resolved.apiKey,
+      });
+    }
+
     return await handleAppwriteOperation(req, res, log, error, action, adminClient, payload);
   } catch (err) {
     error(`appwrite-gateway fatal error: ${err.message}`);

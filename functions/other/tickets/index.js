@@ -2,6 +2,8 @@
  * Tickets / Helpdesk: list, admin list, create, get, messages, status, assignment, follow, notifications.
  */
 const sdk = require("node-appwrite");
+const { hasAppwriteBootstrap } = require("../../subscriptions/stripe-consumer/lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../database/fetchAppwriteCredentialsFromGateway");
 
 const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || "platform_db";
 const TICKETS_COLLECTION = "tickets";
@@ -126,12 +128,6 @@ async function resolveExecutorUserId(req, endpoint, projectId) {
   } catch {
     return null;
   }
-}
-
-function createClient(sdkLib, { endpoint, projectId, apiKey }) {
-  const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
-  if (apiKey) client.setKey(apiKey);
-  return client;
 }
 
 function ok(res, payload = {}, statusCode = 200) {
@@ -305,17 +301,22 @@ function normalizeTicketRow(doc) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     return fail(res, "Function environment not configured", 500);
   }
 
-  const client = createClient(sdk, { endpoint, projectId, apiKey });
-  const databases = new sdk.Databases(client);
-  const teams = new sdk.Teams(client);
-  const users = new sdk.Users(client);
+  let databases;
+  let teams;
+  let users;
+  let endpoint;
+  let projectId;
+  try {
+    ({ databases, teams, users, endpoint, projectId } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(e.message);
+    return fail(res, "Could not resolve Appwrite credentials", 500);
+  }
+
   const userId = await resolveExecutorUserId(req, endpoint, projectId);
 
   const payload = parsePayload(req);

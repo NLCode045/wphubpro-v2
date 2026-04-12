@@ -1,7 +1,7 @@
 // Stripe Webhook Handler for Appwrite Function
-const sdk = require('node-appwrite');
 const { callStripeGateway } = require('./lib/callStripeGateway');
-const { getAppwriteBootstrap, hasAppwriteBootstrap } = require('./lib/appwriteEnv');
+const { hasAppwriteBootstrap } = require('./lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../../database/fetchAppwriteCredentialsFromGateway');
 const { processStripeWebhookEvent } = require('./processStripeWebhookEvent');
 
 /**
@@ -13,8 +13,6 @@ module.exports = async ({ req, res, log, error }) => {
     return res.json({ success: false, message: 'Appwrite configuration missing' }, 500);
   }
 
-  const { endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, apiKey: APPWRITE_API_KEY } =
-    getAppwriteBootstrap();
   const DATABASE_ID = process.env.DATABASE_ID || process.env.APPWRITE_DATABASE_ID || 'platform_db';
   const ACCOUNTS_COLLECTION_ID =
     process.env.ACCOUNTS_COLLECTION_ID || process.env.APPWRITE_ACCOUNTS_COLLECTION_ID || 'accounts';
@@ -46,12 +44,14 @@ module.exports = async ({ req, res, log, error }) => {
     return res.json({ success: false, message: 'Invalid webhook event' }, 400);
   }
 
-  const client = new sdk.Client()
-    .setEndpoint(APPWRITE_ENDPOINT)
-    .setProject(APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  const users = new sdk.Users(client);
-  const databases = new sdk.Databases(client);
+  let databases;
+  let users;
+  try {
+    ({ databases, users } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(`Failed to resolve Appwrite credentials: ${e.message}`);
+    return res.json({ success: false, message: 'Appwrite credentials unavailable' }, 500);
+  }
 
   try {
     return await processStripeWebhookEvent({

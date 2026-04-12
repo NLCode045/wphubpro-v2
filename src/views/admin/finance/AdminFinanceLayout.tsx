@@ -1,12 +1,23 @@
 import { DocHelpButton } from '@/components/docs/DocHelpButton'
 import PageMetaData from '@/components/PageMetaData'
+import { TabNavLabel } from '@/components/TabNavLabel'
 import { ROUTE_PATHS } from '@/config/routePaths'
 import { useDashboardNav } from '@/context/DashboardNavContext'
 import { useAuth } from '@/domains/auth'
 import type { DocsHelpContextKey } from '@/domains/docs/docsHelpMap'
 import { useEffect, useMemo } from 'react'
-import { Card } from 'react-bootstrap'
-import { Outlet, useLocation, useNavigate } from 'react-router'
+import { Card, Nav } from 'react-bootstrap'
+import type { IconType } from 'react-icons'
+import { TbLayoutDashboard, TbListDetails, TbPackages, TbReceipt, TbWallet } from 'react-icons/tb'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+
+const FINANCE_SECTION_TABS: { to: string; label: string; Icon: IconType; end?: boolean }[] = [
+  { to: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD, label: 'Dashboard', Icon: TbLayoutDashboard, end: true },
+  { to: ROUTE_PATHS.ADMIN_FINANCE_SUBSCRIPTIONS, label: 'Subscriptions', Icon: TbListDetails },
+  { to: ROUTE_PATHS.ADMIN_FINANCE_PLANS, label: 'Plans', Icon: TbPackages },
+  { to: ROUTE_PATHS.ADMIN_FINANCE_BILLING, label: 'Billing', Icon: TbReceipt },
+  { to: ROUTE_PATHS.ADMIN_FINANCE_PAYMENTS, label: 'Payments', Icon: TbWallet },
+]
 
 function financeHelpContext(pathname: string): DocsHelpContextKey {
   if (pathname.includes('/subscriptions/')) return 'admin:finance:subscription-detail'
@@ -57,6 +68,27 @@ const AdminFinanceLayout = () => {
             </div>
             <DocHelpButton contextKey={helpKey} />
           </div>
+          <Nav
+            as="div"
+            variant="underline"
+            className="gap-3 flex-wrap flex-md-nowrap mt-3 mb-0"
+            role="tablist"
+            aria-label="Finance sections"
+          >
+            {FINANCE_SECTION_TABS.map(({ to, label, Icon, end }) => (
+              <Nav.Item key={to}>
+                <Nav.Link
+                  as={NavLink}
+                  to={to}
+                  end={end}
+                  className="py-2 px-0"
+                  role="tab"
+                >
+                  <TabNavLabel Icon={Icon}>{label}</TabNavLabel>
+                </Nav.Link>
+              </Nav.Item>
+            ))}
+          </Nav>
         </Card.Header>
         <Card.Body className="p-3 p-lg-4">
           <Outlet />

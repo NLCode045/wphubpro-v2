@@ -3,10 +3,10 @@
  */
 import Stripe from 'stripe';
 
-/** Typed server config; extends Stripe SDK options for a single source of truth. */
-export interface StripeServerConfig extends Stripe.StripeConfig {
+/** Constructor options for `new Stripe(...)` (same shape as `Stripe.StripeConfig`). */
+export type StripeServerConfig = NonNullable<ConstructorParameters<typeof Stripe>[1]> & {
   typescript: true;
-}
+};
 
 export function getStripeFromEnv(config?: Partial<StripeServerConfig>): InstanceType<typeof Stripe> {
   const secret = process.env.STRIPE_SECRET_KEY;

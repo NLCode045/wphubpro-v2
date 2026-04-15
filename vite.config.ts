@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
     fileEnv.VITE_STRIPE_ADMIN_DEV_MOCK === '1' || fileEnv.VITE_STRIPE_ADMIN_DEV_MOCK === 'true';
 
   const stripeApiProxyTarget = (fileEnv.VITE_STRIPE_API_PROXY_TARGET ?? '').trim();
-  const devApiProxyTarget = (fileEnv.VITE_DEV_API_PROXY_TARGET ?? '').trim() || 'https://api.wphub.pro';
+  const devApiProxyTarget = (fileEnv.VITE_DEV_API_PROXY_TARGET ?? '').trim() || 'https://appwrite.wphub.pro';
 
   return {
   /**

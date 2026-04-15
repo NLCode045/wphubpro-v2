@@ -8,7 +8,7 @@ import { account } from '@/services/appwrite'
 import { AppwriteException } from 'appwrite'
 import { useEffect, useState, type FormEvent } from 'react'
 import { FaEnvelope, FaGithub, FaMobileScreenButton } from 'react-icons/fa6'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Alert, Button, Card, Col, Container, Form, FormControl, FormLabel, Row, Spinner } from 'react-bootstrap'
 
 /** Sign-in with email + password; second step only when Appwrite requires MFA (user has MFA enabled). */
@@ -26,6 +26,16 @@ function isMfaFactorsRequiredError(err: unknown): boolean {
   return (err as { type?: string }).type === 'user_more_factors_required'
 }
 
+/** Safe in-app path from `Navigate` state (e.g. bridge connect callback with query string). */
+function postAuthPathFromState(state: unknown): string {
+  const loc = state as { pathname?: string; search?: string } | undefined
+  const p = loc?.pathname
+  if (typeof p === 'string' && p.startsWith('/') && !p.startsWith('//')) {
+    return `${p}${typeof loc.search === 'string' ? loc.search : ''}`
+  }
+  return ROUTE_PATHS.DASHBOARD
+}
+
 const SignInPage = () => {
   const {
     login,
@@ -38,6 +48,8 @@ const SignInPage = () => {
     verifyLoginEmailOtp,
   } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const afterAuthPath = postAuthPathFromState(location.state)
   const [searchParams] = useSearchParams()
 
   /** GitHub OAuth failure redirect (see getOAuthRedirectUrls) or provider error query params. */
@@ -224,7 +236,7 @@ const SignInPage = () => {
           try {
             await account.get()
             await refreshUser()
-            navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+            navigate(afterAuthPath, { replace: true })
             return
           } catch (e2: unknown) {
             if (isMfaFactorsRequiredError(e2)) {
@@ -242,7 +254,7 @@ const SignInPage = () => {
       }
 
       await refreshUser()
-      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+      navigate(afterAuthPath, { replace: true })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.')
     } finally {
@@ -294,7 +306,7 @@ const SignInPage = () => {
         await completeMfaChallengeLogin(pwdFlow.challengeId, verificationCode)
       }
       await refreshUser()
-      navigate(ROUTE_PATHS.DASHBOARD, { replace: true })
+      navigate(afterAuthPath, { replace: true })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid or expired code.')
     } finally {

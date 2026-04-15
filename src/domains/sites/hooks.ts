@@ -7,6 +7,7 @@ import {
   COLLECTIONS,
   databases,
   DATABASE_ID,
+  ID,
 } from '../../services/appwrite';
 import { postBridgeApiJsonWithMeta } from '@/lib/platform-api';
 import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
@@ -249,6 +250,87 @@ export const useSites = () => {
       return response.documents.map((doc) => mapSiteDocumentToSite(doc as Record<string, unknown>));
     },
     enabled: !!user?.$id,
+  });
+};
+
+/** Payload returned after create/update when the bridge stores optional follow-up fields on the document. */
+export type SiteBridgeMutationResult = Site & {
+  siteSecret?: string;
+  site_secret?: string;
+  encrypted_api_key?: string;
+};
+
+export type AddSiteInput = {
+  siteUrl: string;
+  siteName: string;
+  username?: string;
+  /** Plain bridge secret (stored in `api_key`). */
+  apiKey: string;
+};
+
+export type UpdateSiteBridgeInput = {
+  siteId: string;
+  apiKey: string;
+};
+
+/**
+ * Registers a new site row for the current user (WordPress bridge connect flow).
+ */
+export const useAddSite = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<SiteBridgeMutationResult, Error, AddSiteInput>({
+    mutationFn: async (input) => {
+      if (!user?.$id) throw new Error('Not signed in.');
+      const doc = await databases.createDocument(DATABASE_ID, COLLECTIONS.SITES, ID.unique(), {
+        user_id: user.$id,
+        site_url: input.siteUrl.replace(/\/$/, ''),
+        site_name: input.siteName,
+        ...(input.username?.trim() ? { username: input.username.trim() } : {}),
+        api_key: input.apiKey,
+        bridge_status: 'connected',
+      });
+      const raw = doc as unknown as Record<string, unknown>;
+      return {
+        ...mapSiteDocumentToSite(raw),
+        siteSecret: typeof raw.site_secret === 'string' ? raw.site_secret : undefined,
+        site_secret: typeof raw.site_secret === 'string' ? raw.site_secret : undefined,
+        encrypted_api_key: typeof raw.encrypted_api_key === 'string' ? raw.encrypted_api_key : undefined,
+      };
+    },
+    onSuccess: () => {
+      if (user?.$id) void queryClient.invalidateQueries({ queryKey: ['sites', user.$id] });
+    },
+  });
+};
+
+/**
+ * Updates bridge credentials for an existing site (same user).
+ */
+export const useUpdateSite = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<SiteBridgeMutationResult, Error, UpdateSiteBridgeInput>({
+    mutationFn: async (input) => {
+      if (!user?.$id) throw new Error('Not signed in.');
+      const doc = await databases.updateDocument(DATABASE_ID, COLLECTIONS.SITES, input.siteId, {
+        api_key: input.apiKey,
+        bridge_status: 'connected',
+      });
+      const raw = doc as unknown as Record<string, unknown>;
+      return {
+        ...mapSiteDocumentToSite(raw),
+        siteSecret: typeof raw.site_secret === 'string' ? raw.site_secret : undefined,
+        site_secret: typeof raw.site_secret === 'string' ? raw.site_secret : undefined,
+        encrypted_api_key: typeof raw.encrypted_api_key === 'string' ? raw.encrypted_api_key : undefined,
+      };
+    },
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['site', variables.siteId] });
+      if (user?.$id) void queryClient.invalidateQueries({ queryKey: ['sites', user.$id] });
+    },
   });
 };
 

@@ -28,6 +28,7 @@ import AdminSupportTicketsPage from '@/views/support/AdminSupportTicketsPage'
 import SupportTicketCreatePage from '@/views/support/SupportTicketCreatePage'
 import SupportTicketDetailPage from '@/views/support/SupportTicketDetailPage'
 import SupportTicketsListPage from '@/views/support/SupportTicketsListPage'
+import ConnectSuccessPage from '@/views/connect/ConnectSuccessPage'
 import UserProfilePage from '@/views/profile/UserProfilePage'
 import ForgotPasswordPage from '@/views/auth/auth-1/reset-password'
 import LoginPage from '@/views/auth/auth-1/sign-in'
@@ -80,6 +81,8 @@ export const routes: RouteObject[] = [
     children: [
       { path: '/', element: <Navigate to={ROUTE_PATHS.DASHBOARD} replace /> },
       { path: ROUTE_PATHS.DASHBOARD, element: <DashboardPage /> },
+      { path: ROUTE_PATHS.CONNECT_SUCCESS, element: <ConnectSuccessPage /> },
+      { path: '/connect-success', element: <ConnectSuccessPage /> },
       { path: ROUTE_PATHS.PROFILE, element: <UserProfilePage /> },
       { path: ROUTE_PATHS.SUPPORT, element: <SupportTicketsListPage /> },
       { path: ROUTE_PATHS.SUPPORT_NEW, element: <SupportTicketCreatePage /> },

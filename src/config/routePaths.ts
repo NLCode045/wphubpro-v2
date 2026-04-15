@@ -4,6 +4,8 @@ export const ROUTE_PATHS = {
   FORGOT_PASSWORD: '/forgot-password',
   RESET_PASSWORD: '/reset-password',
   DASHBOARD: '/dashboard',
+  /** WordPress bridge redirect after connect (query: site_url, user_login, connect_token | api_key). */
+  CONNECT_SUCCESS: '/connect/success',
   PROFILE: '/profile',
   SITES: '/sites',
   /** Path pattern: `/sites/:siteId` — use `siteDetailPath(id)` for links. */

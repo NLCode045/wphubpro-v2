@@ -4,6 +4,8 @@
  */
 const sdk = require('node-appwrite');
 const crypto = require('crypto');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 function parsePayload(req) {
   if (!req) return {};
@@ -72,18 +74,11 @@ function timingSafeEqual(a, b) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
   const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
-  if (!endpoint || !projectId || !apiKey) {
-    const missing = [];
-    if (!endpoint) missing.push('APPWRITE_ENDPOINT');
-    if (!projectId) missing.push('APPWRITE_PROJECT_ID');
-    if (!apiKey) missing.push('APPWRITE_API_KEY');
-    error(`[site-heartbeat] Missing env: ${missing.join(', ')}.`);
-    return fail(res, `Function environment is not configured. Missing: ${missing.join(', ')}.`, 500);
+  if (!hasAppwriteBootstrap()) {
+    error('[site-heartbeat] Missing Appwrite bootstrap env.');
+    return fail(res, 'Function environment is not configured.', 500);
   }
 
   if (!ENCRYPTION_KEY) {
@@ -114,8 +109,7 @@ module.exports = async ({ req, res, log, error }) => {
   }
 
   try {
-    const adminClient = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-    const databases = new sdk.Databases(adminClient);
+    const { databases } = await createServerClientAndDatabases(log, error);
 
     const siteDoc = await databases.getDocument('platform_db', 'sites', siteId);
     // Validate against site_secret first (Bridge→Hub), then api_key (legacy)

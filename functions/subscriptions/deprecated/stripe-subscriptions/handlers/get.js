@@ -1,14 +1,10 @@
-const sdk = require("node-appwrite");
 const { mergedEnv } = require("../lib/mergedEnv");
-const { getAppwriteBootstrapFromEnv } = require("../lib/appwriteEnv");
+const { hasAppwriteBootstrap } = require("../lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../../../database/fetchAppwriteCredentialsFromGateway");
 const { callStripeGateway } = require("../lib/callStripeGateway");
 
 module.exports = async ({ req, res, log, error }) => {
   const env = mergedEnv(req);
-  const client = new sdk.Client();
-  const databases = new sdk.Databases(client);
-
-  const { endpoint, projectId, apiKey } = getAppwriteBootstrapFromEnv(env);
   const APPWRITE_DATABASE_ID = env.APPWRITE_DATABASE_ID;
   const APPWRITE_ACCOUNTS_COLLECTION_ID = env.APPWRITE_ACCOUNTS_COLLECTION_ID;
 
@@ -16,9 +12,7 @@ module.exports = async ({ req, res, log, error }) => {
   const ACCOUNTS_COLLECTION_ID = APPWRITE_ACCOUNTS_COLLECTION_ID || env.ACCOUNTS_COLLECTION_ID;
 
   const missingVars = [];
-  if (!endpoint) missingVars.push("APPWRITE_ENDPOINT");
-  if (!projectId) missingVars.push("APPWRITE_PROJECT_ID");
-  if (!apiKey) missingVars.push("APPWRITE_API_KEY");
+  if (!hasAppwriteBootstrap(env)) missingVars.push("APPWRITE_ENDPOINT/PROJECT_ID/API_KEY");
   if (!DATABASE_ID) missingVars.push("APPWRITE_DATABASE_ID");
   if (!ACCOUNTS_COLLECTION_ID) missingVars.push("APPWRITE_ACCOUNTS_COLLECTION_ID");
 
@@ -30,7 +24,13 @@ module.exports = async ({ req, res, log, error }) => {
     return res.json({ error: errorMsg }, 500);
   }
 
-  client.setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
+  let databases;
+  try {
+    ({ databases } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(e.message);
+    return res.json({ error: e.message }, 500);
+  }
 
   try {
     let userId =

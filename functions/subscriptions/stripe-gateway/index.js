@@ -10,6 +10,7 @@
  * Consumers: stripe-products, stripe-invoices, stripe-subscriptions, stripe-payments, etc.
  */
 const sdk = require('node-appwrite');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 const { validateGatewayEnvironment } = require('./lib/env');
 const { parsePayload, mergeNestedPayload } = require('./lib/payload');
 const { fail } = require('./lib/responses');
@@ -43,14 +44,8 @@ module.exports = async ({ req, res, log, error }) => {
     const config = validateGatewayEnvironment();
     log(`stripe-gateway: Environment validated. Vault DB: ${config.VAULT_DB_ID}`);
 
-    log('stripe-gateway: Initializing Appwrite admin client');
-    const adminClient = new sdk.Client()
-      .setEndpoint(config.APPWRITE_ENDPOINT)
-      .setProject(config.APPWRITE_PROJECT_ID)
-      .setKey(config.APPWRITE_API_KEY);
-
-    const databases = new sdk.Databases(adminClient);
-    const users = new sdk.Users(adminClient);
+    log('stripe-gateway: Resolving Appwrite credentials via appwrite-gateway (vault)');
+    const { databases, users } = await createServerClientAndDatabases(log, error);
     log('stripe-gateway: Appwrite clients initialized');
 
     log('stripe-gateway: Initializing Stripe client');

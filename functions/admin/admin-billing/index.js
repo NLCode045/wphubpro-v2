@@ -1,5 +1,7 @@
 const Stripe = require("stripe");
 const sdk = require("node-appwrite");
+const { hasAppwriteBootstrap } = require("../../subscriptions/stripe-consumer/lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../database/fetchAppwriteCredentialsFromGateway");
 
 function parsePayload(req) {
   if (!req) return {};
@@ -31,17 +33,15 @@ function fail(res, message, statusCode = 500, extra = {}) {
 }
 
 async function ensureAdmin(req) {
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
   const userId = process.env.APPWRITE_FUNCTION_USER_ID || req.headers?.["x-appwrite-user-id"];
-  if (!userId || !APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) return false;
-  const client = new sdk.Client()
-    .setEndpoint(APPWRITE_ENDPOINT)
-    .setProject(APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  const teams = new sdk.Teams(client);
-  const users = new sdk.Users(client);
+  if (!userId || !hasAppwriteBootstrap()) return false;
+  let teams;
+  let users;
+  try {
+    ({ teams, users } = await createServerClientAndDatabases(null, null));
+  } catch {
+    return false;
+  }
   try {
     const memberships = await teams.listMemberships("admin");
     if (memberships.memberships.some((m) => m.userId === userId)) return true;
@@ -145,9 +145,6 @@ module.exports = async ({ req, res, log, error }) => {
     return fail(res, "Stripe configuration missing", 500);
   }
 
-  const APPWRITE_ENDPOINT = req.variables?.APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = req.variables?.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = req.variables?.APPWRITE_API_KEY || process.env.APPWRITE_API_KEY;
   const DATABASE_ID =
     req.variables?.APPWRITE_DATABASE_ID ||
     process.env.APPWRITE_DATABASE_ID ||
@@ -163,15 +160,17 @@ module.exports = async ({ req, res, log, error }) => {
 
   const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
 
-  const client = new sdk.Client()
-    .setEndpoint(APPWRITE_ENDPOINT)
-    .setProject(APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  const databases = new sdk.Databases(client);
-  const usersApi = new sdk.Users(client);
+  let databases;
+  let usersApi;
+  try {
+    ({ databases, users: usersApi } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(e.message);
+    return fail(res, "Appwrite credentials unavailable", 500);
+  }
 
   async function appwriteUserByStripeCustomerId(customerId) {
-    if (!customerId || !APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) return null;
+    if (!customerId) return null;
     try {
       const accs = await databases.listDocuments(DATABASE_ID, ACCOUNTS_COLLECTION_ID, [
         sdk.Query.equal("stripe_customer_id", customerId),

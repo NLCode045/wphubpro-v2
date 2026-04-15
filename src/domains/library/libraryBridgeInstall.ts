@@ -1,9 +1,6 @@
-import { executeFunctionWithMeta } from '@/integrations/appwrite/executeFunction';
-import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite';
+import { postBridgeApiJsonWithMeta } from '@/lib/platform-api';
 import type { WpPluginInfo, WpThemeInfo } from '@/services/wordpress';
 import type { LibraryItem } from '@/types';
-
-const WP_PROXY_FUNCTION_ID = APPWRITE_FUNCTION_IDS.WP_PROXY;
 
 export type LibraryBridgeInstallPlan =
   | { kind: 'plugin-install-version'; slug: string; version: string }
@@ -121,6 +118,10 @@ function parseWpProxyFailureMessage(data: unknown, statusCode: number): string {
     const o = data as Record<string, unknown>;
     if (typeof o.message === 'string' && o.message.trim()) return o.message.trim();
     if (typeof o.error === 'string' && o.error.trim()) return o.error.trim();
+    if (o.error && typeof o.error === 'object' && typeof (o.error as { message?: string }).message === 'string') {
+      const m = (o.error as { message: string }).message.trim();
+      if (m) return m;
+    }
   }
   if (statusCode > 0) return `Install failed (HTTP ${statusCode}).`;
   return 'Install failed.';
@@ -150,15 +151,10 @@ export async function runLibraryBridgeInstallOnSite(
         };
 
   try {
-    const { statusCode, data } = await executeFunctionWithMeta<unknown>(
-      WP_PROXY_FUNCTION_ID,
-      payload,
-      {
-        throwOnHttpError: false,
-        longRunning: true,
-        maxAsyncWaitMs: 180_000,
-      },
-    );
+    const { statusCode, data } = await postBridgeApiJsonWithMeta<unknown>('/wp-proxy', payload, {
+      timeoutMs: 180_000,
+      throwOnHttpError: false,
+    });
 
     if (statusCode >= 200 && statusCode < 300) {
       return { ok: true, message: 'Installed.' };

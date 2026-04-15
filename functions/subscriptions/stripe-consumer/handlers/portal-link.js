@@ -1,6 +1,7 @@
 const sdk = require('node-appwrite');
 const { callStripeGateway } = require('../lib/callStripeGateway');
-const { getAppwriteBootstrap, hasAppwriteBootstrap } = require('../lib/appwriteEnv');
+const { hasAppwriteBootstrap } = require('../lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../../database/fetchAppwriteCredentialsFromGateway');
 
 module.exports = async ({ req, res, log, error, payload }) => {
   try {
@@ -24,9 +25,7 @@ module.exports = async ({ req, res, log, error, payload }) => {
 
     log(`Creating billing portal session for user: ${userId}`);
 
-    const { endpoint, projectId, apiKey } = getAppwriteBootstrap();
-    const client = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-    const databases = new sdk.Databases(client);
+    const { databases } = await createServerClientAndDatabases(log, error);
 
     let stripeCustomerId = null;
     const accountDocs = await databases.listDocuments(DATABASE_ID, ACCOUNTS_COLLECTION_ID, [

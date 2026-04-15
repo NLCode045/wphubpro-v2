@@ -3,6 +3,7 @@
  * Routes to s3-gateway via gateway-utils
  */
 const sdk = require('node-appwrite');
+const { getAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
 
 function parsePayload(req) {
   if (!req) return {};
@@ -18,10 +19,11 @@ function parsePayload(req) {
 }
 
 async function callGatewayUtils(action, payload) {
-  const client = new sdk.Client()
-    .setEndpoint(process.env.APPWRITE_FUNCTION_ENDPOINT)
-    .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-    .setKey(process.env.APPWRITE_FUNCTION_API_KEY);
+  const { endpoint, projectId, apiKey } = getAppwriteBootstrap();
+  if (!endpoint || !projectId || !apiKey) {
+    throw new Error('APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID and APPWRITE_API_KEY are required');
+  }
+  const client = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
 
   const functions = new sdk.Functions(client);
 

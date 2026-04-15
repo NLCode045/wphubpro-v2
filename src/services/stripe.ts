@@ -1,13 +1,11 @@
-import { executeFunction } from '@/integrations/appwrite/executeFunction';
-import { APPWRITE_FUNCTION_IDS } from '@/services/appwrite';
+import { fetchStripeJson, postStripeJsonAuthed } from '@/lib/stripe-loader';
 
 // Cache the publishable key after fetching
 let stripePublishableKeyCache: string | null = null;
 
 /**
- * Fetch Stripe configuration from stripe-config consumer function
- * The frontend calls stripe-config, which calls stripe-gateway to get the publishable key
- * Sensitive data never reaches the frontend
+ * Fetch Stripe publishable key from `GET /api/stripe/config` (implemented by your API host; see `publishableConfig.ts`).
+ * The secret key stays on the server.
  */
 export async function getStripeConfig(): Promise<{ stripe_publishable_key: string }> {
   if (stripePublishableKeyCache) {
@@ -15,11 +13,11 @@ export async function getStripeConfig(): Promise<{ stripe_publishable_key: strin
   }
 
   try {
-    const result = await executeFunction<{
+    const result = await fetchStripeJson<{
       success?: boolean;
       stripe_publishable_key?: string;
       message?: string;
-    }>(APPWRITE_FUNCTION_IDS.STRIPE_CONFIG, { stripeScope: 'config' });
+    }>('/config');
 
     if (!result?.success || !result?.stripe_publishable_key) {
       throw new Error('Invalid Stripe configuration response');
@@ -46,7 +44,8 @@ export async function initializeStripe(): Promise<string> {
  * Opens Stripe Customer Portal (fallback only; primary flows stay in-app).
  */
 export async function redirectToBillingPortal(returnUrl?: string): Promise<void> {
-  const result = await executeFunction<{ url?: string }>(APPWRITE_FUNCTION_IDS.STRIPE_PORTAL_LINK, {
+  const result = await postStripeJsonAuthed<{ url?: string }>('/user-billing', {
+    action: 'billing-portal',
     returnUrl: returnUrl ?? window.location.href,
   });
   if (!result?.url) throw new Error('Billing portal URL not returned.');

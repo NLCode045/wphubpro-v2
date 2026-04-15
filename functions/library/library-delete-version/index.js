@@ -3,6 +3,8 @@
  * For local uploads, deletes the version's S3 object or prefix when applicable.
  */
 const sdk = require("node-appwrite");
+const { hasAppwriteBootstrap } = require("../../subscriptions/stripe-consumer/lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../database/fetchAppwriteCredentialsFromGateway");
 const {
   S3Client,
   ListObjectsV2Command,
@@ -106,13 +108,8 @@ async function deleteS3Path(s3, bucket, s3Path, log) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const client = new sdk.Client();
-
   const env = req?.variables && Object.keys(req.variables).length > 0 ? req.variables : process.env;
 
-  const APPWRITE_ENDPOINT = env.APPWRITE_FUNCTION_ENDPOINT || env.APPWRITE_ENDPOINT;
-  const APPWRITE_PROJECT_ID = env.APPWRITE_FUNCTION_PROJECT_ID || env.APPWRITE_PROJECT_ID;
-  const APPWRITE_API_KEY = env.APPWRITE_FUNCTION_API_KEY || env.APPWRITE_API_KEY || env.APPWRITE_KEY;
   const APPWRITE_USER_ID = env.APPWRITE_FUNCTION_USER_ID || req?.headers?.["x-appwrite-user-id"];
 
   let S3_BUCKET = env.S3_BUCKET;
@@ -120,11 +117,21 @@ module.exports = async ({ req, res, log, error }) => {
   let S3_ACCESS_KEY_ID = env.S3_ACCESS_KEY_ID;
   let S3_SECRET_ACCESS_KEY = env.S3_SECRET_ACCESS_KEY;
 
+  if (!hasAppwriteBootstrap()) {
+    return res.json({ success: false, message: "Appwrite config missing." }, 500);
+  }
+
+  let databases;
+  try {
+    ({ databases } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    log("Could not resolve Appwrite credentials: " + e.message);
+    return res.json({ success: false, message: "Appwrite config missing." }, 500);
+  }
+
   if (!S3_BUCKET || !S3_REGION || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) {
     try {
-      client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
-      const databasesSdk = new sdk.Databases(client);
-      const settingsList = await databasesSdk.listDocuments("platform_db", "platform_settings", [
+      const settingsList = await databases.listDocuments("platform_db", "platform_settings", [
         sdk.Query.equal("key", "s3"),
       ]);
       if (settingsList.total > 0) {
@@ -137,10 +144,6 @@ module.exports = async ({ req, res, log, error }) => {
     } catch (e) {
       log("Could not load S3 settings: " + e.message);
     }
-  }
-
-  if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) {
-    return res.json({ success: false, message: "Appwrite config missing." }, 500);
   }
 
   if (!APPWRITE_USER_ID) {
@@ -160,8 +163,6 @@ module.exports = async ({ req, res, log, error }) => {
 
   const { libraryItemId, libraryDocumentId, versionKey } = payload;
 
-  client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
-  const databases = new sdk.Databases(client);
   const databaseId = env.APPWRITE_DATABASE_ID || env.DATABASE_ID || "platform_db";
   const collectionId = env.LIBRARY_COLLECTION_ID || "library";
 

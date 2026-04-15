@@ -2,7 +2,8 @@ const sdk = require('node-appwrite');
 const { ensureStripeCustomerForUser } = require('./ensureStripeCustomer');
 const { callStripeGateway } = require('../lib/callStripeGateway');
 const { mergedEnv } = require('../lib/mergedEnv');
-const { getAppwriteBootstrapFromEnv, hasAppwriteBootstrap } = require('../lib/appwriteEnv');
+const { hasAppwriteBootstrap } = require('../lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../../database/fetchAppwriteCredentialsFromGateway');
 
 module.exports = async ({ req, res, error, log, payload }) => {
   const env = mergedEnv(req);
@@ -13,10 +14,14 @@ module.exports = async ({ req, res, error, log, payload }) => {
     return res.json({ error: 'Internal Server Error: Missing configuration.' }, 500);
   }
 
-  const { endpoint, projectId, apiKey } = getAppwriteBootstrapFromEnv(env);
-  const client = new sdk.Client();
-  client.setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-  const databases = new sdk.Databases(client);
+  let databases;
+  let users;
+  try {
+    ({ databases, users } = await createServerClientAndDatabases(log, error));
+  } catch (e) {
+    error(e.message);
+    return res.json({ error: 'Internal Server Error: credentials.' }, 500);
+  }
 
   const gateway = { callStripeGateway, log, error };
 
@@ -32,7 +37,6 @@ module.exports = async ({ req, res, error, log, payload }) => {
       return res.json({ error: 'User not authenticated.' }, 401);
     }
     try {
-      const users = new sdk.Users(client);
       const appwriteUser = await users.get(userId);
       const email = appwriteUser.email;
       if (!email) {

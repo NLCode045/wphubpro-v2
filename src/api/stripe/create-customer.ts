@@ -3,7 +3,6 @@
  *
  * Persists `stripe_customer_id` on the Auth user `prefs` (Stripe-as-a-Source; no subscription DB sync).
  */
-import type Stripe from 'stripe';
 import { Client, Users } from 'node-appwrite';
 
 import { getStripeFromEnv } from './client';
@@ -37,7 +36,7 @@ export interface CreateStripeCustomerParams {
 
 export interface CreateStripeCustomerResult {
   stripeCustomerId: string;
-  customer: Stripe.Customer;
+  customer: import('stripe').Stripe.Customer;
 }
 
 /**

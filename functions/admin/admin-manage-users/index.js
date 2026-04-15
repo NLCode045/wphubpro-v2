@@ -1,12 +1,8 @@
 const sdk = require("node-appwrite");
 const stripe = require("stripe");
 const handleList = require("./handlers/list");
-
-function createClient(sdkLib, { endpoint, projectId, apiKey }) {
-  const client = new sdkLib.Client().setEndpoint(endpoint).setProject(projectId);
-  if (apiKey) client.setKey(apiKey);
-  return client;
-}
+const { hasAppwriteBootstrap } = require("../../subscriptions/stripe-consumer/lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../database/fetchAppwriteCredentialsFromGateway");
 const handleUpdate = require("./handlers/update");
 const handleLoginAs = require("./handlers/login-as");
 
@@ -25,13 +21,21 @@ function parsePayload(req) {
 
 module.exports = async ({ req, res, log, error }) => {
   try {
-    const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT;
-    const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-    const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
-
-    if (!endpoint || !projectId || !apiKey) {
+    if (!hasAppwriteBootstrap()) {
       error("Appwrite configuration missing");
       return res.json({ success: false, message: "Appwrite config missing" }, 500);
+    }
+
+    let client;
+    let databases;
+    let endpoint;
+    let projectId;
+    let apiKey;
+    try {
+      ({ client, databases, endpoint, projectId, apiKey } = await createServerClientAndDatabases(log, error));
+    } catch (e) {
+      error(e.message);
+      return res.json({ success: false, message: "Appwrite credentials unavailable" }, 500);
     }
 
     const payload = parsePayload(req);
@@ -63,8 +67,6 @@ module.exports = async ({ req, res, log, error }) => {
     log("Action: " + action);
     log("=== END DEBUG ===");
 
-    const client = createClient(sdk, { endpoint, projectId, apiKey });
-    const databases = new sdk.Databases(client);
     const stripeInstance = process.env.STRIPE_SECRET_KEY ? stripe(process.env.STRIPE_SECRET_KEY) : null;
 
     const ctx = {

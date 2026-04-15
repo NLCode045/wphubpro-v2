@@ -1,6 +1,8 @@
 /* eslint-disable no-unused-vars */
 const crypto = require("crypto");
 const sdk = require("node-appwrite");
+const { hasAppwriteBootstrap } = require("../../subscriptions/stripe-consumer/lib/appwriteEnv");
+const { createServerClientAndDatabases } = require("../../database/fetchAppwriteCredentialsFromGateway");
 const archiver = require("archiver");
 const unzipper = require("unzipper");
 const stream = require("stream");
@@ -165,20 +167,9 @@ module.exports = async ({ req, res, log, error }) => {
     }
   }
 
-  const client = new sdk.Client();
-  const storage = new sdk.Storage(client);
-
-  // Get Appwrite config from process.env only
-  const APPWRITE_FUNCTION_ENDPOINT =
-    process.env.APPWRITE_FUNCTION_ENDPOINT ||
-    process.env.APPWRITE_ENDPOINT ||
-    process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const APPWRITE_FUNCTION_PROJECT_ID = process.env.APPWRITE_FUNCTION_PROJECT_ID || process.env.APPWRITE_PROJECT_ID;
-  const APPWRITE_FUNCTION_API_KEY =
-    process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_API_KEY || process.env.APPWRITE_KEY;
   const APPWRITE_FUNCTION_USER_ID = process.env.APPWRITE_FUNCTION_USER_ID || process.env.APPWRITE_USER_ID;
 
-  if (!APPWRITE_FUNCTION_ENDPOINT || !APPWRITE_FUNCTION_PROJECT_ID || !APPWRITE_FUNCTION_API_KEY) {
+  if (!hasAppwriteBootstrap()) {
     error("Appwrite environment variables are not set.");
     return res.json({ success: false, message: "Appwrite environment is not configured." }, 500);
   }
@@ -223,6 +214,9 @@ module.exports = async ({ req, res, log, error }) => {
           ? ` for Appwrite fileId: ${fileId}`
           : ` for uploaded file: ${fileName || "unknown"}`)
     );
+
+    const { client, databases } = await createServerClientAndDatabases(log, error);
+    const storage = new sdk.Storage(client);
 
     let zipBuffer;
     if (fileId) {
@@ -338,7 +332,6 @@ module.exports = async ({ req, res, log, error }) => {
 
     let savedDoc;
     try {
-      const databases = new sdk.Databases(client);
       const list = await databases.listDocuments(databaseId, collectionId, [
         sdk.Query.equal("user_id", uid),
         sdk.Query.equal("wpSlug", normalizedSlug),

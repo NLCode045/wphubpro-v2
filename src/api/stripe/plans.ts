@@ -1,11 +1,20 @@
 /**
  * Server-only — Stripe catalog (live). Do not import from React components.
  */
-import type { StripePlan as AdminStripePlanRow } from '@/types';
-import type { StripePlan as ProductPricePlan } from '@/types/stripe';
-import type Stripe from 'stripe';
+import type { StripePlan as AdminStripePlanRow } from '@/types/platform';
 
-import { getStripeFromEnv } from './client';
+import {
+  getStripeFromEnv,
+  type StripeClient,
+  type StripePrice,
+  type StripePriceList,
+  type StripeProduct,
+  type StripeProductList,
+  type StripeSubscriptionList,
+} from './client';
+
+/** Same shape as `@/types/stripe` `StripePlan` — defined here so we do not import `src/types/stripe.ts` in the same module as `./client` (that breaks Stripe SDK types → `unknown`, TS 18046). */
+type ProductPricePlan = { product: StripeProduct; price: StripePrice };
 
 export type AdminPlanDetailPayload = {
   plan: AdminStripePlanRow & { stripeLink: string };
@@ -30,7 +39,7 @@ export type AdminPlanDetailPayload = {
   }>;
 };
 
-function buildPlanFromProduct(product: Stripe.Product, pricesData: Stripe.Price[]): AdminStripePlanRow {
+function buildPlanFromProduct(product: StripeProduct, pricesData: StripePrice[]): AdminStripePlanRow {
   const metadata = Object.entries(product.metadata || {}).map(([key, value]) => ({
     key,
     value: String(value),
@@ -79,7 +88,7 @@ function buildPlanFromProduct(product: Stripe.Product, pricesData: Stripe.Price[
 }
 
 async function countSubscriptionsByProduct(
-  stripe: ReturnType<typeof getStripeFromEnv>,
+  stripe: StripeClient,
 ): Promise<{
   counts: Record<string, number>;
   subscriptionCountsTruncated: boolean;
@@ -92,12 +101,12 @@ async function countSubscriptionsByProduct(
   for (const status of statuses) {
     let startingAfter: string | undefined;
     for (let page = 0; page < maxPagesPerStatus; page++) {
-      const batch = await stripe.subscriptions.list({
+      const batch = (await stripe.subscriptions.list({
         status,
         limit: 100,
         starting_after: startingAfter,
         expand: ['data.items.data.price'],
-      });
+      })) as StripeSubscriptionList;
 
       for (const sub of batch.data) {
         for (const item of sub.items.data) {
@@ -140,7 +149,7 @@ export type ListPlansForAdminOptions = {
 export async function listPlansForAdmin(
   options: ListPlansForAdminOptions,
 ): Promise<{ plans: AdminStripePlanRow[]; subscriptionCountsTruncated: boolean }> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   let subCounts: Record<string, number> | null = null;
   let subscriptionCountsTruncated = false;
   if (options.includeCounts) {
@@ -159,13 +168,13 @@ export async function listPlansForAdmin(
     if (options.activeOnly) params.active = true;
     if (startingAfter) params.starting_after = startingAfter;
 
-    const batch = await stripe.products.list(params);
+    const batch = (await stripe.products.list(params)) as StripeProductList;
 
     for (const product of batch.data) {
       if (options.excludeHidden && product.metadata?.hidden === 'true') continue;
       if (options.excludeNonSellable && product.metadata?.non_sellable === 'true') continue;
 
-      const priceList = await stripe.prices.list({ product: product.id, limit: 100 });
+      const priceList = (await stripe.prices.list({ product: product.id, limit: 100 })) as StripePriceList;
       const row = buildPlanFromProduct(product, priceList.data);
       if (options.includeCounts) {
         row.activeSubscriptionsCount = subCounts ? subCounts[product.id] ?? 0 : 0;
@@ -188,9 +197,9 @@ export async function listPlansForAdmin(
  * Admin plan detail — same as stripe-gateway `get-plan` (plan + stats + subscribers).
  */
 export async function getPlanDetailForAdmin(productId: string): Promise<AdminPlanDetailPayload> {
-  const stripe = getStripeFromEnv();
-  const product = await stripe.products.retrieve(productId);
-  const priceList = await stripe.prices.list({ product: productId, limit: 100 });
+  const stripe: StripeClient = getStripeFromEnv();
+  const product = (await stripe.products.retrieve(productId)) as StripeProduct;
+  const priceList = (await stripe.prices.list({ product: productId, limit: 100 })) as StripePriceList;
   const planBase = buildPlanFromProduct(product, priceList.data);
   const stripeLink = `https://dashboard.stripe.com/products/${encodeURIComponent(product.id)}`;
   const plan = { ...planBase, stripeLink };
@@ -204,12 +213,12 @@ export async function getPlanDetailForAdmin(productId: string): Promise<AdminPla
   for (const status of statuses) {
     let startingAfter: string | undefined;
     for (let page = 0; page < 15; page++) {
-      const batch = await stripe.subscriptions.list({
+      const batch = (await stripe.subscriptions.list({
         status,
         limit: 100,
         starting_after: startingAfter,
         expand: ['data.customer', 'data.items.data.price'],
-      });
+      })) as StripeSubscriptionList;
 
       for (const sub of batch.data) {
         let matchInterval: string | null = null;
@@ -276,26 +285,83 @@ export async function getPlanDetailForAdmin(productId: string): Promise<AdminPla
   return { plan, stats, subscribers };
 }
 
+export async function updateAdminPlanProduct(
+  productId: string,
+  body: {
+    name?: string;
+    description?: string;
+    sites_limit?: number;
+    library_limit?: number;
+    storage_limit?: number;
+    non_sellable?: boolean;
+    hidden?: boolean;
+  },
+): Promise<StripeProduct> {
+  const stripe: StripeClient = getStripeFromEnv();
+  const product = (await stripe.products.retrieve(productId)) as StripeProduct;
+  const meta: Record<string, string> = { ...(product.metadata ?? {}) };
+  if (body.sites_limit !== undefined) meta.sites_limit = String(body.sites_limit);
+  if (body.library_limit !== undefined) meta.library_limit = String(body.library_limit);
+  if (body.storage_limit !== undefined) meta.storage_limit = String(body.storage_limit);
+  if (body.non_sellable !== undefined) meta.non_sellable = body.non_sellable ? 'true' : 'false';
+  if (body.hidden !== undefined) meta.hidden = body.hidden ? 'true' : 'false';
+
+  return stripe.products.update(productId, {
+    name: body.name ?? product.name,
+    description: body.description !== undefined ? body.description : product.description ?? undefined,
+    metadata: meta,
+  });
+}
+
+export async function setAdminProductActive(
+  productId: string,
+  active: boolean,
+): Promise<StripeProduct> {
+  const stripe: StripeClient = getStripeFromEnv();
+  return stripe.products.update(productId, { active });
+}
+
+export async function setAdminPriceActive(priceId: string, active: boolean): Promise<StripePrice> {
+  const stripe: StripeClient = getStripeFromEnv();
+  return stripe.prices.update(priceId, { active });
+}
+
+export async function createAdminPriceForProduct(params: {
+  product_id: string;
+  amount: number;
+  interval: 'month' | 'year';
+  currency?: string;
+}): Promise<StripePrice> {
+  const stripe: StripeClient = getStripeFromEnv();
+  const unit_amount = Math.round(params.amount * 100);
+  return stripe.prices.create({
+    product: params.product_id,
+    unit_amount,
+    currency: (params.currency ?? 'eur').toLowerCase(),
+    recurring: { interval: params.interval },
+  });
+}
+
 /**
  * Lists active products with their recurring prices (live fetch, no DB cache).
  */
 export async function getActivePlans(): Promise<ProductPricePlan[]> {
-  const stripe = getStripeFromEnv();
-  const products = await stripe.products.list({
+  const stripe: StripeClient = getStripeFromEnv();
+  const products = (await stripe.products.list({
     active: true,
     limit: 100,
     expand: ['data.default_price'],
-  });
+  })) as StripeProductList;
 
   const plans: ProductPricePlan[] = [];
 
   for (const product of products.data) {
-    const prices = await stripe.prices.list({
+    const prices = (await stripe.prices.list({
       active: true,
       product: product.id,
       limit: 100,
       expand: ['data.product'],
-    });
+    })) as StripePriceList;
 
     for (const price of prices.data) {
       if (price.recurring) {

@@ -7,14 +7,10 @@ import {
   TbLayoutDashboard,
   TbLibrary,
   TbLifebuoy,
-  TbListDetails,
   TbLogout2,
-  TbPackages,
-  TbReceipt,
   TbSettings,
   TbUserCircle,
   TbUsers,
-  TbWallet,
   TbWorld,
 } from 'react-icons/tb'
 
@@ -140,32 +136,7 @@ export const adminMenuItems: MenuItemType[] = [
     key: 'admin-finance',
     label: 'Finance',
     icon: TbCoin,
-    children: [
-      {
-        key: 'admin-finance-dashboard',
-        label: 'Dashboard',
-        icon: TbLayoutDashboard,
-        url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
-      },
-      {
-        key: 'admin-finance-subscriptions',
-        label: 'Subscriptions',
-        icon: TbListDetails,
-        url: ROUTE_PATHS.ADMIN_FINANCE_SUBSCRIPTIONS,
-      },
-      {
-        key: 'admin-finance-plans',
-        label: 'Plans',
-        icon: TbPackages,
-        url: ROUTE_PATHS.ADMIN_FINANCE_PLANS,
-      },
-      {
-        key: 'admin-finance-payments',
-        label: 'Payments',
-        icon: TbWallet,
-        url: ROUTE_PATHS.ADMIN_FINANCE_PAYMENTS,
-      },
-    ],
+    url: ROUTE_PATHS.ADMIN_FINANCE,
   },
   {
     key: 'admin-support',
@@ -204,38 +175,7 @@ export const horizontalAdminMenuItems: MenuItemType[] = [
     key: 'admin-finance',
     label: 'Finance',
     icon: TbCoin,
-    children: [
-      {
-        key: 'admin-finance-dashboard',
-        label: 'Dashboard',
-        icon: TbLayoutDashboard,
-        url: ROUTE_PATHS.ADMIN_FINANCE_DASHBOARD,
-      },
-      {
-        key: 'admin-finance-subscriptions',
-        label: 'Subscriptions',
-        icon: TbListDetails,
-        url: ROUTE_PATHS.ADMIN_FINANCE_SUBSCRIPTIONS,
-      },
-      {
-        key: 'admin-finance-plans',
-        label: 'Plans',
-        icon: TbPackages,
-        url: ROUTE_PATHS.ADMIN_FINANCE_PLANS,
-      },
-      {
-        key: 'admin-finance-billing',
-        label: 'Billing',
-        icon: TbReceipt,
-        url: ROUTE_PATHS.ADMIN_FINANCE_BILLING,
-      },
-      {
-        key: 'admin-finance-payments',
-        label: 'Payments',
-        icon: TbWallet,
-        url: ROUTE_PATHS.ADMIN_FINANCE_PAYMENTS,
-      },
-    ],
+    url: ROUTE_PATHS.ADMIN_FINANCE,
   },
   {
     key: 'admin-support',

@@ -7,6 +7,8 @@
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
+const { getAppwriteBootstrap, hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || 'platform_db';
 const SITES_COLLECTION_ID = process.env.APPWRITE_SITES_COLLECTION_ID || 'sites';
@@ -748,12 +750,10 @@ async function runExecuteOne(siteDoc, ENCRYPTION_KEY, step, log) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT || process.env.APPWRITE_FUNCTION_API_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
   const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+  const bootstrap = getAppwriteBootstrap();
 
-  if (!endpoint || !projectId || !apiKey) {
+  if (!hasAppwriteBootstrap()) {
     return fail(res, 'Function environment is not configured.', 500);
   }
   if (!ENCRYPTION_KEY) {
@@ -790,12 +790,22 @@ module.exports = async ({ req, res, log, error }) => {
     return fail(res, 'Missing or invalid JWT.', 401);
   }
 
-  const adminClient = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-  const databases = new sdk.Databases(adminClient);
+  let databases;
+  let gwEndpoint;
+  let gwProjectId;
+  try {
+    ({ databases, endpoint: gwEndpoint, projectId: gwProjectId } = await createServerClientAndDatabases(
+      log,
+      error,
+    ));
+  } catch (e) {
+    error(`[health-ai-agent] ${e.message}`);
+    return fail(res, 'Could not resolve Appwrite credentials.', 500);
+  }
 
   let jwtUser;
   try {
-    const jwtClient = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setJWT(token);
+    const jwtClient = new sdk.Client().setEndpoint(gwEndpoint).setProject(gwProjectId).setJWT(token);
     const account = new sdk.Account(jwtClient);
     jwtUser = await account.get();
   } catch (e) {
@@ -876,13 +886,29 @@ module.exports = async ({ req, res, log, error }) => {
       update: t.update,
     }));
 
-    let aiList = await callGeminiForSuggestions(checksSummary, { plugins: pluginsCtx, themes: themesCtx }, log, error, endpoint, projectId, apiKey);
+    let aiList = await callGeminiForSuggestions(
+      checksSummary,
+      { plugins: pluginsCtx, themes: themesCtx },
+      log,
+      error,
+      bootstrap.endpoint,
+      bootstrap.projectId,
+      bootstrap.apiKey,
+    );
     let source = 'gemini';
 
     // If initial call fails, try again (fallback behavior)
     if (!aiList) {
       try {
-        aiList = await callGeminiForSuggestions(checksSummary, { plugins: pluginsCtx, themes: themesCtx }, log, error, endpoint, projectId, apiKey);
+        aiList = await callGeminiForSuggestions(
+          checksSummary,
+          { plugins: pluginsCtx, themes: themesCtx },
+          log,
+          error,
+          bootstrap.endpoint,
+          bootstrap.projectId,
+          bootstrap.apiKey,
+        );
         source = 'gemini';
       } catch (err) {
         log(`[health-ai-agent] Could not generate AI suggestions: ${err.message}`);

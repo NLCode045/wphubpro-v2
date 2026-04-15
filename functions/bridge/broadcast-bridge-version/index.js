@@ -7,6 +7,8 @@
 const sdk = require('node-appwrite');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
+const { hasAppwriteBootstrap } = require('../../subscriptions/stripe-consumer/lib/appwriteEnv');
+const { createServerClientAndDatabases } = require('../../database/fetchAppwriteCredentialsFromGateway');
 
 function ok(res, payload = {}, statusCode = 200) {
   return res.json(payload, statusCode);
@@ -43,18 +45,14 @@ function encrypt(text, key) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
-  const endpoint = process.env.APPWRITE_ENDPOINT || process.env.APPWRITE_FUNCTION_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_FUNCTION_PROJECT_ID;
-  const apiKey = process.env.APPWRITE_API_KEY || process.env.APPWRITE_FUNCTION_API_KEY || process.env.APPWRITE_KEY;
   const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
-  if (!endpoint || !projectId || !apiKey || !ENCRYPTION_KEY) {
+  if (!hasAppwriteBootstrap() || !ENCRYPTION_KEY) {
     return fail(res, 'Function environment is not configured.', 500);
   }
 
   try {
-    const client = new sdk.Client().setEndpoint(endpoint).setProject(projectId).setKey(apiKey);
-    const databases = new sdk.Databases(client);
+    const { databases } = await createServerClientAndDatabases(log, error);
 
     // 1. Get latest version from platform_settings
     const settingsList = await databases.listDocuments('platform_db', 'platform_settings', [

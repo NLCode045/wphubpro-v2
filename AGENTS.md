@@ -78,7 +78,7 @@ All credential access goes through **gateway functions** — not directly from c
 
 | Gateway | Purpose | Consumers |
 |---|---|---|
-| `stripe-gateway` | All Stripe API operations (vault-backed Stripe SDK only here) | stripe-products, stripe-invoices, stripe-subscriptions, stripe-payments, stripe-customers, stripe-config, stripe-order-payments, stripe-payment-methods, stripe-create-customer, stripe-portal-link, `stripe-webhook` (verify + orchestration) |
+| `stripe-gateway` | **Vault only:** `get-credentials` (Stripe keys from `vault.connectors`) — no Stripe REST handlers in this repo’s deploy | API host or bootstrap that needs keys without env files; SPA does **not** call this for catalog/billing (uses `/api/stripe/*` instead) |
 | `s3-gateway` | All S3 operations (upload, download, delete) | zip-parser, file-upload functions |
 | `openai-gateway` | All AI/LLM operations (completions, embeddings) | health-ai-agent, content-generation functions |
 | `appwrite-gateway` | Admin Appwrite operations (bulk writes, user mgmt) | admin-manage-users, system functions |
@@ -138,23 +138,21 @@ New pattern (Three-tier architecture):
 ```
 Frontend/Consumer Code
     ↓
-Consumer Function (`stripe-consumer`; legacy per-domain copies under `functions/stripe/deprecated/`)
-    ↓ (pure data, no credentials)
-Gateway Function (stripe-gateway, s3-gateway, etc.)
-    ↓ (has vault access)
-Vault Database (encrypted credentials)
-    ↓
-External API (Stripe, S3, OpenAI, etc.)
+**WPHub SPA (`wphubpro`)** → `GET/POST /api/stripe/*` on the API host → **Stripe Node SDK** (`src/api/stripe/*`) with `STRIPE_SECRET_KEY` on the server.
+
+Optional: **Appwrite `stripe-gateway`** → vault **only** (`get-credentials`) to inject keys at deploy/bootstrap — not used for per-request Stripe catalog/admin from the browser.
+
+Vault Database (encrypted credentials) → External API (Stripe, …) when read by gateway or copied into API host env.
 ```
 
 #### Modular boundaries (Stripe)
 
 | Layer | Role |
 | --- | --- |
-| **`stripe-gateway`** | Sole vault access for Stripe; `handlers/*` actions; merges nested `{ action, payload }` from consumers before dispatch |
-| **`stripe-consumer`** | Unified Appwrite function: routes to `handlers/*` (replaces separate `stripe-products`, `stripe-webhook`, etc.). Webhook verifies via gateway `verify-webhook`; sync in `handlers/processStripeWebhookEvent.js` |
-| **Consumers (deprecated tree)** | `functions/stripe/deprecated/stripe-*` — old one-function-per-domain layouts; do not add features here |
-| **Shared Stripe helpers** | Active: `functions/stripe/stripe-consumer/lib/`. Legacy mirror: `functions/stripe/deprecated/lib/` — not `functions/_shared` |
+| **`src/api/stripe/*` (this repo)** | Server-only Stripe SDK: implement your HTTP router’s `/api/stripe/admin/*` and `/api/stripe/config` using these modules. Secrets stay on the API host (`STRIPE_SECRET_KEY`). |
+| **`stripe-gateway` (Appwrite)** | Vault credential read (`get-credentials`) only; remove legacy Stripe action handlers from deployed gateway code. |
+| **`stripe-consumer`** | **Removed** from `appwrite.config.json` — do not deploy. Admin/finance UI uses REST instead. |
+| **Deprecated `functions/stripe/deprecated/*`** | Legacy; do not extend. |
 
 #### Consumer Functions
 
@@ -188,9 +186,9 @@ Each function that uses the Appwrite SDK or `Functions.createExecution` needs **
 
 | Consumer | Gateway | Purpose |
 |---|---|---|
-| **stripe-consumer** | stripe-gateway | **Active:** single deployment; `handlers/*` cover catalog, subscriptions, invoices, PMs, portal, checkout, webhook, etc. |
-| stripe-products, stripe-subscriptions, … (under `deprecated/`) | stripe-gateway | **Legacy** one-function-per-domain copies only |
-| stripe-webhook (`deprecated/`) | stripe-gateway (verify + actions) | Old standalone webhook entry; use **stripe-consumer** + Stripe URL instead |
+| **stripe-consumer** | — | **Removed.** Use `/api/stripe` on your API host. |
+| stripe-products, stripe-subscriptions, … (under `deprecated/`) | stripe-gateway | **Legacy** only |
+| stripe-webhook (`deprecated/`) | stripe-gateway (verify + actions) | Legacy |
 | s3-storage | s3-gateway | File upload/download/delete |
 | ai-content | openai-gateway | AI/LLM operations |
 | db-admin | appwrite-gateway | Admin database operations |

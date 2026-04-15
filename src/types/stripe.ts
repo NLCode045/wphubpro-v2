@@ -2,20 +2,23 @@
  * Stripe billing types — aligned with stripe-node SDK shapes (Stripe-as-a-Source).
  * Prefer `import type` from here in UI code; never import server API modules in React.
  *
- * Use `import('stripe').Stripe.*` (not `import * as StripeApi`) so resolution always targets
- * stripe-node’s `declare module 'stripe'` namespace.
+ * Use `import type * as StripeModule` + `StripeModule.Stripe.*` — the named `Stripe` class
+ * merges with the SDK namespace. Do not use `import('stripe').Stripe.*` (often resolves to
+ * `unknown` with `moduleResolution: "bundler"`, TS 18046).
  */
-export type StripeCustomer = import('stripe').Stripe.Customer;
+import type * as StripeModule from 'stripe';
 
-export type StripeSubscription = import('stripe').Stripe.Subscription;
+export type StripeCustomer = StripeModule.Stripe.Customer;
 
-export type StripeInvoice = import('stripe').Stripe.Invoice;
+export type StripeSubscription = StripeModule.Stripe.Subscription;
 
-export type StripePaymentIntent = import('stripe').Stripe.PaymentIntent;
+export type StripeInvoice = StripeModule.Stripe.Invoice;
 
-export type StripePrice = import('stripe').Stripe.Price;
+export type StripePaymentIntent = StripeModule.Stripe.PaymentIntent;
 
-export type StripeProduct = import('stripe').Stripe.Product;
+export type StripePrice = StripeModule.Stripe.Price;
+
+export type StripeProduct = StripeModule.Stripe.Product;
 
 /**
  * Catalog row: one active product with a chosen recurring (or default) price.
@@ -25,12 +28,12 @@ export interface StripePlan {
   price: StripePrice;
 }
 
-export type StripePaymentMethod = import('stripe').Stripe.PaymentMethod;
+export type StripePaymentMethod = StripeModule.Stripe.PaymentMethod;
 
 export type StripeSubscriptionCreatePaymentBehavior =
-  import('stripe').Stripe.SubscriptionCreateParams['payment_behavior'];
+  StripeModule.Stripe.SubscriptionCreateParams['payment_behavior'];
 
-export type StripeWebhookEvent = import('stripe').Stripe.Event;
+export type StripeWebhookEvent = StripeModule.Stripe.Event;
 
 export interface BillingAdminStats {
   /** Normalized monthly recurring revenue in smallest currency unit (e.g. cents). */

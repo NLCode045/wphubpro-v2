@@ -1,12 +1,7 @@
 /**
  * Server-only — raw body + signing secret. Do not import from React components.
  */
-import type { StripeWebhookEvent } from '@/types/stripe';
-import StripeNode from 'stripe';
-
-import { getStripeFromEnv } from './client';
-
-type StripeInstance = InstanceType<typeof StripeNode>;
+import { getStripeFromEnv, type StripeClient } from './client';
 
 export interface VerifyWebhookParams {
   rawBody: string | Buffer;
@@ -18,7 +13,7 @@ export interface VerifyWebhookParams {
  */
 export function verifyStripeWebhookEvent(
   params: VerifyWebhookParams,
-): ReturnType<StripeInstance['webhooks']['constructEvent']> {
+): ReturnType<StripeClient['webhooks']['constructEvent']> {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret?.trim()) {
     throw new Error('STRIPE_WEBHOOK_SECRET is required for webhook verification');
@@ -33,7 +28,8 @@ export function verifyStripeWebhookEvent(
 /**
  * Baseline handlers — extend with email/receipt logic; billing state stays live in Stripe.
  */
-export async function handleStripeWebhookEvent(event: StripeWebhookEvent): Promise<{ ok: boolean; detail: string }> {
+/** Verified webhook payload from `constructEvent` — use structural type so tsserver does not collapse `Stripe.Event` to `unknown`. */
+export async function handleStripeWebhookEvent(event: { type: string }): Promise<{ ok: boolean; detail: string }> {
   switch (event.type) {
     case 'invoice.paid':
       return { ok: true, detail: 'invoice payment recorded in Stripe' };

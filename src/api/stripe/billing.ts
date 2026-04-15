@@ -1,11 +1,7 @@
 /**
  * Server-only — live invoices from Stripe. Do not import from React components.
  */
-import StripeNode from 'stripe';
-
-import { getStripeFromEnv } from './client';
-
-type StripeInstance = InstanceType<typeof StripeNode>;
+import { getStripeFromEnv, type StripeClient } from './client';
 
 /**
  * GET: invoices for a Stripe customer id (newest first).
@@ -13,7 +9,7 @@ type StripeInstance = InstanceType<typeof StripeNode>;
 export async function listInvoicesForCustomer(
   customerId: string,
   options?: { limit?: number },
-): Promise<Awaited<ReturnType<StripeInstance['invoices']['list']>>> {
+): Promise<Awaited<ReturnType<StripeClient['invoices']['list']>>> {
   const stripe = getStripeFromEnv();
   const limit = options?.limit ?? 50;
   return stripe.invoices.list({

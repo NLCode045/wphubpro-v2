@@ -2,11 +2,8 @@
  * Server-only — live subscription reads/writes in Stripe. Do not import from React components.
  */
 import type { StripeSubscription, StripeSubscriptionCreatePaymentBehavior } from '@/types/stripe';
-import StripeNode from 'stripe';
 
-import { getStripeFromEnv } from './client';
-
-type StripeInstance = InstanceType<typeof StripeNode>;
+import { getStripeFromEnv, type StripeClient } from './client';
 
 /** Stripe `expand` expects `string[]`, not a readonly tuple (TS4104). */
 const SUBSCRIPTION_EXPAND: string[] = [
@@ -22,7 +19,7 @@ const SUBSCRIPTION_EXPAND: string[] = [
  */
 export async function listSubscriptionsForCustomer(
   customerId: string,
-): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['list']>>> {
+): Promise<Awaited<ReturnType<StripeClient['subscriptions']['list']>>> {
   const stripe = getStripeFromEnv();
   return stripe.subscriptions.list({
     customer: customerId,
@@ -56,7 +53,7 @@ export interface UpdateSubscriptionBody {
  */
 export async function createSubscription(
   body: CreateSubscriptionBody,
-): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['create']>>> {
+): Promise<Awaited<ReturnType<StripeClient['subscriptions']['create']>>> {
   const stripe = getStripeFromEnv();
   return stripe.subscriptions.create({
     customer: body.customerId,
@@ -71,7 +68,7 @@ export async function createSubscription(
  */
 export async function updateSubscriptionPrice(
   body: UpdateSubscriptionBody,
-): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['update']>>> {
+): Promise<Awaited<ReturnType<StripeClient['subscriptions']['update']>>> {
   const stripe = getStripeFromEnv();
   const current = (await stripe.subscriptions.retrieve(body.subscriptionId, {
     expand: ['items.data.price'],
@@ -91,7 +88,7 @@ export async function updateSubscriptionPrice(
 /** Admin plan change — optional proration behavior (defaults to create_prorations). */
 export async function updateSubscriptionPriceAdmin(
   body: UpdateSubscriptionBody & { proration_behavior?: 'always_invoice' | 'none' },
-): Promise<Awaited<ReturnType<StripeInstance['subscriptions']['update']>>> {
+): Promise<Awaited<ReturnType<StripeClient['subscriptions']['update']>>> {
   const stripe = getStripeFromEnv();
   const current = (await stripe.subscriptions.retrieve(body.subscriptionId, {
     expand: ['items.data.price'],

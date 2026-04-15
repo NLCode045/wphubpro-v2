@@ -12,7 +12,7 @@ import type {
 } from '@/types/stripe';
 import type { StripeAdminDashboardStats } from '@/types/stripeAdmin';
 
-import { getStripeFromEnv } from './client';
+import { getStripeFromEnv, type StripeClient } from './client';
 import { getPlanDetailForAdmin, listPlansForAdmin } from './plans';
 import { getSubscription } from './subscriptions';
 
@@ -55,17 +55,24 @@ function addMonthlyFromSubscription(mrr: { total: number; currency?: string }, s
  * GET: MRR (approximate, normalized to monthly) and active subscription count from Stripe.
  */
 export async function getBillingAdminStats(): Promise<BillingAdminStats> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   const mrr = { total: 0, currency: undefined as string | undefined };
   let activeSubscriptionCount = 0;
 
-  for await (const sub of stripe.subscriptions.list({
-    status: 'active',
-    limit: 100,
-    expand: ['data.items.data.price'],
-  })) {
-    activeSubscriptionCount += 1;
-    addMonthlyFromSubscription(mrr, sub);
+  let mrrSubCursor: string | undefined;
+  for (let p = 0; p < 500; p++) {
+    const subPage = await stripe.subscriptions.list({
+      status: 'active',
+      limit: 100,
+      starting_after: mrrSubCursor,
+      expand: ['data.items.data.price'],
+    });
+    for (const sub of subPage.data) {
+      activeSubscriptionCount += 1;
+      addMonthlyFromSubscription(mrr, sub);
+    }
+    if (!subPage.has_more || subPage.data.length === 0) break;
+    mrrSubCursor = subPage.data[subPage.data.length - 1].id;
   }
 
   return {
@@ -81,7 +88,7 @@ export async function getBillingAdminStats(): Promise<BillingAdminStats> {
  */
 export async function getStripeAdminDashboardStats(): Promise<StripeAdminDashboardStats> {
   const base = await getBillingAdminStats();
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   const now = Math.floor(Date.now() / 1000);
   const dayAgo = now - 86400;
 
@@ -158,15 +165,23 @@ export async function getStripeAdminDashboardStats(): Promise<StripeAdminDashboa
 const MAX_SUB_LIST = 500;
 
 export async function listStripeSubscriptionsForAdmin(): Promise<{ subscriptions: StripeSubscription[] }> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   const subscriptions: StripeSubscription[] = [];
-  for await (const sub of stripe.subscriptions.list({
-    status: 'all',
-    limit: 100,
-    expand: ['data.customer', 'data.items.data.price.product'],
-  })) {
-    subscriptions.push(sub);
+  let adminSubCursor: string | undefined;
+  for (let p = 0; p < 500; p++) {
+    const subPage = await stripe.subscriptions.list({
+      status: 'all',
+      limit: 100,
+      starting_after: adminSubCursor,
+      expand: ['data.customer', 'data.items.data.price.product'],
+    });
+    for (const sub of subPage.data) {
+      subscriptions.push(sub);
+      if (subscriptions.length >= MAX_SUB_LIST) break;
+    }
     if (subscriptions.length >= MAX_SUB_LIST) break;
+    if (!subPage.has_more || subPage.data.length === 0) break;
+    adminSubCursor = subPage.data[subPage.data.length - 1].id;
   }
   return { subscriptions };
 }
@@ -179,7 +194,7 @@ export async function getStripeSubscriptionForAdmin(
   const cust = subscription.customer;
   let customer: StripeCustomer | null = null;
   if (typeof cust === 'string') {
-    const stripe = getStripeFromEnv();
+    const stripe: StripeClient = getStripeFromEnv();
     const c = await stripe.customers.retrieve(cust);
     customer = 'deleted' in c && c.deleted ? null : c;
   } else if (cust && !('deleted' in cust && cust.deleted)) {
@@ -193,7 +208,7 @@ export async function runStripeSubscriptionAdminAction(
   action: 'cancel' | 'pause' | 'resume',
   options?: { cancelAtPeriodEnd?: boolean },
 ): Promise<StripeSubscription> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   if (action === 'cancel') {
     if (options?.cancelAtPeriodEnd === true) {
       return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
@@ -225,7 +240,7 @@ export async function getStripeAdminCatalogPlanDetail(productId: string) {
 export async function listProductsAndPricesForAdmin(): Promise<{
   catalog: Array<{ product: StripeProduct; prices: StripePrice[] }>;
 }> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   const products = await stripe.products.list({ limit: 100 });
   const catalog: Array<{ product: StripeProduct; prices: StripePrice[] }> = [];
   for (const product of products.data) {
@@ -239,7 +254,7 @@ export async function createStripeProductAdmin(params: {
   name: string;
   description?: string;
 }): Promise<StripeProduct> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   return stripe.products.create({ name: params.name, description: params.description });
 }
 
@@ -247,7 +262,7 @@ export async function updateStripeProductAdmin(
   productId: string,
   params: { name?: string; description?: string; active?: boolean },
 ): Promise<StripeProduct> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   return stripe.products.update(productId, params);
 }
 
@@ -257,7 +272,7 @@ export async function createStripePriceAdmin(params: {
   currency: string;
   interval: 'month' | 'year' | 'week' | 'day';
 }): Promise<StripePrice> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   return stripe.prices.create({
     product: params.productId,
     unit_amount: params.unit_amount,
@@ -270,7 +285,7 @@ export async function getStripeAdminBillingOverview(): Promise<{
   recentInvoices: StripeInvoice[];
   failedPayments: StripePaymentIntent[];
 }> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   const recentInvoices = await stripe.invoices.list({
     limit: 40,
     expand: ['data.customer', 'data.lines.data.price.product'],
@@ -286,14 +301,14 @@ export async function getStripeAdminBillingOverview(): Promise<{
 }
 
 export async function getStripeInvoiceForAdmin(invoiceId: string): Promise<StripeInvoice> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   return stripe.invoices.retrieve(invoiceId, {
     expand: ['customer', 'payment_intent', 'lines.data.price.product'],
   });
 }
 
 export async function listAdminInvoicesRecent(limit: number): Promise<{ invoices: StripeInvoice[] }> {
-  const stripe = getStripeFromEnv();
+  const stripe: StripeClient = getStripeFromEnv();
   const lim = Math.min(Math.max(limit, 1), 100);
   const list = await stripe.invoices.list({
     limit: lim,

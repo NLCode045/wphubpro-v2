@@ -35,6 +35,7 @@ import LoginPage from '@/views/auth/auth-1/sign-in'
 import NewPasswordPage from '@/views/auth/auth-1/new-password'
 import RegisterPage from '@/views/auth/auth-1/sign-up'
 import { Navigate, type RouteObject } from 'react-router'
+import ConnectSuccessPage from '@/views/connect/ConnectSuccessPage'
 
 export const routes: RouteObject[] = [
   { path: '/auth-1/sign-in', element: <Navigate to={ROUTE_PATHS.LOGIN} replace /> },
@@ -75,6 +76,10 @@ export const routes: RouteObject[] = [
         <NewPasswordPage />
       </AuthScreenGate>
     ),
+  },
+  {
+    path: ROUTE_PATHS.CONNECT_SUCCESS,
+    element: <ConnectSuccessPage />,
   },
   {
     element: (

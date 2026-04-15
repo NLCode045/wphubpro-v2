@@ -1,5 +1,7 @@
 export const ROUTE_PATHS = {
   LOGIN: '/login',
+  /** OAuth / bridge callback after connecting WordPress (`?site_url=…&connect_token=…` or legacy `api_key`). */
+  CONNECT_SUCCESS: '/connect-success',
   /** Second step after password or OAuth when Appwrite requires MFA (`user_more_factors_required`). */
   MFA_CHALLENGE: '/verify-mfa',
   REGISTER: '/register',

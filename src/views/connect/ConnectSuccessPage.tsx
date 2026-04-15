@@ -1,19 +1,15 @@
 /**
- * Connect Success page - handles callback from WordPress plugin
- * New flow: ?site_url=...&user_login=...&connect_token=... (token exchanged for bridge_secret)
- * Legacy: ?site_url=...&user_login=...&api_key=...
+ * Connect Success page — callback from WordPress bridge after OAuth/connect.
+ * New flow: `?site_url=...&user_login=...&connect_token=...` (exchanged for bridge_secret).
+ * Legacy: `?site_url=...&user_login=...&api_key=...`
  */
+import { ROUTE_PATHS } from '@/config/routePaths';
+import { useAuth } from '@/domains/auth';
+import { useAddSite, useSites, useUpdateSite } from '@/domains/sites';
+import { APPWRITE_ENDPOINT, APPWRITE_HEARTBEAT_URL, APPWRITE_PROJECT_ID } from '@/services/appwrite';
 import React, { useEffect, useRef, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import SoftBox from 'components/SoftBox';
-import SoftButton from 'components/SoftButton';
-import SoftTypography from 'components/SoftTypography';
-import Icon from '@mui/material/Icon';
-
-import { useAuth } from '../domains/auth';
-import { useSites, useAddSite, useUpdateSite } from '../domains/sites';
-import { ROUTE_PATHS } from '../config/routePaths';
-import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, APPWRITE_HEARTBEAT_URL } from '../services/appwrite';
+import { Button, Container, Spinner } from 'react-bootstrap';
+import { useNavigate, useSearchParams } from 'react-router';
 
 /** Fetch bridge_secret from WordPress via one-time token exchange. */
 async function exchangeToken(siteUrl: string, connectToken: string): Promise<string> {
@@ -36,7 +32,7 @@ async function saveConnectionToWordPress(
   siteId: string,
   siteSecret?: string,
   encryptedApiKey?: string,
-  wpAdminUsername?: string
+  wpAdminUsername?: string,
 ): Promise<void> {
   const base = siteUrl.replace(/\/$/, '');
   const url = `${base}/wp-json/wphubpro/v1/save-connection`;
@@ -60,7 +56,7 @@ async function saveConnectionToWordPress(
       body: JSON.stringify(body),
     });
   } catch {
-    // Silently ignore - connection still works
+    /* Silently ignore — hub connection still works */
   }
 }
 
@@ -89,7 +85,7 @@ const ConnectSuccessPage: React.FC = () => {
   const connectToken = searchParams.get('connect_token') || '';
   const apiKeyLegacy = searchParams.get('api_key') || '';
 
-  const isNewFlow = !!connectToken;
+  const isNewFlow = Boolean(connectToken);
 
   useEffect(() => {
     if (processed.current || authLoading || sitesLoading || !user) return;
@@ -116,7 +112,7 @@ const ConnectSuccessPage: React.FC = () => {
       processed.current = true;
       const siteName = (() => {
         try {
-          return new URL(siteUrl).hostname || siteUrl;
+          return new URL(siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`).hostname || siteUrl;
         } catch {
           return siteUrl;
         }
@@ -124,21 +120,28 @@ const ConnectSuccessPage: React.FC = () => {
 
       if (existing) {
         updateSite.mutate(
-          { siteId: existing.$id, apiKey: bridgeSecret, bridgeSecret: bridgeSecret },
+          {
+            siteId: existing.$id,
+            apiKey: bridgeSecret,
+            bridgeSecret,
+            silent: true,
+          },
           {
             onSuccess: (data) => {
-              const siteSecret = (data as { siteSecret?: string })?.siteSecret ?? (data as { site_secret?: string })?.site_secret;
+              const siteSecret =
+                (data as { siteSecret?: string })?.siteSecret ??
+                (data as { site_secret?: string })?.site_secret;
               const encryptedKey = (data as { encrypted_api_key?: string })?.encrypted_api_key;
-              saveConnectionToWordPress(
+              void saveConnectionToWordPress(
                 fullSiteUrl,
                 bridgeSecret,
                 existing.$id,
                 siteSecret,
-                encryptedKey
+                encryptedKey,
               ).then(doNavigate);
             },
             onError: () => {},
-          }
+          },
         );
       } else {
         addSite.mutate(
@@ -152,75 +155,90 @@ const ConnectSuccessPage: React.FC = () => {
           {
             onSuccess: (data) => {
               const newSiteId = data?.$id;
-              const siteSecret = (data as { siteSecret?: string })?.siteSecret ?? (data as { site_secret?: string })?.site_secret;
+              const siteSecret =
+                (data as { siteSecret?: string })?.siteSecret ??
+                (data as { site_secret?: string })?.site_secret;
               const encryptedKey = (data as { encrypted_api_key?: string })?.encrypted_api_key;
               if (newSiteId) {
-                saveConnectionToWordPress(
+                void saveConnectionToWordPress(
                   fullSiteUrl,
                   bridgeSecret,
                   newSiteId,
                   siteSecret,
                   encryptedKey,
-                  userLogin || undefined
+                  userLogin || undefined,
                 ).then(doNavigate);
               } else {
                 doNavigate();
               }
             },
             onError: () => {},
-          }
+          },
         );
       }
     };
 
     if (isNewFlow) {
-      exchangeToken(fullSiteUrl, connectToken)
+      void exchangeToken(fullSiteUrl, connectToken)
         .then(runWithBridgeSecret)
-        .catch((err) => {
+        .catch((err: Error) => {
           processed.current = true;
           setTokenError(err?.message || 'Token exchange failed');
         });
     } else {
       runWithBridgeSecret(apiKeyLegacy);
     }
-  }, [user, authLoading, sitesLoading, sites, siteUrl, connectToken, apiKeyLegacy, userLogin, navigate, addSite, updateSite]);
+  }, [
+    user,
+    authLoading,
+    sitesLoading,
+    sites,
+    siteUrl,
+    connectToken,
+    apiKeyLegacy,
+    userLogin,
+    navigate,
+    addSite,
+    updateSite,
+    isNewFlow,
+  ]);
 
   if (authLoading || !user) {
     return (
-      <SoftBox sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', p: 4 }}>
-        <Icon sx={{ fontSize: 48, color: 'grey.400', mb: 2 }}>hourglass_empty</Icon>
-        <SoftTypography variant="h6" fontWeight="medium" sx={{ mb: 1 }}>Even geduld…</SoftTypography>
-        <SoftTypography variant="body2" color="secondary">Log in to complete the connection.</SoftTypography>
-        <SoftButton variant="contained" color="primary" size="small" sx={{ mt: 3 }} onClick={() => navigate(ROUTE_PATHS.LOGIN)}>
+      <Container className="py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '50vh' }}>
+        <Spinner animation="border" variant="secondary" className="mb-3" />
+        <h5 className="mb-1">Even geduld…</h5>
+        <p className="text-muted mb-3">Log in to complete the connection.</p>
+        <Button variant="primary" size="sm" onClick={() => navigate(ROUTE_PATHS.LOGIN)}>
           Inloggen
-        </SoftButton>
-      </SoftBox>
+        </Button>
+      </Container>
     );
   }
 
   if (!siteUrl || (!connectToken && !apiKeyLegacy)) {
     return (
-      <SoftBox sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', p: 4 }}>
-        <Icon sx={{ fontSize: 48, color: 'warning.main', mb: 2 }}>warning</Icon>
-        <SoftTypography variant="h6" fontWeight="medium" sx={{ mb: 1 }}>Ongeldige callback</SoftTypography>
-        <SoftTypography variant="body2" color="secondary" sx={{ mb: 2 }}>Missing site_url or connect_token/api_key.</SoftTypography>
-        <SoftButton variant="contained" color="primary" size="small" onClick={() => navigate(ROUTE_PATHS.DASHBOARD)}>
+      <Container className="py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '50vh' }}>
+        <i className="ri-alert-line text-warning fs-1 mb-3" aria-hidden />
+        <h5 className="mb-1">Ongeldige callback</h5>
+        <p className="text-muted text-center mb-3">Missing site_url or connect_token/api_key.</p>
+        <Button variant="primary" size="sm" onClick={() => navigate(ROUTE_PATHS.DASHBOARD)}>
           Naar dashboard
-        </SoftButton>
-      </SoftBox>
+        </Button>
+      </Container>
     );
   }
 
   if (tokenError) {
     return (
-      <SoftBox sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', p: 4 }}>
-        <Icon sx={{ fontSize: 48, color: 'error.main', mb: 2 }}>error</Icon>
-        <SoftTypography variant="h6" fontWeight="medium" sx={{ mb: 1 }}>Token exchange failed</SoftTypography>
-        <SoftTypography variant="body2" color="secondary" sx={{ mb: 2 }}>{tokenError}</SoftTypography>
-        <SoftButton variant="contained" color="primary" size="small" onClick={() => navigate(ROUTE_PATHS.DASHBOARD)}>
+      <Container className="py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '50vh' }}>
+        <i className="ri-error-warning-line text-danger fs-1 mb-3" aria-hidden />
+        <h5 className="mb-1">Token exchange failed</h5>
+        <p className="text-muted text-center mb-3">{tokenError}</p>
+        <Button variant="primary" size="sm" onClick={() => navigate(ROUTE_PATHS.DASHBOARD)}>
           Naar dashboard
-        </SoftButton>
-      </SoftBox>
+        </Button>
+      </Container>
     );
   }
 
@@ -230,29 +248,27 @@ const ConnectSuccessPage: React.FC = () => {
   if (isError) {
     const err = addSite.error || updateSite.error;
     return (
-      <SoftBox sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', p: 4 }}>
-        <Icon sx={{ fontSize: 48, color: 'error.main', mb: 2 }}>error</Icon>
-        <SoftTypography variant="h6" fontWeight="medium" sx={{ mb: 1 }}>Connection failed</SoftTypography>
-        <SoftTypography variant="body2" color="secondary" sx={{ mb: 2 }}>{err?.message}</SoftTypography>
-        <SoftButton variant="contained" color="primary" size="small" onClick={() => navigate(ROUTE_PATHS.SITES)}>
+      <Container className="py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '50vh' }}>
+        <i className="ri-close-circle-line text-danger fs-1 mb-3" aria-hidden />
+        <h5 className="mb-1">Connection failed</h5>
+        <p className="text-muted text-center mb-3">{err?.message}</p>
+        <Button variant="primary" size="sm" onClick={() => navigate(ROUTE_PATHS.SITES)}>
           Naar sites
-        </SoftButton>
-      </SoftBox>
+        </Button>
+      </Container>
     );
   }
 
   return (
-    <SoftBox sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', p: 4 }}>
-      <Icon sx={{ fontSize: 48, color: isPending ? 'info.main' : 'success.main', mb: 2 }}>
-        {isPending ? 'sync' : 'check_circle'}
-      </Icon>
-      <SoftTypography variant="h6" fontWeight="medium" sx={{ mb: 1 }}>
-        {isPending ? 'Site koppelen…' : 'Site gekoppeld!'}
-      </SoftTypography>
-      <SoftTypography variant="body2" color="secondary">
-        {isPending ? 'Saving connection…' : 'Redirecting to sites.'}
-      </SoftTypography>
-    </SoftBox>
+    <Container className="py-5 d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '50vh' }}>
+      {isPending ? (
+        <Spinner animation="border" variant="primary" className="mb-3" />
+      ) : (
+        <i className="ri-checkbox-circle-line text-success fs-1 mb-3" aria-hidden />
+      )}
+      <h5 className="mb-1">{isPending ? 'Site koppelen…' : 'Site gekoppeld!'}</h5>
+      <p className="text-muted mb-0">{isPending ? 'Saving connection…' : 'Redirecting to sites.'}</p>
+    </Container>
   );
 };
 

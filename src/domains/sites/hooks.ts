@@ -8,7 +8,7 @@ import {
   databases,
   DATABASE_ID,
 } from '../../services/appwrite';
-import { executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
+import { executeFunction, executeFunctionWithMeta } from '../../integrations/appwrite/executeFunction';
 import type {
   HealthAiDryRunAnalyzeResponse,
   HealthAiDryRunPlanResponse,
@@ -20,6 +20,7 @@ import type {
   SitePagespeedResult,
   SitePagespeedScores,
 } from '../../types';
+import { useNotificationContext } from '@/context/useNotificationContext';
 import { useAuth } from '../auth';
 import {
   forEachStoredPagespeed,
@@ -265,6 +266,157 @@ export const useSite = (siteId: string | undefined) => {
     },
     enabled: !!siteId && !!user,
     retry: 1,
+  });
+};
+
+export const useAddSite = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { showNotification } = useNotificationContext();
+
+  type NewSiteInput = {
+    siteName: string;
+    siteUrl: string;
+    username: string;
+    apiKey?: string;
+    bridgeSecret?: string;
+    metaData?: string;
+  };
+
+  return useMutation<Site & { siteSecret?: string; encrypted_api_key?: string }, Error, NewSiteInput>({
+    mutationFn: async (newSiteData) => {
+      if (!user) throw new Error('User not authenticated.');
+
+      const payload: Record<string, unknown> = {
+        action: 'create',
+        site_url: newSiteData.siteUrl,
+        site_name: newSiteData.siteName,
+        username: newSiteData.username,
+      };
+      const bridgeSecret = newSiteData.bridgeSecret ?? newSiteData.apiKey;
+      if (bridgeSecret) payload.bridge_secret = bridgeSecret;
+      if (newSiteData.metaData !== undefined) payload.meta_data = newSiteData.metaData;
+
+      const parsed = await executeFunction<{
+        document?: Site & { encrypted_api_key?: string };
+        site_secret?: string;
+      }>(APPWRITE_FUNCTION_IDS.WPHUB_SITES, payload, { path: '/' });
+      const rawSite = parsed?.document ?? parsed;
+      const site = mapSiteDocumentToSite(rawSite as Record<string, unknown>);
+      return {
+        ...site,
+        siteSecret: parsed?.site_secret,
+        encrypted_api_key: (rawSite as { encrypted_api_key?: string })?.encrypted_api_key,
+      };
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['sites', user?.$id] });
+      showNotification({
+        title: 'Site added',
+        message: `Site ${data.siteName} has been successfully created.`,
+        variant: 'success',
+      });
+    },
+    onError: (error) => {
+      showNotification({
+        title: 'Error adding site',
+        message: error.message,
+        variant: 'danger',
+      });
+    },
+  });
+};
+
+export const useUpdateSite = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { showNotification } = useNotificationContext();
+
+  return useMutation<
+    Site & { site_secret?: string; encrypted_api_key?: string },
+    Error,
+    {
+      siteId: string;
+      username?: string;
+      apiKey?: string;
+      bridgeSecret?: string;
+      siteName?: string;
+      siteUrl?: string;
+      status?: 'connected' | 'disconnected';
+      healthStatus?: 'healthy' | 'bad';
+      lastChecked?: string;
+      metaData?: string;
+      silent?: boolean;
+    }
+  >({
+    mutationFn: async (input) => {
+      if (!user) throw new Error('User not authenticated.');
+      const { siteId, silent: _silent, ...updates } = input;
+
+      const hasOwn = (obj: Record<string, unknown>, key: string) =>
+        Object.prototype.hasOwnProperty.call(obj || {}, key);
+      const updatesRecord = updates as Record<string, unknown>;
+      const needsServerProcessing =
+        hasOwn(updatesRecord, 'username') ||
+        hasOwn(updatesRecord, 'apiKey') ||
+        hasOwn(updatesRecord, 'bridgeSecret');
+
+      if (!needsServerProcessing) {
+        const dbUpdates: Record<string, unknown> = {};
+        if (updates.siteName !== undefined) dbUpdates.site_name = updates.siteName;
+        if (updates.siteUrl !== undefined) dbUpdates.site_url = updates.siteUrl;
+        if (updates.healthStatus !== undefined) dbUpdates.health_status = updates.healthStatus;
+        if (updates.lastChecked !== undefined) dbUpdates.last_checked = updates.lastChecked;
+        if (updates.metaData !== undefined) dbUpdates.meta_data = updates.metaData;
+        if (updates.status !== undefined) dbUpdates.bridge_status = updates.status;
+
+        if (Object.keys(dbUpdates).length === 0) {
+          throw new Error('No fields to update.');
+        }
+        const updated = await databases.updateDocument(
+          DATABASE_ID,
+          COLLECTIONS.SITES,
+          siteId,
+          dbUpdates,
+        );
+        return mapSiteDocumentToSite(updated as Record<string, unknown>);
+      }
+
+      const apiUpdates: Record<string, unknown> = {};
+      if (updates.username !== undefined) apiUpdates.username = updates.username;
+      if (updates.apiKey !== undefined) apiUpdates.api_key = updates.apiKey;
+      if (updates.bridgeSecret !== undefined) apiUpdates.bridge_secret = updates.bridgeSecret;
+      if (updates.siteName !== undefined) apiUpdates.site_name = updates.siteName;
+      if (updates.siteUrl !== undefined) apiUpdates.site_url = updates.siteUrl;
+      const payload = { action: 'update', siteId, updates: apiUpdates };
+      const parsed = await executeFunction<{
+        document?: Record<string, unknown>;
+        site_secret?: string;
+      }>(APPWRITE_FUNCTION_IDS.WPHUB_SITES, payload, { path: '/' });
+      const rawSite = parsed?.document ?? parsed;
+      const site = mapSiteDocumentToSite(rawSite as Record<string, unknown>);
+      return {
+        ...site,
+        site_secret: parsed?.site_secret,
+        encrypted_api_key: (rawSite as { encrypted_api_key?: string })?.encrypted_api_key,
+      };
+    },
+    onSuccess: (_, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['sites', user?.$id] });
+      void queryClient.invalidateQueries({ queryKey: ['site', variables.siteId] });
+      void queryClient.invalidateQueries({ queryKey: ['plugins', variables.siteId] });
+      void queryClient.invalidateQueries({ queryKey: ['themes', variables.siteId] });
+      if (!variables.silent) {
+        showNotification({
+          title: 'Site updated',
+          message: 'Your changes were saved.',
+          variant: 'success',
+        });
+      }
+    },
+    onError: (err) => {
+      showNotification({ title: 'Update failed', message: err.message, variant: 'danger' });
+    },
   });
 };
 
